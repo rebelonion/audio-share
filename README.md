@@ -2,10 +2,10 @@
 
 A modern web application for browsing, playing, and sharing audio files from your local collection.
 
-\![Next.js](https://img.shields.io/badge/Next.js-15.2.3-black)
-\![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
-\![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38b2ac)
-\![React](https://img.shields.io/badge/React-19-61dafb)
+![Next.js](https://img.shields.io/badge/Next.js-15.2.3-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38b2ac)
+![React](https://img.shields.io/badge/React-19-61dafb)
 
 ## Features
 
@@ -15,7 +15,6 @@ A modern web application for browsing, playing, and sharing audio files from you
 - 📊 Display metadata for audio files including title, artist, and album art
 - 🔗 Share links to specific audio files
 - 📱 Responsive design that works on all devices
-- 🌙 Light and dark mode support
 - 🔄 Request new artists/channels to be added via ntfy notifications
 
 ## Installation
