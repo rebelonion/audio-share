@@ -58,7 +58,8 @@ export async function GET(
         if (ext === '.wav') contentType = 'audio/wav';
         if (ext === '.ogg') contentType = 'audio/ogg';
         if (ext === '.flac') contentType = 'audio/flac';
-        if (ext === '.aac' || ext === '.m4a') contentType = 'audio/aac';
+        if (ext === '.aac') contentType = 'audio/aac';
+        if (ext === '.m4a') contentType = 'audio/mp4';
         if (ext === '.opus') contentType = 'audio/opus';
 
         if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';

@@ -183,7 +183,8 @@ export async function getDirectoryContents(
                 if (ext === '.wav') mimeType = 'audio/wav';
                 if (ext === '.ogg') mimeType = 'audio/ogg';
                 if (ext === '.flac') mimeType = 'audio/flac';
-                if (ext === '.aac' || ext === '.m4a') mimeType = 'audio/aac';
+                if (ext === '.aac') mimeType = 'audio/aac';
+                if (ext === '.m4a') mimeType = 'audio/mp4';
                 if (ext === '.opus') mimeType = 'audio/opus';
 
                 items.push({
