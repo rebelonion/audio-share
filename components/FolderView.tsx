@@ -1,33 +1,118 @@
 'use client';
 
-import React, {useEffect, useState} from 'react';
-import {Check, Download, ExternalLink, Folder, Loader2, Music, Share2} from 'lucide-react';
-import {FileSystemItem} from '@/types';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {Calendar, Check, Music, SortAsc} from 'lucide-react';
+import {FileSystemItem, Notification} from '@/types';
 import AudioPlayer from './AudioPlayer';
-import {useRouter} from 'next/navigation';
+import AlphaScrollbar from './AlphaScrollbar';
+import MobileItemName from "@/components/MobileItemName";
+import ItemSize from "@/components/ItemSize";
+import TableItem from "@/components/TableItem";
 
 interface FolderViewProps {
     items: FileSystemItem[];
     currentPath: string;
 }
 
+type SortMethod = 'alpha' | 'modified' | 'size' | 'type';
+
 export default function FolderView({items}: FolderViewProps) {
-    const router = useRouter();
     const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
     const [selectedAudioName, setSelectedAudioName] = useState<string>('');
     const [isLoading, setIsLoading] = useState<string | null>(null);
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
-    const [notification, setNotification] = useState<{
-        path: string,
-        message: string,
-        isError: boolean,
-        visible: boolean
-    }>({
+    const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
+    const [notification, setNotification] = useState<Notification>({
         path: '',
         message: '',
         isError: false,
         visible: false
     });
+
+    const letterRefs = useRef<Record<string, HTMLElement | null>>({});
+
+    useEffect(() => {
+        const folderCount = items.filter(item => item.type === 'folder').length;
+        const fileCount = items.filter(item => item.type === 'audio').length;
+
+        if (folderCount >= fileCount) {
+            setSortMethod('alpha'); // More folders than files - use alphabetical
+        } else {
+            setSortMethod('modified'); // More files than folders - use modified date
+        }
+    }, [items]);
+
+    const sortedItems = useMemo(() => {
+        switch (sortMethod) {
+            case 'alpha':
+                return [...items].sort((a, b) => {
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+            case 'modified':
+                return [...items].sort((a, b) => {
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+                    return b.modifiedAt.localeCompare(a.modifiedAt);
+                });
+
+            case 'size':
+                return [...items].sort((a, b) => {
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+                    const aSize = 'size' in a ? a.size : 0;
+                    const bSize = 'size' in b ? b.size : 0;
+                    return bSize - aSize;
+                });
+
+            case 'type':
+                return [...items].sort((a, b) => {
+                    // First by type
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+
+                    // Then by extension for audio files
+                    if (a.type === 'audio' && b.type === 'audio') {
+                        const aExt = a.name.split('.').pop() || '';
+                        const bExt = b.name.split('.').pop() || '';
+                        const extCompare = aExt.localeCompare(bExt);
+
+                        // If same extension, sort by name
+                        if (extCompare === 0) {
+                            return a.name.localeCompare(b.name);
+                        }
+                        return extCompare;
+                    }
+
+                    // Default to name comparison
+                    return a.name.localeCompare(b.name);
+                });
+
+            default:
+                return items;
+        }
+    }, [items, sortMethod]);
+
+    // Group items by first letter (for alphabetical browsing)
+    const itemsByLetter = useMemo(() => {
+        const grouped: Record<string, FileSystemItem[]> = {};
+
+        sortedItems.forEach(item => {
+            const firstLetter = item.name.charAt(0).toUpperCase();
+            if (!grouped[firstLetter]) {
+                grouped[firstLetter] = [];
+            }
+            grouped[firstLetter].push(item);
+        });
+
+        return grouped;
+    }, [sortedItems]);
+
+    const showAlphaScrollbar = useMemo(() => {
+        return sortMethod === 'alpha' && Object.keys(itemsByLetter).length > 5;
+    }, [sortMethod, itemsByLetter]);
 
     useEffect(() => {
         if (notification.visible) {
@@ -53,19 +138,59 @@ export default function FolderView({items}: FolderViewProps) {
         }
     };
 
-    const formatFileSize = (bytes: number) => {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    };
+    const letterPositionCache: {[key: string]: number} = {};
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+    const scrollToLetter = (letter: string) => {
+        const isMobile = window.innerWidth < 768;
+        
+        if (isMobile) {
+            if (letterPositionCache[letter] !== undefined) {
+                const mobileContainer = document.getElementById('mobile-content-container');
+                if (mobileContainer) {
+                    mobileContainer.scrollTop = letterPositionCache[letter];
+                    return;
+                }
+            }
+
+            const letterSelector = `.letter-section-mobile[data-letter="${letter}"]`;
+            const targetElement = document.querySelector(letterSelector);
+            const mobileContainer = document.getElementById('mobile-content-container');
+            
+            if (targetElement && mobileContainer) {
+                if (Object.keys(letterPositionCache).length === 0) {
+                    mobileContainer.scrollTop = 0;
+                    
+                    setTimeout(() => {
+                        const allLetters = document.querySelectorAll('.letter-section-mobile');
+                        allLetters.forEach(letterElement => {
+                            const letterValue = letterElement.getAttribute('data-letter');
+                            if (letterValue && letterElement instanceof HTMLElement) {
+                                letterPositionCache[letterValue] = letterElement.offsetTop;
+                            }
+                        });
+
+                        if (letterPositionCache[letter] !== undefined) {
+                            mobileContainer.scrollTop = letterPositionCache[letter];
+                        } else {
+                            targetElement.scrollIntoView({block: 'start', behavior: 'auto'});
+                        }
+                    }, 50);
+                } else {
+                    targetElement.scrollIntoView({block: 'start', behavior: 'auto'});
+                }
+            }
+        } else {
+            // Desktop
+            const targetId = `letter-section-${letter}`;
+            const element = document.getElementById(targetId);
+            const tableContainer = document.getElementById('table-container');
+            
+            if (element && tableContainer) {
+                setTimeout(() => {
+                    tableContainer.scrollTop = element.offsetTop - 60;
+                }, 10);
+            }
+        }
     };
 
     const copyToClipboard = (path: string, e: React.MouseEvent) => {
@@ -131,27 +256,77 @@ export default function FolderView({items}: FolderViewProps) {
                 </div>
             ) : (
                 <>
+                    {/* Sort Controls */}
+                    <div className="mb-4 flex items-center justify-end space-x-2">
+                        <div className="text-sm text-[var(--muted-foreground)]">Sort by:</div>
+                        <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
+                            <button
+                                onClick={() => setSortMethod('alpha')}
+                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                title="Sort alphabetically"
+                            >
+                                <SortAsc className="h-3.5 w-3.5 mr-1"/> A-Z
+                            </button>
+                            <button
+                                onClick={() => setSortMethod('modified')}
+                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                title="Sort by modified date"
+                            >
+                                <Calendar className="h-3.5 w-3.5 mr-1"/> Date
+                            </button>
+                            <button
+                                onClick={() => setSortMethod('size')}
+                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                title="Sort by size"
+                            >
+                                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     strokeWidth="2">
+                                    <rect x="4" y="14" width="4" height="6" rx="1"/>
+                                    <rect x="10" y="9" width="4" height="11" rx="1"/>
+                                    <rect x="16" y="4" width="4" height="16" rx="1"/>
+                                </svg>
+                                Size
+                            </button>
+                            <button
+                                onClick={() => setSortMethod('type')}
+                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                title="Group by type"
+                            >
+                                <Music className="h-3.5 w-3.5 mr-1"/> Type
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Desktop view */}
-                    <div
-                        className="hidden md:block bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
-                        <div className="overflow-x-auto" style={{WebkitOverflowScrolling: 'touch'}}>
-                            <table className="w-full table-fixed divide-y divide-[var(--border)]">
-                                <thead className="bg-[var(--card-hover)]">
+                    <div className="hidden md:block relative">
+                        {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
+                        
+                        <div className="bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
+                            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] scroll-smooth" id="table-container"
+                                 style={{WebkitOverflowScrolling: 'touch'}}>
+                                <table className="w-full table-fixed divide-y divide-[var(--border)]">
+                                <thead className="bg-[var(--card-hover)] sticky top-0 z-10">
                                 <tr>
                                     <th scope="col"
-                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                        style={{width: '55%'}}>
+                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                        style={{width: '55%'}}
+                                        onClick={() => setSortMethod('alpha')}>
                                         Name
+                                        {sortMethod === 'alpha' && ' ↓'}
                                     </th>
                                     <th scope="col"
-                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                        style={{width: '20%'}}>
+                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                        style={{width: '20%'}}
+                                        onClick={() => setSortMethod('size')}>
                                         Size
+                                        {sortMethod === 'size' && ' ↓'}
                                     </th>
                                     <th scope="col"
-                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                        style={{width: '15%'}}>
+                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                        style={{width: '15%'}}
+                                        onClick={() => setSortMethod('modified')}>
                                         Modified
+                                        {sortMethod === 'modified' && ' ↓'}
                                     </th>
                                     <th scope="col"
                                         className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
@@ -161,196 +336,106 @@ export default function FolderView({items}: FolderViewProps) {
                                 </tr>
                                 </thead>
                                 <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
-                                {items.map((item) => (
-                                    <tr
-                                        key={`desktop-${item.path}`}
-                                        className={`file-row hover:bg-[var(--card-hover)] ${
-                                            item.type === 'audio' ? 'cursor-pointer' : ''
-                                        }`}
-                                        onClick={() => item.type === 'audio' && handleAudioSelect(item)}
-                                    >
-                                        <td className="px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis"
-                                            style={{width: '55%'}}>
-                                            {item.type === 'folder' ? (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setIsLoading(item.path);
-                                                        router.push(`/browse/${encodeURIComponent(item.path).replace(/%2F/g, '/')}`);
+                                {sortMethod === 'alpha' ? (
+                                    Object.entries(itemsByLetter)
+                                        .sort(([a], [b]) => a.localeCompare(b))
+                                        .map(([letter, letterItems]) => (
+                                            <React.Fragment key={`letter-group-${letter}`}>
+                                                <tr
+                                                    id={`letter-section-${letter}`}
+                                                    data-letter={letter}
+                                                    ref={(el) => {
+                                                        if (el) letterRefs.current[letter] = el;
                                                     }}
-                                                    className="flex items-center text-[var(--primary)] hover:text-[var(--primary-hover)]"
+                                                    className="bg-[var(--card-hover)] sticky z-[5] letter-section"
                                                 >
-                                                    {isLoading === item.path ? (
-                                                        <Loader2
-                                                            className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)] animate-spin"/>
-                                                    ) : (
-                                                        <Folder
-                                                            className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)]"/>
-                                                    )}
-                                                    <span className="truncate" title={item.name}>{item.name}</span>
-                                                </button>
-                                            ) : (
-                                                <div className="flex items-center text-[var(--foreground)]">
-                                                    <Music className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)]"/>
-                                                    <span className="truncate" title={item.name}>{item.name}</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--muted-foreground)]"
-                                            style={{width: '20%'}}>
-                                            {item.type === 'audio' ? formatFileSize(item.size) :
-                                                (item.type === 'folder' && item.metadata?.directory_size) ?
-                                                    `${item.metadata.directory_size}${item.metadata.items ? ` | ${item.metadata.items} items` : ''}` :
-                                                    (item.type === 'folder' && item.metadata?.items) ?
-                                                        `${item.metadata.items} items` : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--muted-foreground)]"
-                                            style={{width: '15%'}}>
-                                            {formatDate(item.modifiedAt)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right"
-                                            style={{width: '10%'}}>
-                                            {item.type === 'audio' && (
-                                                <div className="flex gap-2 justify-end">
-                                                    <button
-                                                        className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
-                                                        onClick={(e) => copyToClipboard(item.path, e)}
-                                                        title="Share"
+                                                    <td
+                                                        colSpan={4}
+                                                        className="px-6 py-2 font-semibold text-[var(--primary)]"
                                                     >
-                                                        {notification.visible && notification.path === item.path && !notification.isError ?
-                                                            <Check className="h-4 w-4"/> :
-                                                            <Share2 className="h-4 w-4"/>
-                                                        }
-                                                    </button>
-                                                    <a
-                                                        href={`/api/audio/${item.path.split('/').map(segment => encodeURIComponent(segment)).join('/')}`}
-                                                        download
-                                                        className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        title="Download"
-                                                    >
-                                                        <Download className="h-4 w-4"/>
-                                                    </a>
-                                                </div>
-                                            )}
-                                            {item.type === 'folder' && item.metadata?.original_url && (
-                                                <div className="flex gap-2 justify-end">
-                                                    <a
-                                                        href={item.metadata.original_url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        title="Visit Original Source"
-                                                    >
-                                                        <ExternalLink className="h-4 w-4"/>
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                                        {letter}
+                                                    </td>
+                                                </tr>
+
+                                                {/* Items starting with this letter */}
+                                                {letterItems.map((item) => (
+                                                    <TableItem item={item} isLoading={isLoading} setIsLoading={setIsLoading}
+                                                               handleAudioSelect={handleAudioSelect} notification={notification}
+                                                               copyToClipboard={copyToClipboard} key={`desktop-${item.path}`}/>
+                                                ))}
+                                            </React.Fragment>
+                                        ))
+                                ) : (
+                                    // Non-alphabetical view - flat list
+                                    sortedItems.map((item) => (
+                                        <TableItem item={item} isLoading={isLoading} setIsLoading={setIsLoading}
+                                                   handleAudioSelect={handleAudioSelect} notification={notification}
+                                                   copyToClipboard={copyToClipboard} key={`desktop-flat-${item.path}`}/>
+                                    ))
+                                )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
+                </div>
 
                     {/* Mobile view */}
-                    <div className="md:hidden">
-                        {items.map((item) => (
-                            <div
-                                key={`mobile-${item.path}`}
-                                className={`border border-[var(--border)] rounded-lg mb-3 bg-[var(--card)] overflow-hidden ${
-                                    item.type === 'audio' ? 'cursor-pointer' : ''
-                                }`}
-                                onClick={() => item.type === 'audio' && handleAudioSelect(item)}
-                            >
-                                <div className="p-3 flex items-center">
-                                    <div className="mr-3">
-                                        {item.type === 'folder' ? (
-                                            <Folder className="h-5 w-5 text-[var(--primary)]"/>
-                                        ) : (
-                                            <Music className="h-5 w-5 text-[var(--primary)]"/>
-                                        )}
-                                    </div>
+                    <div className="md:hidden relative flex">
+                        {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
 
-                                    <div className="flex-1 overflow-hidden">
-                                        {item.type === 'folder' ? (
-                                            <button
-                                                className="text-[var(--primary)] hover:text-[var(--primary-hover)] block w-full text-left"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsLoading(item.path);
-                                                    router.push(`/browse/${encodeURIComponent(item.path).replace(/%2F/g, '/')}`);
+                        <div className="flex-grow overflow-y-auto max-h-[70vh] pb-4 scroll-smooth" id="mobile-content-container">
+                            {sortMethod === 'alpha' ? (
+                                Object.entries(itemsByLetter)
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .map(([letter, letterItems]) => (
+                                        <React.Fragment key={`letter-group-mobile-${letter}`}>
+                                            <div
+                                                id={`letter-section-mobile-${letter}`}
+                                                data-letter={letter}
+                                                ref={(el) => {
+                                                    if (el) letterRefs.current[letter] = el;
                                                 }}
+                                                className="bg-[var(--card-hover)] rounded-lg px-4 py-2 mb-2 font-semibold text-[var(--primary)] sticky top-0 z-10 letter-section-mobile"
                                             >
-                                                <div className="font-medium truncate flex items-center">
-                                                    {isLoading === item.path ? (
-                                                        <Loader2 className="h-4 w-4 mr-1 animate-spin inline"/>
-                                                    ) : null}
-                                                    {item.name}
+                                                {letter}
+                                            </div>
+
+                                            {/* Items starting with this letter */}
+                                            {letterItems.map((item) => (
+                                                <div
+                                                    key={`mobile-${item.path}`}
+                                                    className={`border border-[var(--border)] rounded-lg mb-3 bg-[var(--card)] overflow-hidden ${
+                                                        item.type === 'audio' ? 'cursor-pointer' : ''
+                                                    }`}
+                                                    onClick={() => item.type === 'audio' && handleAudioSelect(item)}
+                                                >
+                                                    <MobileItemName item={item} isLoading={isLoading}
+                                                                    setIsLoading={setIsLoading}/>
+
+                                                    <ItemSize item={item} notification={notification}
+                                                              copyToClipboard={copyToClipboard}/>
                                                 </div>
-                                            </button>
-                                        ) : (
-                                            <div className="font-medium truncate">{item.name}</div>
-                                        )}
-                                    </div>
-                                </div>
+                                            ))}
+                                        </React.Fragment>
+                                    ))
+                            ) : (
+                                // Non-alphabetical view - flat list
+                                sortedItems.map((item) => (
+                                    <div
+                                        key={`mobile-flat-${item.path}`}
+                                        className={`border border-[var(--border)] rounded-lg mb-3 bg-[var(--card)] overflow-hidden ${
+                                            item.type === 'audio' ? 'cursor-pointer' : ''
+                                        }`}
+                                        onClick={() => item.type === 'audio' && handleAudioSelect(item)}
+                                    >
+                                        <MobileItemName item={item} isLoading={isLoading} setIsLoading={setIsLoading}/>
 
-                                <div className="px-3 pb-3 flex justify-between">
-                                    <div className="text-xs text-[var(--muted-foreground)]">
-                                        {item.type === 'audio' && (
-                                            <span className="mr-3">{formatFileSize(item.size)}</span>
-                                        )}
-                                        {item.type === 'folder' && item.metadata?.directory_size && (
-                                            <span className="mr-3">{item.metadata.directory_size}</span>
-                                        )}
-                                        {item.type === 'folder' && item.metadata?.items && (
-                                            <span className="mr-3">{item.metadata.items} items</span>
-                                        )}
-                                        <span>{formatDate(item.modifiedAt)}</span>
+                                        <ItemSize item={item} notification={notification}
+                                                  copyToClipboard={copyToClipboard}/>
                                     </div>
-
-                                    {item.type === 'audio' && (
-                                        <div className="flex gap-2">
-                                            <button
-                                                className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
-                                                onClick={(e) => copyToClipboard(item.path, e)}
-                                                title="Share"
-                                            >
-                                                {notification.visible && notification.path === item.path && !notification.isError ?
-                                                    <Check className="h-3 w-3"/> :
-                                                    <Share2 className="h-3 w-3"/>
-                                                }
-                                            </button>
-                                            <a
-                                                href={`/api/audio/${item.path.split('/').map(segment => encodeURIComponent(segment)).join('/')}`}
-                                                download
-                                                className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
-                                                onClick={(e) => e.stopPropagation()}
-                                                title="Download"
-                                            >
-                                                <Download className="h-3 w-3"/>
-                                            </a>
-                                        </div>
-                                    )}
-                                    {item.type === 'folder' && item.metadata?.original_url && (
-                                        <div className="flex gap-2">
-                                            <a
-                                                href={item.metadata.original_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
-                                                onClick={(e) => e.stopPropagation()}
-                                                title="Visit Original Source"
-                                            >
-                                                <ExternalLink className="h-3 w-3"/>
-                                            </a>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                                ))
+                            )}
+                        </div>
                     </div>
                 </>
             )}

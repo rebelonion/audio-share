@@ -25,4 +25,11 @@ export interface Folder {
     metadata?: FolderMetadata;
 }
 
+export type Notification = {
+    path: string;
+    message: string;
+    isError: boolean;
+    visible: boolean;
+}
+
 export type FileSystemItem = AudioFile | Folder;
