@@ -8,6 +8,7 @@ import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
 import ItemSize from "@/components/ItemSize";
 import TableItem from "@/components/TableItem";
+import {sizeFromString} from "@/lib/utils";
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -60,8 +61,21 @@ export default function FolderView({items}: FolderViewProps) {
 
             case 'size':
                 return [...items].sort((a, b) => {
-                    if (a.type === 'folder' && b.type !== 'folder') return -1;
-                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+                    if (a.type === 'folder' && b.type !== 'folder') {
+                        const aSize = 'metadata' in a ? sizeFromString(a.metadata?.directory_size || '0') : 0;
+                        const bSize = 'size' in b ? b.size : 0;
+                        return bSize - aSize;
+                    }
+                    if (a.type !== 'folder' && b.type === 'folder') {
+                        const aSize = 'size' in a ? a.size : 0;
+                        const bSize = 'metadata' in b ? sizeFromString(b.metadata?.directory_size || '0') : 0;
+                        return bSize - aSize;
+                    }
+                    if (a.type === 'folder' && b.type === 'folder') {
+                        const aSize = 'metadata' in a ? sizeFromString(a.metadata?.directory_size || '0') : 0;
+                        const bSize = 'metadata' in b ? sizeFromString(b.metadata?.directory_size || '0') : 0;
+                        return bSize - aSize;
+                    }
                     const aSize = 'size' in a ? a.size : 0;
                     const bSize = 'size' in b ? b.size : 0;
                     return bSize - aSize;
