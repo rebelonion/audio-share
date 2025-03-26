@@ -68,7 +68,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
             {/* Desktop scrollbar */}
             <div className="hidden md:block h-full">
                 <div 
-                    className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-1 sticky top-0 float-right mr-4 ml-3 max-h-[70vh] overflow-y-auto scrollbar-hide"
+                    className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-1 sticky top-0 float-right ml-3 max-h-[70vh] overflow-y-auto scrollbar-hide"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
                     {availableLetters.map(letter => (
@@ -91,7 +91,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
             {/* Mobile scrollbar */}
             <div className="md:hidden block">
                 <div
-                    className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 sticky top-0 float-right mr-2 ml-2 max-h-[70vh] overflow-y-auto z-30 scrollbar-hide"
+                    className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 sticky top-0 float-right mr-2 max-h-[70vh] overflow-y-auto z-30 scrollbar-hide"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
