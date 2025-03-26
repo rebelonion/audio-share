@@ -1,7 +1,7 @@
 'use client';
 
-import React, {useState, useEffect} from 'react';
-import {Folder, Music, Download, Share2, Check, Loader2} from 'lucide-react';
+import React, {useEffect, useState} from 'react';
+import {Check, Download, ExternalLink, Folder, Loader2, Music, Share2} from 'lucide-react';
 import {FileSystemItem} from '@/types';
 import AudioPlayer from './AudioPlayer';
 import {useRouter} from 'next/navigation';
@@ -41,7 +41,7 @@ export default function FolderView({items}: FolderViewProps) {
     const handleAudioSelect = (item: FileSystemItem) => {
         if (item.type === 'audio' && !isAudioSelectionLocked) {
             setIsAudioSelectionLocked(true);
-            
+
             const path = item.path.split('/').map(encodeURIComponent).join('/');
             const audioPath = (item.path.startsWith('audio/') ? `/${path}` : `/audio/${path}`);
             console.log('Setting audio path:', audioPath);
@@ -74,7 +74,7 @@ export default function FolderView({items}: FolderViewProps) {
         const source = encodeURIComponent(pathParts[0]);
         const filePath = pathParts.slice(1).map(segment => encodeURIComponent(segment)).join('/');
         const url = `${window.location.origin}/share/${source}/${filePath}`;
-        
+
         try {
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(url).then(() => {
@@ -145,7 +145,7 @@ export default function FolderView({items}: FolderViewProps) {
                                     </th>
                                     <th scope="col"
                                         className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                        style={{width: '15%'}}>
+                                        style={{width: '20%'}}>
                                         Size
                                     </th>
                                     <th scope="col"
@@ -155,7 +155,7 @@ export default function FolderView({items}: FolderViewProps) {
                                     </th>
                                     <th scope="col"
                                         className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                        style={{width: '15%'}}>
+                                        style={{width: '10%'}}>
                                         Actions
                                     </th>
                                 </tr>
@@ -197,8 +197,12 @@ export default function FolderView({items}: FolderViewProps) {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--muted-foreground)]"
-                                            style={{width: '15%'}}>
-                                            {item.type === 'audio' ? formatFileSize(item.size) : '-'}
+                                            style={{width: '20%'}}>
+                                            {item.type === 'audio' ? formatFileSize(item.size) :
+                                                (item.type === 'folder' && item.metadata?.directory_size) ?
+                                                    `${item.metadata.directory_size}${item.metadata.items ? ` | ${item.metadata.items} items` : ''}` :
+                                                    (item.type === 'folder' && item.metadata?.items) ?
+                                                        `${item.metadata.items} items` : '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--muted-foreground)]"
                                             style={{width: '15%'}}>
@@ -226,6 +230,20 @@ export default function FolderView({items}: FolderViewProps) {
                                                         title="Download"
                                                     >
                                                         <Download className="h-4 w-4"/>
+                                                    </a>
+                                                </div>
+                                            )}
+                                            {item.type === 'folder' && item.metadata?.original_url && (
+                                                <div className="flex gap-2 justify-end">
+                                                    <a
+                                                        href={item.metadata.original_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        title="Visit Original Source"
+                                                    >
+                                                        <ExternalLink className="h-4 w-4"/>
                                                     </a>
                                                 </div>
                                             )}
@@ -284,6 +302,12 @@ export default function FolderView({items}: FolderViewProps) {
                                         {item.type === 'audio' && (
                                             <span className="mr-3">{formatFileSize(item.size)}</span>
                                         )}
+                                        {item.type === 'folder' && item.metadata?.directory_size && (
+                                            <span className="mr-3">{item.metadata.directory_size}</span>
+                                        )}
+                                        {item.type === 'folder' && item.metadata?.items && (
+                                            <span className="mr-3">{item.metadata.items} items</span>
+                                        )}
                                         <span>{formatDate(item.modifiedAt)}</span>
                                     </div>
 
@@ -307,6 +331,20 @@ export default function FolderView({items}: FolderViewProps) {
                                                 title="Download"
                                             >
                                                 <Download className="h-3 w-3"/>
+                                            </a>
+                                        </div>
+                                    )}
+                                    {item.type === 'folder' && item.metadata?.original_url && (
+                                        <div className="flex gap-2">
+                                            <a
+                                                href={item.metadata.original_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
+                                                onClick={(e) => e.stopPropagation()}
+                                                title="Visit Original Source"
+                                            >
+                                                <ExternalLink className="h-3 w-3"/>
                                             </a>
                                         </div>
                                     )}

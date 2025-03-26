@@ -1,10 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import {promisify} from 'util';
-import {FileSystemItem} from '@/types';
+import {FileSystemItem, FolderMetadata} from '@/types';
 
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
+const readFile = promisify(fs.readFile);
 
 interface AudioDirConfig {
     path: string;        // Actual filesystem path
@@ -162,6 +163,17 @@ export async function getDirectoryContents(
         const fullPath = path.join(targetDir, normalizedPath);
         const files = await readdir(fullPath);
 
+        let folderMetadataList: FolderMetadata[] = [];
+        const folderMetadataPath = path.join(fullPath, 'folder.json');
+        try {
+            if (fs.existsSync(folderMetadataPath)) {
+                const metadataContent = await readFile(folderMetadataPath, 'utf-8');
+                folderMetadataList = JSON.parse(metadataContent);
+            }
+        } catch (error) {
+            console.error(`Error reading folder metadata from ${folderMetadataPath}:`, error);
+        }
+
         for (const file of files) {
             if (file.startsWith('.')) continue;
 
@@ -171,11 +183,18 @@ export async function getDirectoryContents(
             const ext = path.extname(file).toLowerCase();
 
             if (stats.isDirectory()) {
+                const folderMetadata = folderMetadataList.find(
+                    (item: FolderMetadata) => item.folder_name === file
+                );
+
+                const displayName = folderMetadata?.name || file;
+                
                 items.push({
-                    name: file,
+                    name: displayName,
                     path: virtualPath,
                     modifiedAt: stats.mtime.toISOString(),
                     type: 'folder',
+                    metadata: folderMetadata
                 });
             }
             else if (audioExts.includes(ext)) {

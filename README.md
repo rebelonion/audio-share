@@ -16,6 +16,7 @@ A modern web application for browsing, playing, and sharing audio files from you
 - 🔗 Share links to specific audio files
 - 📱 Responsive design that works on all devices
 - 🔄 Request new artists/channels to be added via ntfy notifications
+- 📂 Enhanced folder presentation with custom names, item counts, and source links
 
 ## Installation
 
@@ -100,6 +101,36 @@ The metadata JSON can include:
   "description": "Description text about the song"
 }
 ```
+
+### Folder Metadata
+
+You can add enhanced metadata for directories by adding a `folder.json` file in the parent directory. This file contains an array of metadata objects for subdirectories:
+
+```json
+[
+  {
+    "folder_name": "actual_folder_name",
+    "name": "Display Name",
+    "original_url": "https://source-url.com/channel",
+    "items": 53,
+    "directory_size": "3.0G"
+  },
+  {
+    "folder_name": "another_folder",
+    "name": "Another Display Name",
+    "original_url": "https://another-url.com",
+    "items": 42,
+    "directory_size": "1.2G"
+  }
+]
+```
+
+Each entry maps a folder name to its display information:
+- `folder_name`: The actual directory name to match
+- `name`: The display name shown in the UI
+- `original_url`: Optional link to the original content source
+- `items`: Optional number of items in the folder
+- `directory_size`: Optional human-readable size of the directory
 
 ## Customization
 
