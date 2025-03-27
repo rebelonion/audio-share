@@ -152,56 +152,32 @@ export default function FolderView({items}: FolderViewProps) {
         }
     };
 
-    const letterPositionCache: {[key: string]: number} = {};
-
     const scrollToLetter = (letter: string) => {
         const isMobile = window.innerWidth < 768;
         
         if (isMobile) {
-            if (letterPositionCache[letter] !== undefined) {
-                const mobileContainer = document.getElementById('mobile-content-container');
-                if (mobileContainer) {
-                    mobileContainer.scrollTop = letterPositionCache[letter];
-                    return;
-                }
-            }
-
             const letterSelector = `.letter-section-mobile[data-letter="${letter}"]`;
             const targetElement = document.querySelector(letterSelector);
-            const mobileContainer = document.getElementById('mobile-content-container');
             
-            if (targetElement && mobileContainer) {
-                if (Object.keys(letterPositionCache).length === 0) {
-                    mobileContainer.scrollTop = 0;
-                    
-                    setTimeout(() => {
-                        const allLetters = document.querySelectorAll('.letter-section-mobile');
-                        allLetters.forEach(letterElement => {
-                            const letterValue = letterElement.getAttribute('data-letter');
-                            if (letterValue && letterElement instanceof HTMLElement) {
-                                letterPositionCache[letterValue] = letterElement.offsetTop;
-                            }
-                        });
-
-                        if (letterPositionCache[letter] !== undefined) {
-                            mobileContainer.scrollTop = letterPositionCache[letter];
-                        } else {
-                            targetElement.scrollIntoView({block: 'start', behavior: 'auto'});
-                        }
-                    }, 50);
-                } else {
-                    targetElement.scrollIntoView({block: 'start', behavior: 'auto'});
-                }
+            if (targetElement && targetElement instanceof HTMLElement) {
+                setTimeout(() => {
+                    window.scrollTo({
+                        top: targetElement.getBoundingClientRect().top + window.scrollY - 60,
+                        behavior: 'smooth'
+                    });
+                }, 10);
             }
         } else {
             // Desktop
             const targetId = `letter-section-${letter}`;
             const element = document.getElementById(targetId);
-            const tableContainer = document.getElementById('table-container');
             
-            if (element && tableContainer) {
+            if (element) {
                 setTimeout(() => {
-                    tableContainer.scrollTop = element.offsetTop - 60;
+                    window.scrollTo({
+                        top: element.getBoundingClientRect().top + window.scrollY - 60,
+                        behavior: 'smooth'
+                    });
                 }, 10);
             }
         }
@@ -271,7 +247,7 @@ export default function FolderView({items}: FolderViewProps) {
             ) : (
                 <>
                     {/* Sort Controls */}
-                    <div className="mb-4 flex items-center justify-end space-x-2">
+                    <div className="mb-4 flex items-center justify-end space-x-2 pr-12">
                         <div className="text-sm text-[var(--muted-foreground)]">Sort by:</div>
                         <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
                             <button
@@ -312,14 +288,13 @@ export default function FolderView({items}: FolderViewProps) {
                     </div>
 
                     {/* Desktop view */}
-                    <div className="hidden md:block relative">
+                    <div className="hidden md:block relative pr-12">
                         {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
                         
                         <div className="bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
-                            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] scroll-smooth scrollbar-hide" id="table-container"
-                                 style={{WebkitOverflowScrolling: 'touch'}}>
+                            <div className="overflow-x-auto" id="table-container">
                                 <table className="w-full table-fixed divide-y divide-[var(--border)]">
-                                <thead className="bg-[var(--card-hover)] sticky top-0 z-10">
+                                <thead className="bg-[var(--card-hover)] sticky top-0 z-20">
                                 <tr>
                                     <th scope="col"
                                         className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
@@ -361,7 +336,7 @@ export default function FolderView({items}: FolderViewProps) {
                                                     ref={(el) => {
                                                         if (el) letterRefs.current[letter] = el;
                                                     }}
-                                                    className="bg-[var(--card-hover)] sticky z-[5] letter-section"
+                                                    className="bg-[var(--card-hover)] sticky top-12 z-10 letter-section"
                                                 >
                                                     <td
                                                         colSpan={4}
@@ -394,10 +369,10 @@ export default function FolderView({items}: FolderViewProps) {
                 </div>
 
                     {/* Mobile view */}
-                    <div className="md:hidden relative flex">
+                    <div className="md:hidden relative flex pr-10">
                         {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
 
-                        <div className="flex-grow overflow-y-auto max-h-[70vh] pb-4 scroll-smooth" id="mobile-content-container">
+                        <div className="flex-grow pb-4" id="mobile-content-container">
                             {sortMethod === 'alpha' ? (
                                 Object.entries(itemsByLetter)
                                     .sort(([a], [b]) => a.localeCompare(b))
