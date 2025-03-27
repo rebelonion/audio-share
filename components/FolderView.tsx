@@ -292,7 +292,7 @@ export default function FolderView({items}: FolderViewProps) {
                         {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
                         
                         <div className="bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
-                            <div className="overflow-x-auto" id="table-container">
+                            <div className="overflow-x-auto scrollbar-hide" id="table-container">
                                 <table className="w-full table-fixed divide-y divide-[var(--border)]">
                                 <thead className="bg-[var(--card-hover)] sticky top-0 z-20">
                                 <tr>
