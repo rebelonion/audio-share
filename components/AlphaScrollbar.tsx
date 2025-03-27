@@ -11,7 +11,6 @@ interface AlphaScrollbarProps {
 export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaScrollbarProps) {
     const [availableLetters, setAvailableLetters] = useState<string[]>([]);
     const [activeLetter, setActiveLetter] = useState<string | null>(null);
-    const [isTouching, setIsTouching] = useState(false);
 
     useEffect(() => {
         const letters = items
@@ -30,34 +29,6 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
             setActiveLetter(null);
         }, 1000);
     }, [onScrollToLetterAction]);
-    
-    const handleTouchStart = useCallback((letter: string) => {
-        setIsTouching(true);
-        setActiveLetter(letter);
-        onScrollToLetterAction(letter);
-    }, [onScrollToLetterAction]);
-    
-    const handleTouchMove = useCallback((e: React.TouchEvent) => {
-        if (!isTouching) return;
-        
-        const touch = e.touches[0];
-        const element = document.elementFromPoint(touch.clientX, touch.clientY);
-        
-        if (element && element.hasAttribute('data-letter')) {
-            const letter = element.getAttribute('data-letter');
-            if (letter && letter !== activeLetter) {
-                setActiveLetter(letter);
-                onScrollToLetterAction(letter);
-            }
-        }
-    }, [isTouching, activeLetter, onScrollToLetterAction]);
-    
-    const handleTouchEnd = useCallback(() => {
-        setIsTouching(false);
-        setTimeout(() => {
-            setActiveLetter(null);
-        }, 500);
-    }, []);
 
     if (availableLetters.length <= 1) {
         return null; // Don't show scrollbar if there's only one or no letters
@@ -93,8 +64,6 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
                 <div
                     className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 sticky top-0 float-right mr-2 max-h-[70vh] overflow-y-auto z-30 scrollbar-hide"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
                 >
                     {availableLetters.map(letter => (
                         <button
@@ -106,7 +75,6 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
                                     : 'hover:bg-[var(--card-hover)] text-[var(--foreground)]'
                             }`}
                             onClick={() => handleLetterClick(letter)}
-                            onTouchStart={() => handleTouchStart(letter)}
                         >
                             {letter}
                         </button>
