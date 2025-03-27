@@ -16,10 +16,13 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
     const mobileScrollbarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const sortOrder = urlParams?.get('order') === 'desc' ? 'desc' : 'asc';
+        
         const letters = items
             .map(item => item.name.charAt(0).toUpperCase())
             .filter((letter, index, self) => self.indexOf(letter) === index)
-            .sort((a, b) => a.localeCompare(b));
+            .sort((a, b) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
 
         setAvailableLetters(letters);
     }, [items]);

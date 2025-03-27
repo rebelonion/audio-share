@@ -1,5 +1,4 @@
 
-
 export const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -32,4 +31,8 @@ export const sizeFromString = (size: string) => {
         case 'tb': return num * 1024 * 1024 * 1024 * 1024;
         default: return NaN;
     }
+}
+
+export function reverseIf<T>(array: T[], condition: boolean): T[] {
+    return condition ? [...array].reverse() : array;
 }

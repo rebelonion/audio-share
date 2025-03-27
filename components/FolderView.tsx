@@ -1,6 +1,6 @@
 'use client';
 
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Calendar, Check, Music, SortAsc} from 'lucide-react';
 import {FileSystemItem, Notification} from '@/types';
 import AudioPlayer from './AudioPlayer';
@@ -8,7 +8,7 @@ import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
 import ItemSize from "@/components/ItemSize";
 import TableItem from "@/components/TableItem";
-import {sizeFromString} from "@/lib/utils";
+import {reverseIf, sizeFromString} from "@/lib/utils";
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -23,6 +23,7 @@ export default function FolderView({items}: FolderViewProps) {
     const [isLoading, setIsLoading] = useState<string | null>(null);
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
     const [notification, setNotification] = useState<Notification>({
         path: '',
         message: '',
@@ -33,34 +34,68 @@ export default function FolderView({items}: FolderViewProps) {
     const letterRefs = useRef<Record<string, HTMLElement | null>>({});
 
     useEffect(() => {
-        const folderCount = items.filter(item => item.type === 'folder').length;
-        const fileCount = items.filter(item => item.type === 'audio').length;
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 
-        if (folderCount >= fileCount) {
-            setSortMethod('alpha'); // More folders than files - use alphabetical
+        const urlSort = urlParams?.get('sort') as SortMethod | null;
+        if (urlSort && ['alpha', 'modified', 'size', 'type'].includes(urlSort)) {
+            setSortMethod(urlSort);
         } else {
-            setSortMethod('modified'); // More files than folders - use modified date
+            const folderCount = items.filter(item => item.type === 'folder').length;
+            const fileCount = items.filter(item => item.type === 'audio').length;
+            
+            if (folderCount >= fileCount) {
+                setSortMethod('alpha'); // More folders than files - use alphabetical
+            } else {
+                setSortMethod('modified'); // More files than folders - use modified date
+            }
+        }
+
+        const urlOrder = urlParams?.get('order');
+        if (urlOrder === 'desc' || urlOrder === 'asc') {
+            setSortOrder(urlOrder);
         }
     }, [items]);
 
+    const handleOrderToggle = useCallback((method: SortMethod) => {
+        if (method === sortMethod) {
+            const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            setSortOrder(newOrder);
+
+            const url = new URL(window.location.href);
+            url.searchParams.set('order', newOrder);
+            window.history.replaceState({}, '', url.toString());
+        } else {
+            setSortOrder('asc');
+            setSortMethod(method);
+
+            const url = new URL(window.location.href);
+            url.searchParams.set('sort', method);
+            url.searchParams.set('order', 'asc');
+            window.history.replaceState({}, '', url.toString());
+        }
+    }, [setSortOrder, sortMethod, sortOrder]);
+
+
     const sortedItems = useMemo(() => {
         switch (sortMethod) {
-            case 'alpha':
-                return [...items].sort((a, b) => {
+            case 'alpha': {
+                const presortedItems = [...items].sort((a, b) => {
                     if (a.type === 'folder' && b.type !== 'folder') return -1;
                     if (a.type !== 'folder' && b.type === 'folder') return 1;
                     return a.name.localeCompare(b.name);
                 });
-
-            case 'modified':
-                return [...items].sort((a, b) => {
+                return reverseIf(presortedItems, sortOrder === 'desc');
+            }
+            case 'modified': {
+                const presortedItems = [...items].sort((a, b) => {
                     if (a.type === 'folder' && b.type !== 'folder') return -1;
                     if (a.type !== 'folder' && b.type === 'folder') return 1;
                     return b.modifiedAt.localeCompare(a.modifiedAt);
                 });
-
-            case 'size':
-                return [...items].sort((a, b) => {
+                return reverseIf(presortedItems, sortOrder === 'desc');
+            }
+            case 'size': {
+                const presortedItems = [...items].sort((a, b) => {
                     if (a.type === 'folder' && b.type !== 'folder') {
                         const aSize = 'metadata' in a ? sizeFromString(a.metadata?.directory_size || '0') : 0;
                         const bSize = 'size' in b ? b.size : 0;
@@ -80,9 +115,10 @@ export default function FolderView({items}: FolderViewProps) {
                     const bSize = 'size' in b ? b.size : 0;
                     return bSize - aSize;
                 });
-
-            case 'type':
-                return [...items].sort((a, b) => {
+                return reverseIf(presortedItems, sortOrder === 'desc');
+            }
+            case 'type': {
+                const presortedItems = [...items].sort((a, b) => {
                     // First by type
                     if (a.type === 'folder' && b.type !== 'folder') return -1;
                     if (a.type !== 'folder' && b.type === 'folder') return 1;
@@ -103,11 +139,12 @@ export default function FolderView({items}: FolderViewProps) {
                     // Default to name comparison
                     return a.name.localeCompare(b.name);
                 });
-
+                return reverseIf(presortedItems, sortOrder === 'desc');
+            }
             default:
-                return items;
+                return reverseIf(items, sortOrder === 'desc');
         }
-    }, [items, sortMethod]);
+    }, [items, sortMethod, sortOrder]);
 
     // Group items by first letter (for alphabetical browsing)
     const itemsByLetter = useMemo(() => {
@@ -154,11 +191,11 @@ export default function FolderView({items}: FolderViewProps) {
 
     const scrollToLetter = (letter: string) => {
         const isMobile = window.innerWidth < 768;
-        
+
         if (isMobile) {
             const letterSelector = `.letter-section-mobile[data-letter="${letter}"]`;
             const targetElement = document.querySelector(letterSelector);
-            
+
             if (targetElement && targetElement instanceof HTMLElement) {
                 setTimeout(() => {
                     window.scrollTo({
@@ -171,7 +208,7 @@ export default function FolderView({items}: FolderViewProps) {
             // Desktop
             const targetId = `letter-section-${letter}`;
             const element = document.getElementById(targetId);
-            
+
             if (element) {
                 setTimeout(() => {
                     window.scrollTo({
@@ -251,21 +288,21 @@ export default function FolderView({items}: FolderViewProps) {
                         <div className="text-sm text-[var(--muted-foreground)]">Sort by:</div>
                         <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
                             <button
-                                onClick={() => setSortMethod('alpha')}
+                                onClick={() => handleOrderToggle('alpha')}
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Sort alphabetically"
                             >
                                 <SortAsc className="h-3.5 w-3.5 mr-1"/> A-Z
                             </button>
                             <button
-                                onClick={() => setSortMethod('modified')}
+                                onClick={() => handleOrderToggle('modified')}
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Sort by modified date"
                             >
                                 <Calendar className="h-3.5 w-3.5 mr-1"/> Date
                             </button>
                             <button
-                                onClick={() => setSortMethod('size')}
+                                onClick={() => handleOrderToggle('size')}
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Sort by size"
                             >
@@ -278,7 +315,7 @@ export default function FolderView({items}: FolderViewProps) {
                                 Size
                             </button>
                             <button
-                                onClick={() => setSortMethod('type')}
+                                onClick={() => handleOrderToggle('type')}
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Group by type"
                             >
@@ -289,93 +326,100 @@ export default function FolderView({items}: FolderViewProps) {
 
                     {/* Desktop view */}
                     <div className="hidden md:block relative pr-12">
-                        {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
-                        
-                        <div className="bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
+                        {showAlphaScrollbar &&
+                            <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
+
+                        <div
+                            className="bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
                             <div className="overflow-x-auto scrollbar-hide" id="table-container">
                                 <table className="w-full table-fixed divide-y divide-[var(--border)]">
-                                <thead className="bg-[var(--card-hover)] sticky top-0 z-20">
-                                <tr>
-                                    <th scope="col"
-                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                        style={{width: '55%'}}
-                                        onClick={() => setSortMethod('alpha')}>
-                                        Name
-                                        {sortMethod === 'alpha' && ' ↓'}
-                                    </th>
-                                    <th scope="col"
-                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                        style={{width: '20%'}}
-                                        onClick={() => setSortMethod('size')}>
-                                        Size
-                                        {sortMethod === 'size' && ' ↓'}
-                                    </th>
-                                    <th scope="col"
-                                        className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                        style={{width: '15%'}}
-                                        onClick={() => setSortMethod('modified')}>
-                                        Modified
-                                        {sortMethod === 'modified' && ' ↓'}
-                                    </th>
-                                    <th scope="col"
-                                        className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                        style={{width: '10%'}}>
-                                        Actions
-                                    </th>
-                                </tr>
-                                </thead>
-                                <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
-                                {sortMethod === 'alpha' ? (
-                                    Object.entries(itemsByLetter)
-                                        .sort(([a], [b]) => a.localeCompare(b))
-                                        .map(([letter, letterItems]) => (
-                                            <React.Fragment key={`letter-group-${letter}`}>
-                                                <tr
-                                                    id={`letter-section-${letter}`}
-                                                    data-letter={letter}
-                                                    ref={(el) => {
-                                                        if (el) letterRefs.current[letter] = el;
-                                                    }}
-                                                    className="bg-[var(--card-hover)] sticky top-12 z-10 letter-section"
-                                                >
-                                                    <td
-                                                        colSpan={4}
-                                                        className="px-6 py-2 font-semibold text-[var(--primary)]"
+                                    <thead className="bg-[var(--card-hover)] sticky top-0 z-20">
+                                    <tr>
+                                        <th scope="col"
+                                            className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                            style={{width: '55%'}}
+                                            onClick={() => handleOrderToggle('alpha')}>
+                                            Name
+                                            {sortMethod === 'alpha' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                        </th>
+                                        <th scope="col"
+                                            className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                            style={{width: '20%'}}
+                                            onClick={() => handleOrderToggle('size')}>
+                                            Size
+                                            {sortMethod === 'size' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                        </th>
+                                        <th scope="col"
+                                            className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                            style={{width: '15%'}}
+                                            onClick={() => handleOrderToggle('modified')}>
+                                            Modified
+                                            {sortMethod === 'modified' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                        </th>
+                                        <th scope="col"
+                                            className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
+                                            style={{width: '10%'}}>
+                                            Actions
+                                        </th>
+                                    </tr>
+                                    </thead>
+                                    <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
+                                    {sortMethod === 'alpha' ? (
+                                        Object.entries(itemsByLetter)
+                                            .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b))
+                                            .map(([letter, letterItems]) => (
+                                                <React.Fragment key={`letter-group-${letter}`}>
+                                                    <tr
+                                                        id={`letter-section-${letter}`}
+                                                        data-letter={letter}
+                                                        ref={(el) => {
+                                                            if (el) letterRefs.current[letter] = el;
+                                                        }}
+                                                        className="bg-[var(--card-hover)] sticky top-12 z-10 letter-section"
                                                     >
-                                                        {letter}
-                                                    </td>
-                                                </tr>
+                                                        <td
+                                                            colSpan={4}
+                                                            className="px-6 py-2 font-semibold text-[var(--primary)]"
+                                                        >
+                                                            {letter}
+                                                        </td>
+                                                    </tr>
 
-                                                {/* Items starting with this letter */}
-                                                {letterItems.map((item) => (
-                                                    <TableItem item={item} isLoading={isLoading} setIsLoading={setIsLoading}
-                                                               handleAudioSelect={handleAudioSelect} notification={notification}
-                                                               copyToClipboard={copyToClipboard} key={`desktop-${item.path}`}/>
-                                                ))}
-                                            </React.Fragment>
+                                                    {/* Items starting with this letter */}
+                                                    {letterItems.map((item) => (
+                                                        <TableItem item={item} isLoading={isLoading}
+                                                                   setIsLoading={setIsLoading}
+                                                                   handleAudioSelect={handleAudioSelect}
+                                                                   notification={notification}
+                                                                   copyToClipboard={copyToClipboard}
+                                                                   key={`desktop-${item.path}`}/>
+                                                    ))}
+                                                </React.Fragment>
+                                            ))
+                                    ) : (
+                                        // Non-alphabetical view - flat list
+                                        sortedItems.map((item) => (
+                                            <TableItem item={item} isLoading={isLoading} setIsLoading={setIsLoading}
+                                                       handleAudioSelect={handleAudioSelect} notification={notification}
+                                                       copyToClipboard={copyToClipboard}
+                                                       key={`desktop-flat-${item.path}`}/>
                                         ))
-                                ) : (
-                                    // Non-alphabetical view - flat list
-                                    sortedItems.map((item) => (
-                                        <TableItem item={item} isLoading={isLoading} setIsLoading={setIsLoading}
-                                                   handleAudioSelect={handleAudioSelect} notification={notification}
-                                                   copyToClipboard={copyToClipboard} key={`desktop-flat-${item.path}`}/>
-                                    ))
-                                )}
-                                </tbody>
-                            </table>
+                                    )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
 
                     {/* Mobile view */}
                     <div className="md:hidden relative flex pr-10">
-                        {showAlphaScrollbar && <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
+                        {showAlphaScrollbar &&
+                            <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
 
                         <div className="flex-grow pb-4" id="mobile-content-container">
                             {sortMethod === 'alpha' ? (
                                 Object.entries(itemsByLetter)
-                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b))
                                     .map(([letter, letterItems]) => (
                                         <React.Fragment key={`letter-group-mobile-${letter}`}>
                                             <div
