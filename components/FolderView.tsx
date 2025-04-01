@@ -9,6 +9,7 @@ import MobileItemName from "@/components/MobileItemName";
 import ItemSize from "@/components/ItemSize";
 import TableItem from "@/components/TableItem";
 import {reverseIf, sizeFromString} from "@/lib/utils";
+import {useSearchParams} from "next/navigation";
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -18,6 +19,7 @@ interface FolderViewProps {
 type SortMethod = 'alpha' | 'modified' | 'size' | 'type';
 
 export default function FolderView({items}: FolderViewProps) {
+    const searchParams = useSearchParams();
     const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
     const [selectedAudioName, setSelectedAudioName] = useState<string>('');
     const [isLoading, setIsLoading] = useState<string | null>(null);
@@ -34,9 +36,8 @@ export default function FolderView({items}: FolderViewProps) {
     const letterRefs = useRef<Record<string, HTMLElement | null>>({});
 
     useEffect(() => {
-        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const urlSort = searchParams.get("sort") as SortMethod | null;
 
-        const urlSort = urlParams?.get('sort') as SortMethod | null;
         if (urlSort && ['alpha', 'modified', 'size', 'type'].includes(urlSort)) {
             setSortMethod(urlSort);
         } else {
@@ -50,11 +51,11 @@ export default function FolderView({items}: FolderViewProps) {
             }
         }
 
-        const urlOrder = urlParams?.get('order');
+        const urlOrder = searchParams?.get('order');
         if (urlOrder === 'desc' || urlOrder === 'asc') {
             setSortOrder(urlOrder);
         }
-    }, [items]);
+    }, [items, searchParams]);
 
     const handleOrderToggle = useCallback((method: SortMethod) => {
         if (method === sortMethod) {

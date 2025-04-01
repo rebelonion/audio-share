@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FileSystemItem } from '@/types';
 import { ChevronUp, ChevronDown } from 'lucide-react';
+import {useSearchParams} from "next/navigation";
 
 interface AlphaScrollbarProps {
     items: FileSystemItem[];
@@ -10,14 +11,14 @@ interface AlphaScrollbarProps {
 }
 
 export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaScrollbarProps) {
+    const searchParams = useSearchParams();
     const [availableLetters, setAvailableLetters] = useState<string[]>([]);
     const [activeLetter, setActiveLetter] = useState<string | null>(null);
     const desktopScrollbarRef = useRef<HTMLDivElement>(null);
     const mobileScrollbarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const sortOrder = urlParams?.get('order') === 'desc' ? 'desc' : 'asc';
+        const sortOrder = searchParams?.get('order') === 'desc' ? 'desc' : 'asc';
         
         const letters = items
             .map(item => item.name.charAt(0).toUpperCase())
@@ -25,7 +26,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
             .sort((a, b) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
 
         setAvailableLetters(letters);
-    }, [items]);
+    }, [items, searchParams]);
 
 
     const handleLetterClick = useCallback((letter: string) => {
