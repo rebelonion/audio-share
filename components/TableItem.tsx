@@ -50,7 +50,7 @@ export default function TableItem({ item, isLoading, setIsLoading, handleAudioSe
                     </div>
                 )}
             </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--muted-foreground)]"
+            <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center"
                 style={{width: '20%'}}>
                 {item.type === 'audio' ? formatFileSize(item.size) :
                     (item.type === 'folder' && item.metadata?.directory_size) ?
@@ -58,7 +58,7 @@ export default function TableItem({ item, isLoading, setIsLoading, handleAudioSe
                         (item.type === 'folder' && item.metadata?.items) ?
                             `${item.metadata.items} items` : '-'}
             </td>
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--muted-foreground)]"
+            <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center"
                 style={{width: '15%'}}>
                 {formatDate(item.modifiedAt)}
             </td>

@@ -292,21 +292,21 @@ export default function FolderView({items}: FolderViewProps) {
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Sort alphabetically"
                             >
-                                <SortAsc className="h-3.5 w-3.5 mr-1"/> A-Z
+                                <SortAsc className="h-3.5 w-3.5 mr-1 hidden md:block"/> A-Z
                             </button>
                             <button
                                 onClick={() => handleOrderToggle('modified')}
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Sort by modified date"
                             >
-                                <Calendar className="h-3.5 w-3.5 mr-1"/> Date
+                                <Calendar className="h-3.5 w-3.5 mr-1 hidden md:block"/> Date
                             </button>
                             <button
                                 onClick={() => handleOrderToggle('size')}
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Sort by size"
                             >
-                                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                <svg className="h-3.5 w-3.5 mr-1 hidden md:block" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      strokeWidth="2">
                                     <rect x="4" y="14" width="4" height="6" rx="1"/>
                                     <rect x="10" y="9" width="4" height="11" rx="1"/>
@@ -319,7 +319,7 @@ export default function FolderView({items}: FolderViewProps) {
                                 className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                 title="Group by type"
                             >
-                                <Music className="h-3.5 w-3.5 mr-1"/> Type
+                                <Music className="h-3.5 w-3.5 mr-1 hidden md:block"/> Type
                             </button>
                         </div>
                     </div>
@@ -343,14 +343,14 @@ export default function FolderView({items}: FolderViewProps) {
                                             {sortMethod === 'alpha' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
                                         </th>
                                         <th scope="col"
-                                            className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                            className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
                                             style={{width: '20%'}}
                                             onClick={() => handleOrderToggle('size')}>
                                             Size
                                             {sortMethod === 'size' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
                                         </th>
                                         <th scope="col"
-                                            className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                            className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
                                             style={{width: '15%'}}
                                             onClick={() => handleOrderToggle('modified')}>
                                             Modified
@@ -375,7 +375,7 @@ export default function FolderView({items}: FolderViewProps) {
                                                         ref={(el) => {
                                                             if (el) letterRefs.current[letter] = el;
                                                         }}
-                                                        className="bg-[var(--card-hover)] sticky top-12 z-10 letter-section"
+                                                        className="bg-[var(--card-hover)] sticky z-10 letter-section"
                                                     >
                                                         <td
                                                             colSpan={4}
@@ -416,8 +416,8 @@ export default function FolderView({items}: FolderViewProps) {
                         {showAlphaScrollbar &&
                             <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
 
-                        <div className="flex-grow pb-4" id="mobile-content-container">
-                            {sortMethod === 'alpha' ? (
+                        <div className="flex-grow h-full overflow-hidden" id="mobile-content-container">
+                        {sortMethod === 'alpha' ? (
                                 Object.entries(itemsByLetter)
                                     .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b))
                                     .map(([letter, letterItems]) => (
