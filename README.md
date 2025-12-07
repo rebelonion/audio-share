@@ -28,7 +28,7 @@ A modern web application for browsing, playing, and sharing audio files from you
 
 2. Install dependencies:
    ```bash
-   npm install
+   bun install
    ```
 
 3. Set up your audio directory:
@@ -54,7 +54,7 @@ A modern web application for browsing, playing, and sharing audio files from you
 Run the development server:
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -64,13 +64,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 Build for production:
 
 ```bash
-npm run build
+bun run build
 ```
 
 Start the production server:
 
 ```bash
-npm run start
+bun run start
 ```
 
 ## Audio Files Organization
