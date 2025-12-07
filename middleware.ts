@@ -18,7 +18,8 @@ export function middleware(request: NextRequest) {
 
     const isAudioRequest = request.nextUrl.pathname.match(/\.(mp3|wav|ogg|flac|aac|m4a|opus)$/i);
     const isShareRequest = request.nextUrl.pathname === '/api/share' && request.method === 'POST';
-    
+    const isRangeRequest = request.headers.has('range');
+
     let limit = MAX_REQUESTS_PER_WINDOW;
     if (isAudioRequest) limit = AUDIO_FILE_LIMIT;
     if (isShareRequest) limit = SHARE_REQUEST_LIMIT;
@@ -47,7 +48,7 @@ export function middleware(request: NextRequest) {
     // Increment the appropriate counter
     if (isShareRequest) {
         rateLimitData.shareCount++;
-    } else {
+    } else if (!(isAudioRequest && isRangeRequest)) {
         rateLimitData[isAudioRequest ? 'audioCount' : 'apiCount']++;
     }
     rateLimit.set(ip, rateLimitData);
