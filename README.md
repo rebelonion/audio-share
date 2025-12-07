@@ -2,10 +2,11 @@
 
 A modern web application for browsing, playing, and sharing audio files from your local collection.
 
-![Next.js](https://img.shields.io/badge/Next.js-15.2.3-black)
+![Next.js](https://img.shields.io/badge/Next.js-15.4.8-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38b2ac)
 ![React](https://img.shields.io/badge/React-19-61dafb)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
 
 ## Features
 
@@ -71,6 +72,56 @@ Start the production server:
 
 ```bash
 bun run start
+```
+
+### Docker
+
+Run with Docker using a pre-built image:
+
+```bash
+docker run -p 3000:3000 \
+  -v /path/to/your/audio:/app/public/audio \
+  -e AUDIO_DIR=/app/public/audio \
+  ghcr.io/rebelonion/audio-share:latest
+```
+
+Or build and run locally:
+
+```bash
+docker build -t audio-share .
+docker run -p 3000:3000 \
+  -v /path/to/your/audio:/app/public/audio \
+  -e AUDIO_DIR=/app/public/audio \
+  audio-share
+```
+
+#### Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  audio-share:
+    image: ghcr.io/rebelonion/audio-share:latest
+    # Or build locally:
+    # build: .
+    ports:
+      - '3000:3000'
+    volumes:
+      - /path/to/your/audio:/app/public/audio
+    environment:
+      - AUDIO_DIR=/app/public/audio
+      # Optional: Add ntfy notifications
+      # - NTFY_URL=https://ntfy.sh
+      # - NTFY_TOPIC=your-topic
+      # - NTFY_TOKEN=your-token
+    restart: unless-stopped
+```
+
+Then run:
+
+```bash
+docker compose up -d
 ```
 
 ## Audio Files Organization
