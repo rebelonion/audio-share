@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect, useCallback} from 'react';
+import React, {useState} from 'react';
 import {
     Play,
     Pause,
@@ -16,287 +16,38 @@ import {
     Loader2
 } from 'lucide-react';
 import NextImage from 'next/image';
+import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 
 interface AudioPlayerProps {
     src: string;
     name?: string;
 }
 
-interface MetadataType {
-    title: string;
-    artist: string;
-    uploadDate?: string;
-    webpageUrl?: string;
-    duration?: number;
-    description?: string;
-}
-
 export default function AudioPlayer({src}: AudioPlayerProps) {
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [volume, setVolume] = useState(1);
-    const [isMuted, setIsMuted] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(true);
     const [isMinimized, setIsMinimized] = useState(false);
-    const [thumbnail, setThumbnail] = useState<string | null>(null);
-    const [metadata, setMetadata] = useState<MetadataType | null>(null);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-    const [audioLoaded, setAudioLoaded] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
 
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const progressRef = useRef<HTMLDivElement>(null);
-
-    const getDisplayName = (filename: string): { artist: string, track: string } => {
-        const decodedFilename = decodeURIComponent(filename);
-        const parts = decodedFilename.split('/');
-
-        if (parts.length >= 2) {
-            const artist = parts[parts.length - 2];
-            const track = parts[parts.length - 1].replace(/\.[^/.]+$/, "");
-            return {artist, track};
-        }
-
-        return {
-            artist: 'Unknown Artist',
-            track: decodedFilename.replace(/\.[^/.]+$/, "")
-        };
-    };
-
-    const loadMetadata = useCallback(async (filePath: string, signal?: AbortSignal) => {
-        try {
-            const jsonPath = filePath.replace(/\.[^/.]+$/, ".info.json");
-            const apiJsonPath = jsonPath.replace(/^\/audio\//, '/api/audio/');
-            const response = await fetch(apiJsonPath, { signal });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (signal && signal.aborted) return;
-                
-                setMetadata({
-                    title: data.title || data.fulltitle || '',
-                    artist: data.meta_artist || data.uploader || data.channel || '',
-                    uploadDate: data.upload_date || '',
-                    webpageUrl: data.webpage_url || '',
-                    description: data.description || '',
-                    duration: data.duration
-                });
-            }
-        } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-                throw error;
-            }
-            if (signal && signal.aborted) return;
-            
-            const {artist, track} = getDisplayName(filePath);
-            setMetadata({
-                title: track,
-                artist: artist
-            });
-        }
-    }, []);
-
-    const {artist, track} = getDisplayName(src);
-
-    useEffect(() => {
-        const controller = new AbortController();
-        const signal = controller.signal;
-        
-        const potentialThumbPath = src.replace(/\.[^/.]+$/, "-thumb.jpg");
-        const apiThumbPath = potentialThumbPath.replace(/^\/audio\//, '/api/audio/');
-        setThumbnail(null);
-        setMetadata(null);
-
-        fetch(apiThumbPath, {
-            method: 'HEAD',
-            signal: controller.signal
-        })
-        .then(response => {
-            if (!signal.aborted && response.ok) {
-                setThumbnail(apiThumbPath);
-            } else if (!signal.aborted) {
-                setThumbnail(null);
-            }
-        })
-        .catch(error => {
-            if (!signal.aborted && error.name !== 'AbortError') {
-                console.error('Error checking thumbnail:', error);
-                setThumbnail(null);
-            }
-        });
-        loadMetadata(src, signal).catch(err => {
-            if (err.name !== 'AbortError') {
-                console.error('Error loading metadata:', err);
-            }
-        });
-
-        return () => {
-            controller.abort();
-        };
-    }, [src, loadMetadata]);
-
-    const togglePlay = () => {
-        if (isPlaying && audioRef.current) {
-            try {
-                audioRef.current.pause();
-                setIsPlaying(false);
-            } catch (err) {
-                console.error('Error pausing audio:', err);
-            }
-        } else {
-            if (!audioLoaded) {
-                setIsLoading(true);
-                setError(null);
-                
-                try {
-                    const apiAudioPath = src.replace(/^\/audio\//, '/api/audio/');
-                    const newAudio = new Audio(apiAudioPath);
-
-                    newAudio.addEventListener('timeupdate', handleTimeUpdate);
-                    
-                    newAudio.addEventListener('loadedmetadata', handleLoadedMetadata);
-                    
-                    newAudio.addEventListener('ended', () => setIsPlaying(false));
-
-                    const handleError = (e: Event) => {
-                        setIsLoading(false);
-                        console.warn('Audio element error:', e);
-                        
-                        // Only show error if this is the current audio element
-                        if (audioRef.current === newAudio) {
-                            fetch(apiAudioPath, {method: 'HEAD'})
-                                .then(response => {
-                                    if (response.status === 429) {
-                                        setError('Rate limit exceeded. Please try again later.');
-                                    } else if (response.status >= 500) {
-                                        setError('Server error while loading audio. Please try again later.');
-                                    } else if (response.status >= 400) {
-                                        setError('Could not load audio file. The file may not exist or is in an unsupported format.');
-                                    } else {
-                                        setError('Error playing audio. The connection may have been interrupted.');
-                                    }
-                                })
-                                .catch(() => {
-                                    setError('Network error while loading audio. Please check your connection.');
-                                });
-                        }
-                    };
-                    
-                    newAudio.addEventListener('error', handleError);
-
-                    newAudio.volume = volume;
-                    newAudio.muted = isMuted;
-                    newAudio.preload = 'auto';
-                    audioRef.current = newAudio;
-                    setAudioLoaded(true);
-                } catch (initErr) {
-                    console.error('Error initializing audio:', initErr);
-                    setError('Failed to initialize audio player. Please try again.');
-                    setIsLoading(false);
-                    return;
-                }
-            }
-
-            if (audioRef.current) {
-                try {
-                    const playPromise = audioRef.current.play();
-                    setIsLoading(true);
-                    if (playPromise !== undefined) {
-                        playPromise
-                            .then(() => {
-                                setIsPlaying(true);
-                                setIsLoading(false);
-                            })
-                            .catch(err => {
-                                console.error('Error playing audio:', err);
-                                if (audioRef.current) {
-                                    if (err.name === 'AbortError') {
-                                        setError('Playback was aborted. Please try again.');
-                                    } else if (err.name === 'NotAllowedError') {
-                                        setError('Playback was blocked by browser policy. Try interacting with the page first.');
-                                    } else if (err.name === 'NotSupportedError') {
-                                        setError('This audio format is not supported by your browser.');
-                                    } else {
-                                        setError('Could not play audio file. The file may not exist or is in an unsupported format.');
-                                    }
-                                    
-                                    setIsPlaying(false);
-                                }
-                                setIsLoading(false);
-                            });
-                    } else {
-                        // Older browsers don't return a promise
-                        setIsPlaying(true);
-                        setIsLoading(false);
-                    }
-                } catch (playErr) {
-                    console.error('Unexpected error during play:', playErr);
-                    setError('An unexpected error occurred while playing audio.');
-                    setIsPlaying(false);
-                    setIsLoading(false);
-                }
-            }
-        }
-    };
-
-    const toggleMute = () => {
-        if (audioRef.current) {
-            audioRef.current.muted = !isMuted;
-            setIsMuted(!isMuted);
-        }
-    };
-
-    const handleTimeUpdate = useCallback(() => {
-        if (audioRef.current) {
-            setCurrentTime(audioRef.current.currentTime);
-        }
-    }, []);
-
-    const handleLoadedMetadata = useCallback(() => {
-        if (audioRef.current) {
-            setDuration(audioRef.current.duration);
-            setIsLoading(false);
-        }
-    }, []);
-
-    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newVolume = parseFloat(e.target.value);
-        setVolume(newVolume);
-        if (audioRef.current) {
-            audioRef.current.volume = newVolume;
-        }
-        if (newVolume === 0) {
-            setIsMuted(true);
-        } else if (isMuted) {
-            setIsMuted(false);
-        }
-    };
-
-    const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (audioRef.current && progressRef.current) {
-            const bounds = progressRef.current.getBoundingClientRect();
-            const x = e.clientX - bounds.left;
-            const ratio = x / bounds.width;
-            const seekTime = ratio * (duration || 0);
-
-            if (seekTime >= 0 && seekTime <= duration) {
-                audioRef.current.currentTime = seekTime;
-                setCurrentTime(seekTime);
-            }
-        }
-    };
-
-    const formatTime = (time: number) => {
-        if (!time && !audioLoaded && metadata?.duration) {
-            time = metadata.duration;
-        }
-
-        const minutes = Math.floor(time / 60);
-        const seconds = Math.floor(time % 60);
-        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    };
+    const {
+        isPlaying,
+        duration,
+        currentTime,
+        volume,
+        isMuted,
+        error,
+        thumbnail,
+        metadata,
+        audioLoaded,
+        isLoading,
+        artist,
+        track,
+        progressRef,
+        togglePlay,
+        toggleMute,
+        handleVolumeChange,
+        handleProgressClick,
+        formatTime
+    } = useAudioPlayer(src);
 
     const toggleExpand = () => {
         setIsExpanded(!isExpanded);
@@ -315,53 +66,6 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
     const toggleDescriptionExpand = () => {
         setIsDescriptionExpanded(!isDescriptionExpanded);
     };
-
-    const errorHandler = useCallback((e: Event) => {
-        console.error('Audio element error:', e);
-    }, []);
-
-    useEffect(() => {
-        setIsPlaying(false);
-        setCurrentTime(0);
-        setDuration(0);
-        setAudioLoaded(false);
-        setError(null);
-        setIsLoading(false);
-
-        const audioElement = audioRef.current;
-        if (audioElement) {
-            try {
-                audioElement.pause();
-                audioElement.removeEventListener('timeupdate', handleTimeUpdate);
-                audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-                audioElement.removeEventListener('ended', () => setIsPlaying(false));
-                audioElement.removeEventListener('error', errorHandler);
-                audioElement.src = '';
-                audioElement.load();
-            } catch (e) {
-                console.error('Error cleaning up audio element:', e);
-            }
-            audioRef.current = null;
-        }
-
-        return () => {
-            const audio = audioRef.current;
-            if (audio) {
-                try {
-                    audio.pause();
-                    audio.removeEventListener('timeupdate', handleTimeUpdate);
-                    audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-                    audio.removeEventListener('ended', () => setIsPlaying(false));
-                    audio.removeEventListener('error', errorHandler);
-
-                    audio.src = '';
-                    audio.load();
-                } catch (e) {
-                    console.error('Error during cleanup on unmount:', e);
-                }
-            }
-        };
-    }, [src, handleTimeUpdate, errorHandler, handleLoadedMetadata]);
 
     return (
         <div
@@ -412,7 +116,6 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
                     <button
                         onClick={togglePlay}
                         className="p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-opacity-50"
-                        disabled={!!error}
                         aria-label={isPlaying ? "Pause" : "Play"}
                     >
                         {isLoading ? (
@@ -440,7 +143,6 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
                                     priority={false}
                                     loading="lazy"
                                     className="object-cover rounded-md shadow-sm w-full h-auto max-h-48"
-                                    onError={() => setThumbnail(null)}
                                 />
                             </div>
                         )}
@@ -485,7 +187,6 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
                             <button
                                 onClick={togglePlay}
                                 className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-opacity-50 mx-2"
-                                disabled={!!error}
                                 aria-label={isPlaying ? "Pause" : "Play"}
                             >
                                 {isLoading ? (
@@ -508,7 +209,6 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
                             <button
                                 onClick={toggleMute}
                                 className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus:outline-none"
-                                disabled={!!error}
                                 aria-label={isMuted ? "Unmute" : "Mute"}
                             >
                                 {isMuted ? <VolumeX className="h-4 w-4"/> : <Volume2 className="h-4 w-4"/>}
@@ -522,7 +222,6 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
                                 value={volume}
                                 onChange={handleVolumeChange}
                                 className="flex-grow accent-[var(--primary)] transition-all duration-200"
-                                disabled={!!error}
                                 aria-label="Volume"
                             />
                         </div>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import { Share2, Home, Music } from 'lucide-react';
-import AudioPlayer from '@/components/AudioPlayer';
+import SharePagePlayer from '@/components/SharePagePlayer';
 import Link from 'next/link';
 
 interface SharePageProps {
@@ -99,14 +99,10 @@ export default function SharePage({ params }: SharePageProps) {
                     </p>
                 </div>
                 
-                <div className="bg-[var(--card-hover)]/40 rounded-lg p-5">
-                    <p className="font-medium mb-3">Audio Player</p>
-                    <div className="h-[100px] flex items-center justify-center border border-dashed border-[var(--border)] rounded-md bg-[var(--background)]/60 mb-2">
-                        <p className="text-[var(--muted-foreground)]">Player will appear in the bottom-right corner</p>
-                    </div>
+                <div className="bg-[var(--card-hover)]/40 rounded-lg p-6">
+                    <SharePagePlayer src={`/audio/${source}/${encodedPath}`} />
                 </div>
             </div>
-            <AudioPlayer src={`/audio/${source}/${encodedPath}`} />
         </div>
     );
 }

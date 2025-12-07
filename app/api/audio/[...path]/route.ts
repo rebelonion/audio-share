@@ -1,16 +1,66 @@
 import {NextRequest, NextResponse} from 'next/server';
-import {createReadStream, stat as fsStat} from 'fs';
+import {createReadStream, stat as fsStat, ReadStream} from 'fs';
 import fs from 'fs';
 import path from 'path';
 import {promisify} from 'util';
-import {Readable} from 'stream';
 import {getSlugToDirectoryMap} from '@/lib/fileSystem';
 
 const stat = promisify(fsStat);
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at API route:', promise, 'reason:', reason);
-});
+function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal): ReadableStream {
+    let isAborted = false;
+
+    if (requestSignal) {
+        requestSignal.addEventListener('abort', () => {
+            isAborted = true;
+            if (fileStream && !fileStream.destroyed) {
+                fileStream.destroy();
+            }
+        });
+    }
+
+    return new ReadableStream({
+        start(controller) {
+            fileStream.on('data', (chunk: string | Buffer) => {
+                try {
+                    if (!isAborted) {
+                        const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+                        controller.enqueue(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
+                    }
+                } catch {
+                }
+            });
+
+            fileStream.on('end', () => {
+                try {
+                    if (!isAborted) {
+                        controller.close();
+                    }
+                } catch {
+                }
+            });
+
+            fileStream.on('error', (streamError: NodeJS.ErrnoException) => {
+                if (!isAborted &&
+                    streamError.code !== 'ERR_STREAM_PREMATURE_CLOSE' &&
+                    streamError.code !== 'ECONNRESET') {
+                    console.error('Stream error:', streamError);
+                    try {
+                        controller.error(streamError);
+                    } catch {
+                    }
+                }
+            });
+        },
+
+        cancel() {
+            isAborted = true;
+            if (fileStream && !fileStream.destroyed) {
+                fileStream.destroy();
+            }
+        }
+    });
+}
 
 export async function GET(
     request: NextRequest,
@@ -88,26 +138,17 @@ export async function GET(
             }
         }
 
-        let fileStream = null;
-        
         try {
-            // For audio files
             if (request.headers.get('range') && contentType.startsWith('audio/')) {
                 const range = request.headers.get('range');
                 const parts = range?.replace(/bytes=/, '').split('-');
                 const start = parseInt(parts?.[0] || '0', 10);
                 const end = parts?.[1] ? parseInt(parts[1], 10) : stats.size - 1;
-    
+
                 const chunkSize = end - start + 1;
-                fileStream = createReadStream(fullPath, {start, end});
+                const fileStream = createReadStream(fullPath, {start, end});
+                const webStream = createSafeWebStream(fileStream, request.signal);
 
-                fileStream.on('error', (streamError) => {
-                    console.error('Stream error:', streamError);
-                    // Stream errors are handled automatically by Next.js Response
-                });
-
-                const webStream = Readable.toWeb(fileStream) as ReadableStream;
-                
                 return new NextResponse(webStream, {
                     status: 206,
                     headers: {
@@ -119,15 +160,10 @@ export async function GET(
                     }
                 });
             }
-    
-            fileStream = createReadStream(fullPath);
-            fileStream.on('error', (streamError) => {
-                console.error('Stream error:', streamError);
-                // Stream errors are handled automatically by Next.js Response
-            });
 
-            const webStream = Readable.toWeb(fileStream) as ReadableStream;
-            
+            const fileStream = createReadStream(fullPath);
+            const webStream = createSafeWebStream(fileStream, request.signal);
+
             return new NextResponse(webStream, {
                 headers: {
                     'Content-Type': contentType,
@@ -144,7 +180,6 @@ export async function GET(
         return new NextResponse('File not found', {status: 404});
     }
     } catch (uncaughtError) {
-        // Catch any errors that weren't caught by the inner try/catch
         console.error('Uncaught error in API route:', uncaughtError);
         return new NextResponse('Internal Server Error', {status: 500});
     }
