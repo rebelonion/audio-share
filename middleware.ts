@@ -17,6 +17,7 @@ export function middleware(request: NextRequest) {
     const now = Date.now();
 
     const isAudioRequest = request.nextUrl.pathname.match(/\.(mp3|wav|ogg|flac|aac|m4a|opus)$/i);
+    const isImageRequest = request.nextUrl.pathname.match(/\.(jpg|jpeg|png|gif|webp)$/i);
     const isShareRequest = request.nextUrl.pathname === '/api/share' && request.method === 'POST';
     const isRangeRequest = request.headers.has('range');
 
@@ -45,10 +46,10 @@ export function middleware(request: NextRequest) {
         rateLimitData.shareTimestamp = now;
     }
 
-    // Increment the appropriate counter
+    // Increment the appropriate counter (skip images and audio range requests)
     if (isShareRequest) {
         rateLimitData.shareCount++;
-    } else if (!(isAudioRequest && isRangeRequest)) {
+    } else if (!isImageRequest && !(isAudioRequest && isRangeRequest)) {
         rateLimitData[isAudioRequest ? 'audioCount' : 'apiCount']++;
     }
     rateLimit.set(ip, rateLimitData);

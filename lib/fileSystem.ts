@@ -188,13 +188,17 @@ export async function getDirectoryContents(
                 );
 
                 const displayName = folderMetadata?.name || file;
-                
+
+                const posterPath = path.join(filePath, 'poster.jpg');
+                const hasPoster = fs.existsSync(posterPath);
+
                 items.push({
                     name: displayName,
                     path: virtualPath,
                     modifiedAt: stats.mtime.toISOString(),
                     type: 'folder',
-                    metadata: folderMetadata
+                    metadata: folderMetadata,
+                    hasPoster
                 });
             }
             else if (audioExts.includes(ext)) {
