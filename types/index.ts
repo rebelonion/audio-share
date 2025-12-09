@@ -12,6 +12,7 @@ export interface FolderMetadata {
     folder_name: string;  // Directory name to map to
     name: string;         // Display name
     original_url?: string;
+    url_broken?: boolean;
     items?: number;
     directory_size?: string;
     description?: string;
