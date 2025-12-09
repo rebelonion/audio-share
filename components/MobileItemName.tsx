@@ -2,6 +2,7 @@ import {Folder, Loader2, Music} from "lucide-react";
 import React from "react";
 import {FileSystemItem} from "@/types";
 import {useRouter} from 'next/navigation';
+import PosterImage from '@/components/PosterImage';
 
 interface ItemNameProps {
     item: FileSystemItem;
@@ -13,9 +14,18 @@ export default function MobileItemName({ item, isLoading, setIsLoading }: ItemNa
     const router = useRouter();
     return (
         <div className="p-3 flex items-center">
-            <div className="mr-3">
+            <div className="mr-3 flex items-center">
                 {item.type === 'folder' ? (
-                    <Folder className="h-5 w-5 text-[var(--primary)]"/>
+                    item.hasPoster ? (
+                        <PosterImage
+                            path={item.path}
+                            className="w-8 h-8 rounded object-cover shadow-sm"
+                        />
+                    ) : (
+                        <div className="w-8 h-8 flex items-center justify-center">
+                            <Folder className="h-6 w-6 text-[var(--primary)]"/>
+                        </div>
+                    )
                 ) : (
                     <Music className="h-5 w-5 text-[var(--primary)]"/>
                 )}

@@ -4,6 +4,7 @@ import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
 import {useRouter} from 'next/navigation';
+import PosterImage from '@/components/PosterImage';
 
 interface TableItemProps {
     item: FileSystemItem;
@@ -37,9 +38,15 @@ export default function TableItem({ item, isLoading, setIsLoading, handleAudioSe
                         {isLoading === item.path ? (
                             <Loader2
                                 className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)] animate-spin"/>
+                        ) : item.hasPoster ? (
+                            <PosterImage
+                                path={item.path}
+                                className="w-8 h-8 min-w-[32px] mr-2 rounded object-cover shadow-sm"
+                            />
                         ) : (
-                            <Folder
-                                className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)]"/>
+                            <div className="w-8 h-8 min-w-[32px] mr-2 flex items-center justify-center">
+                                <Folder className="h-6 w-6 text-[var(--primary)]"/>
+                            </div>
                         )}
                         <span className="truncate" title={item.name}>{item.name}</span>
                     </button>
