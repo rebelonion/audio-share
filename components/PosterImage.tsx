@@ -21,7 +21,7 @@ export default function PosterImage({ path, className }: PosterImageProps) {
         // eslint-disable-next-line @next/next/no-img-element
         <img
             src={posterUrl}
-            alt=""
+            alt="" // Decorative image
             width={32}
             height={32}
             loading="lazy"
