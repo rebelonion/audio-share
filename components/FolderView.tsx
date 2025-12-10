@@ -6,7 +6,7 @@ import {FileSystemItem, Notification} from '@/types';
 import AudioPlayer from './AudioPlayer';
 import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
-import ItemSize from "@/components/ItemSize";
+import MobileItemDetails from "@/components/MobileItemDetails";
 import TableItem from "@/components/TableItem";
 import {reverseIf, sizeFromString} from "@/lib/utils";
 import {useSearchParams} from "next/navigation";
@@ -446,7 +446,7 @@ export default function FolderView({items}: FolderViewProps) {
                                                     <MobileItemName item={item} isLoading={isLoading}
                                                                     setIsLoading={setIsLoading}/>
 
-                                                    <ItemSize item={item} notification={notification}
+                                                    <MobileItemDetails item={item} notification={notification}
                                                               copyToClipboard={copyToClipboard}/>
                                                 </div>
                                             ))}
@@ -464,7 +464,7 @@ export default function FolderView({items}: FolderViewProps) {
                                     >
                                         <MobileItemName item={item} isLoading={isLoading} setIsLoading={setIsLoading}/>
 
-                                        <ItemSize item={item} notification={notification}
+                                        <MobileItemDetails item={item} notification={notification}
                                                   copyToClipboard={copyToClipboard}/>
                                     </div>
                                 ))

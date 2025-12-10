@@ -3,13 +3,13 @@ import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {formatDate, formatFileSize} from "@/lib/utils";
 
-interface ItemSizeProps {
+interface MobileItemDetailsProps {
     item: FileSystemItem;
     notification: Notification,
     copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
 }
 
-export default function ItemSize({ item, notification, copyToClipboard }: ItemSizeProps) {
+export default function MobileItemDetails({ item, notification, copyToClipboard }: MobileItemDetailsProps) {
     return (
         <div className="px-3 pb-3 flex justify-between">
             <div className="text-xs text-[var(--muted-foreground)]">

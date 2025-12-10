@@ -2,13 +2,13 @@ import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
 
-interface ItemActionProps {
+interface DesktopItemActionsProps {
     item: FileSystemItem;
     notification: Notification,
     copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
 }
 
-export default function ItemAction({ item, notification, copyToClipboard }: ItemActionProps) {
+export default function DesktopItemActions({ item, notification, copyToClipboard }: DesktopItemActionsProps) {
     return(
         <td className="px-6 py-4 whitespace-nowrap text-sm text-right"
             style={{width: '10%'}}>

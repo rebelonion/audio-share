@@ -1,6 +1,6 @@
 import {Folder, Loader2, Music} from "lucide-react";
 import {formatDate, formatFileSize} from "@/lib/utils";
-import ItemAction from "@/components/ItemAction";
+import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
 import {useRouter} from 'next/navigation';
@@ -62,7 +62,7 @@ export default function TableItem({ item, isLoading, setIsLoading, handleAudioSe
                 style={{width: '15%'}}>
                 {formatDate(item.modifiedAt)}
             </td>
-            <ItemAction item={item} notification={notification} copyToClipboard={copyToClipboard} />
+            <DesktopItemActions item={item} notification={notification} copyToClipboard={copyToClipboard} />
         </tr>
     )
 }
