@@ -1,5 +1,5 @@
 import {FileSystemItem, Notification} from "@/types";
-import {Check, Download, ExternalLink, Share2} from "lucide-react";
+import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {formatDate, formatFileSize} from "@/lib/utils";
 
@@ -54,11 +54,19 @@ export default function ItemSize({ item, notification, copyToClipboard }: ItemSi
                         href={item.metadata.original_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
+                        className={`inline-flex items-center justify-center p-1 rounded-full ${
+                            item.metadata.url_broken
+                                ? 'bg-gray-400 text-white opacity-60'
+                                : 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'
+                        }`}
                         onClick={(e) => e.stopPropagation()}
-                        title="Visit Original Source"
+                        title={item.metadata.url_broken ? 'Source Link Broken' : 'Visit Original Source'}
                     >
-                        <ExternalLink className="h-3 w-3"/>
+                        {item.metadata.url_broken ? (
+                            <Unlink className="h-3 w-3"/>
+                        ) : (
+                            <ExternalLink className="h-3 w-3"/>
+                        )}
                     </a>
                 </div>
             )}
