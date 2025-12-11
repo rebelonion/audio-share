@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-                                       children,
-                                   }: Readonly<{
+    children,
+}: Readonly<{
     children: React.ReactNode;
 }>) {
     return (
@@ -27,17 +27,26 @@ export default function RootLayout({
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                 <div className="flex items-center justify-between">
                     <Link href="/" className="flex items-center group">
-                        <Music className="h-8 w-8 text-[var(--primary)] mr-3 group-hover:text-[var(--primary-hover)] transition-colors"/>
+                        <Music
+                            className="h-8 w-8 text-[var(--primary)] mr-3 group-hover:text-[var(--primary-hover)] transition-colors"/>
                         <h1 className="text-2xl font-bold text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
                             {metadata.title?.toString()}
                         </h1>
                     </Link>
-                    <Link
-                        href="/about"
-                        className="text-[var(--foreground)] hover:text-[var(--primary)] pr-12 transition-colors font-medium"
-                    >
-                        About
-                    </Link>
+                    <nav className="flex gap-6 pr-12">
+                        <Link
+                            href="/about"
+                            className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                        >
+                            About
+                        </Link>
+                        <Link
+                            href="/contact"
+                            className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                        >
+                            Contact
+                        </Link>
+                    </nav>
                 </div>
             </div>
         </header>

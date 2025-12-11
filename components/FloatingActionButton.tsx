@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Link } from 'lucide-react';
+import React, {useState} from 'react';
+import {ListPlus} from 'lucide-react';
 import RequestSourceDialog from './RequestSourceDialog';
 
 export default function FloatingActionButton() {
@@ -15,10 +15,10 @@ export default function FloatingActionButton() {
                 title="Request new artist"
                 aria-label="Request new artist"
             >
-                <Link className="h-6 w-6" />
+                <ListPlus className="pl-1 h-7 w-7"/>
             </button>
-            
-            <RequestSourceDialog 
+
+            <RequestSourceDialog
                 isOpen={isDialogOpen}
                 onCloseAction={() => setIsDialogOpen(false)}
             />
