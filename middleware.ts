@@ -129,14 +129,24 @@ export function middleware(request: NextRequest) {
 
     response.headers.set('X-RateLimit-Limit', String(limit));
 
+    const umamiUrl = process.env.NEXT_PUBLIC_UMAMI_URL;
+    let umamiDomain = '';
+    if (umamiUrl) {
+        try {
+            const url = new URL(umamiUrl);
+            umamiDomain = url.origin;
+        } catch {
+        }
+    }
+
     response.headers.set(
         'Content-Security-Policy',
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval'${umamiDomain ? ' ' + umamiDomain : ''}; ` +
         "style-src 'self' 'unsafe-inline'; " + // Allow inline styles for Tailwind
         "img-src 'self' data: blob:; " + // Allow data: for inline images and blob: for dynamic content
         "media-src 'self' blob:; " + // For audio files
-        "connect-src 'self'; " +
+        `connect-src 'self'${umamiDomain ? ' ' + umamiDomain : ''}; ` +
         "font-src 'self'; " +
         "object-src 'none'; " +
         "base-uri 'self'; " +
