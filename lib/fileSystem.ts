@@ -166,13 +166,9 @@ export async function getDirectoryContents(
         let folderMetadataList: FolderMetadata[] = [];
         const folderMetadataPath = path.join(fullPath, 'folder.json');
         try {
-            if (fs.existsSync(folderMetadataPath)) {
-                const metadataContent = await readFile(folderMetadataPath, 'utf-8');
-                folderMetadataList = JSON.parse(metadataContent);
-            }
-        } catch (error) {
-            console.error(`Error reading folder metadata from ${folderMetadataPath}:`, error);
-        }
+            const metadataContent = await readFile(folderMetadataPath, 'utf-8');
+            folderMetadataList = JSON.parse(metadataContent);
+        } catch {}
 
         for (const file of files) {
             if (file.startsWith('.')) continue;
@@ -188,13 +184,21 @@ export async function getDirectoryContents(
                 );
 
                 const displayName = folderMetadata?.name || file;
-                
+
+                const posterPath = path.join(filePath, 'poster.jpg');
+                let hasPoster = false;
+                try {
+                    await fs.promises.access(posterPath);
+                    hasPoster = true;
+                } catch {}
+
                 items.push({
                     name: displayName,
                     path: virtualPath,
                     modifiedAt: stats.mtime.toISOString(),
                     type: 'folder',
-                    metadata: folderMetadata
+                    metadata: folderMetadata,
+                    hasPoster
                 });
             }
             else if (audioExts.includes(ext)) {
