@@ -109,6 +109,8 @@ services:
       - '3000:3000'
     volumes:
       - /path/to/your/audio:/app/public/audio
+      # Optional: Mount content directory for custom About page
+      # - /path/to/your/content:/app/content
     environment:
       - AUDIO_DIR=/app/public/audio
       # Optional: Add ntfy notifications
@@ -149,9 +151,18 @@ The metadata JSON can include:
   "meta_artist": "Artist Name",
   "upload_date": "20230215",
   "webpage_url": "https://original-source-url.com",
-  "description": "Description text about the song"
+  "description": "Description text about the song",
+  "url_broken": false
 }
 ```
+
+Metadata fields:
+- `title`: Display title for the audio file
+- `meta_artist`: Artist or creator name
+- `upload_date`: Upload date in YYYYMMDD format
+- `webpage_url`: Link to the original source
+- `description`: Description or notes about the audio
+- `url_broken`: Set to `true` to indicate the source link is no longer available (displays a broken link icon instead of a clickable link)
 
 ### Folder Metadata
 
