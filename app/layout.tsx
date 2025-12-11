@@ -1,9 +1,10 @@
-import type {Metadata} from "next";
+import type {Metadata} from 'next';
 import {Music} from 'lucide-react';
-import "./globals.css";
-import React from "react";
-import Link from "next/link";
-import FloatingActionButton from "@/components/FloatingActionButton";
+import './globals.css';
+import React from 'react';
+import Link from 'next/link';
+import Script from 'next/script';
+import FloatingActionButton from '@/components/FloatingActionButton';
 
 export const metadata: Metadata = {
     title: process.env.DEFAULT_TITLE || "Audio Archive",
@@ -80,6 +81,14 @@ export default function RootLayout({
                 </p>
             </div>
         </footer>
+
+        {process.env.NEXT_PUBLIC_UMAMI_URL && process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID && (
+            <Script
+                src={process.env.NEXT_PUBLIC_UMAMI_URL}
+                data-website-id={process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
+                strategy="afterInteractive"
+            />
+        )}
         </body>
         </html>
     );
