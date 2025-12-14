@@ -10,6 +10,7 @@ import MobileItemDetails from "@/components/MobileItemDetails";
 import TableItem from "@/components/TableItem";
 import {reverseIf, sizeFromString} from "@/lib/utils";
 import {useSearchParams} from "next/navigation";
+import {useUmami} from "@/hooks/useUmami";
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -19,6 +20,7 @@ interface FolderViewProps {
 type SortMethod = 'alpha' | 'modified' | 'size' | 'type';
 
 export default function FolderView({items}: FolderViewProps) {
+    const {track} = useUmami();
     const searchParams = useSearchParams();
     const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
     const [selectedAudioName, setSelectedAudioName] = useState<string>('');
@@ -184,6 +186,7 @@ export default function FolderView({items}: FolderViewProps) {
             console.log('Setting audio path:', audioPath);
             setSelectedAudio(audioPath);
             setSelectedAudioName(item.name);
+            track('audio-player-open', { path: item.path, name: item.name });
             setTimeout(() => {
                 setIsAudioSelectionLocked(false);
             }, 300);

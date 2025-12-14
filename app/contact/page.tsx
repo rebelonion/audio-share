@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUmami } from '@/hooks/useUmami';
 
 export default function ContactPage() {
+    const { track } = useUmami();
     const [topic, setTopic] = useState('');
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');
@@ -52,6 +54,7 @@ export default function ContactPage() {
 
             if (response.ok) {
                 setSubmitMessage({ type: 'success', text: 'Message sent successfully! Thank you for contacting us.' });
+                track('contact-form-submit', { topic });
                 setTopic('');
                 setEmail('');
                 setMessage('');

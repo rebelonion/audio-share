@@ -1,4 +1,5 @@
 import {useState, useRef, useEffect, useCallback} from 'react';
+import {useUmami} from './useUmami';
 
 interface MetadataType {
     title: string;
@@ -10,6 +11,7 @@ interface MetadataType {
 }
 
 export function useAudioPlayer(src: string) {
+    const {track: trackEvent} = useUmami();
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
@@ -133,6 +135,7 @@ export function useAudioPlayer(src: string) {
             try {
                 audioRef.current.pause();
                 setIsPlaying(false);
+                trackEvent('audio-pause');
             } catch (err) {
                 console.error('Error pausing audio:', err);
             }
@@ -201,6 +204,7 @@ export function useAudioPlayer(src: string) {
                             setIsPlaying(true);
                             setIsLoading(false);
                             setError(null);
+                            trackEvent('audio-play');
                         })
                         .catch(async (err) => {
                             setIsPlaying(false);
@@ -242,6 +246,7 @@ export function useAudioPlayer(src: string) {
                             setIsPlaying(true);
                             setIsLoading(false);
                             setError(null);
+                            trackEvent('audio-play');
                         })
                         .catch(async (err) => {
                             setIsPlaying(false);
@@ -273,14 +278,15 @@ export function useAudioPlayer(src: string) {
                 }
             }
         }
-    }, [isPlaying, audioLoaded, error, src, volume, isMuted, handleTimeUpdate, handleLoadedMetadata]);
+    }, [isPlaying, audioLoaded, error, src, volume, isMuted, handleTimeUpdate, handleLoadedMetadata, trackEvent]);
 
     const toggleMute = useCallback(() => {
         if (audioRef.current) {
             audioRef.current.muted = !isMuted;
             setIsMuted(!isMuted);
+            trackEvent('audio-mute', { muted: !isMuted });
         }
-    }, [isMuted]);
+    }, [isMuted, trackEvent]);
 
     const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const newVolume = parseFloat(e.target.value);
@@ -305,9 +311,10 @@ export function useAudioPlayer(src: string) {
             if (seekTime >= 0 && seekTime <= duration) {
                 audioRef.current.currentTime = seekTime;
                 setCurrentTime(seekTime);
+                trackEvent('audio-seek');
             }
         }
-    }, [duration]);
+    }, [duration, trackEvent]);
 
     const formatTime = useCallback((time: number) => {
         if (!time && !audioLoaded && metadata?.duration) {

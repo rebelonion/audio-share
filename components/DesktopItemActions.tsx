@@ -1,6 +1,9 @@
+'use client';
+
 import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
+import {useUmami} from "@/hooks/useUmami";
 
 interface DesktopItemActionsProps {
     item: FileSystemItem;
@@ -9,6 +12,7 @@ interface DesktopItemActionsProps {
 }
 
 export default function DesktopItemActions({ item, notification, copyToClipboard }: DesktopItemActionsProps) {
+    const {track} = useUmami();
     return(
         <td className="px-6 py-4 whitespace-nowrap text-sm text-right"
             style={{width: '10%'}}>
@@ -16,7 +20,10 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                 <div className="flex gap-2 justify-end">
                     <button
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
-                        onClick={(e) => copyToClipboard(item.path, e)}
+                        onClick={(e) => {
+                            copyToClipboard(item.path, e);
+                            track('audio-share', { path: item.path, name: item.name });
+                        }}
                         title="Share"
                     >
                         {notification.visible && notification.path === item.path && !notification.isError ?
@@ -28,7 +35,10 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                         href={`/api/audio/${item.path.split('/').map(segment => encodeURIComponent(segment)).join('/')}`}
                         download
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            track('audio-download', { path: item.path, name: item.name });
+                        }}
                         title="Download"
                     >
                         <Download className="h-4 w-4"/>
@@ -46,7 +56,13 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                                 ? 'bg-gray-400 text-white opacity-60'
                                 : 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'
                         }`}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            track(
+                                item.metadata?.url_broken ? 'external-link-broken-click' : 'external-link-click',
+                                { url: item.metadata?.original_url, folder: item.name }
+                            );
+                        }}
                         title={item.metadata.url_broken ? 'Source Link Broken' : 'Visit Original Source'}
                     >
                         {item.metadata.url_broken ? (

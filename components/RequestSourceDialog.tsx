@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import { useUmami } from '@/hooks/useUmami';
 
 interface RequestSourceDialogProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface RequestSourceDialogProps {
 }
 
 export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSourceDialogProps) {
+    const { track } = useUmami();
     const [requestUrl, setRequestUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<{
@@ -48,12 +50,13 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                 });
                 return;
             }
-            
+
             setStatus({
                 success: true,
                 message: 'Request sent successfully!'
             });
 
+            track('artist-request');
             setRequestUrl('');
 
             setTimeout(() => {
