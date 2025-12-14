@@ -8,6 +8,7 @@ import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
 import MobileItemDetails from "@/components/MobileItemDetails";
 import TableItem from "@/components/TableItem";
+import SearchBar from "@/components/SearchBar";
 import {reverseIf, sizeFromString} from "@/lib/utils";
 import {useSearchParams} from "next/navigation";
 import {useUmami} from "@/hooks/useUmami";
@@ -28,11 +29,12 @@ export default function FolderView({items}: FolderViewProps) {
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
+    const [searchQuery, setSearchQuery] = useState<string>('');
     const [notification, setNotification] = useState<Notification>({
         path: '',
         message: '',
         isError: false,
-        visible: false
+        visible: false,
     });
 
     const letterRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -78,11 +80,36 @@ export default function FolderView({items}: FolderViewProps) {
         }
     }, [setSortOrder, sortMethod, sortOrder]);
 
+    const filteredItems = useMemo(() => {
+        if (!searchQuery.trim()) {
+            return items;
+        }
+
+        const query = searchQuery.toLowerCase().trim();
+
+        return items.filter(item => {
+            if (item.name.toLowerCase().includes(query)) {
+                return true;
+            }
+
+            if (item.type === 'folder' && item.metadata) {
+                if (item.metadata.name && item.metadata.name.toLowerCase().includes(query)) {
+                    return true;
+                }
+
+                if (item.metadata.description && item.metadata.description.toLowerCase().includes(query)) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }, [items, searchQuery]);
 
     const sortedItems = useMemo(() => {
         switch (sortMethod) {
             case 'alpha': {
-                const presortedItems = [...items].sort((a, b) => {
+                const presortedItems = [...filteredItems].sort((a, b) => {
                     if (a.type === 'folder' && b.type !== 'folder') return -1;
                     if (a.type !== 'folder' && b.type === 'folder') return 1;
                     return a.name.localeCompare(b.name);
@@ -90,7 +117,7 @@ export default function FolderView({items}: FolderViewProps) {
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
             case 'modified': {
-                const presortedItems = [...items].sort((a, b) => {
+                const presortedItems = [...filteredItems].sort((a, b) => {
                     if (a.type === 'folder' && b.type !== 'folder') return -1;
                     if (a.type !== 'folder' && b.type === 'folder') return 1;
                     return b.modifiedAt.localeCompare(a.modifiedAt);
@@ -98,7 +125,7 @@ export default function FolderView({items}: FolderViewProps) {
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
             case 'size': {
-                const presortedItems = [...items].sort((a, b) => {
+                const presortedItems = [...filteredItems].sort((a, b) => {
                     if (a.type === 'folder' && b.type !== 'folder') {
                         const aSize = 'metadata' in a ? sizeFromString(a.metadata?.directory_size || '0') : 0;
                         const bSize = 'size' in b ? b.size : 0;
@@ -121,7 +148,7 @@ export default function FolderView({items}: FolderViewProps) {
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
             case 'type': {
-                const presortedItems = [...items].sort((a, b) => {
+                const presortedItems = [...filteredItems].sort((a, b) => {
                     // First by type
                     if (a.type === 'folder' && b.type !== 'folder') return -1;
                     if (a.type !== 'folder' && b.type === 'folder') return 1;
@@ -145,9 +172,9 @@ export default function FolderView({items}: FolderViewProps) {
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
             default:
-                return reverseIf(items, sortOrder === 'desc');
+                return reverseIf(filteredItems, sortOrder === 'desc');
         }
-    }, [items, sortMethod, sortOrder]);
+    }, [filteredItems, sortMethod, sortOrder]);
 
     // Group items by first letter (for alphabetical browsing)
     const itemsByLetter = useMemo(() => {
@@ -287,44 +314,52 @@ export default function FolderView({items}: FolderViewProps) {
                 </div>
             ) : (
                 <>
-                    {/* Sort Controls */}
-                    <div className="mb-4 flex items-center justify-end space-x-2 pr-12">
-                        <div className="text-sm text-[var(--muted-foreground)]">Sort by:</div>
-                        <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
-                            <button
-                                onClick={() => handleOrderToggle('alpha')}
-                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                title="Sort alphabetically"
-                            >
-                                <SortAsc className="h-3.5 w-3.5 mr-1 hidden md:block"/> A-Z
-                            </button>
-                            <button
-                                onClick={() => handleOrderToggle('modified')}
-                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                title="Sort by modified date"
-                            >
-                                <Calendar className="h-3.5 w-3.5 mr-1 hidden md:block"/> Date
-                            </button>
-                            <button
-                                onClick={() => handleOrderToggle('size')}
-                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                title="Sort by size"
-                            >
-                                <svg className="h-3.5 w-3.5 mr-1 hidden md:block" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                     strokeWidth="2">
-                                    <rect x="4" y="14" width="4" height="6" rx="1"/>
-                                    <rect x="10" y="9" width="4" height="11" rx="1"/>
-                                    <rect x="16" y="4" width="4" height="16" rx="1"/>
-                                </svg>
-                                Size
-                            </button>
-                            <button
-                                onClick={() => handleOrderToggle('type')}
-                                className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                title="Group by type"
-                            >
-                                <Music className="h-3.5 w-3.5 mr-1 hidden md:block"/> Type
-                            </button>
+                    <div className="mb-4 pr-12">
+                        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                            <div className="flex-1">
+                                <SearchBar value={searchQuery} onChange={setSearchQuery} />
+                            </div>
+
+                            {/* Sort Controls */}
+                            <div className="flex items-center justify-end md:justify-start space-x-2 flex-shrink-0">
+                                <div className="text-sm text-[var(--muted-foreground)]">Sort by:</div>
+                                <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
+                                    <button
+                                        onClick={() => handleOrderToggle('alpha')}
+                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        title="Sort alphabetically"
+                                    >
+                                        <SortAsc className="h-3.5 w-3.5 mr-1 hidden md:block"/> A-Z
+                                    </button>
+                                    <button
+                                        onClick={() => handleOrderToggle('modified')}
+                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        title="Sort by modified date"
+                                    >
+                                        <Calendar className="h-3.5 w-3.5 mr-1 hidden md:block"/> Date
+                                    </button>
+                                    <button
+                                        onClick={() => handleOrderToggle('size')}
+                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        title="Sort by size"
+                                    >
+                                        <svg className="h-3.5 w-3.5 mr-1 hidden md:block" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                             strokeWidth="2">
+                                            <rect x="4" y="14" width="4" height="6" rx="1"/>
+                                            <rect x="10" y="9" width="4" height="11" rx="1"/>
+                                            <rect x="16" y="4" width="4" height="16" rx="1"/>
+                                        </svg>
+                                        Size
+                                    </button>
+                                    <button
+                                        onClick={() => handleOrderToggle('type')}
+                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        title="Group by type"
+                                    >
+                                        <Music className="h-3.5 w-3.5 mr-1 hidden md:block"/> Type
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
