@@ -152,8 +152,7 @@ export function middleware(request: NextRequest) {
         "base-uri 'self'; " +
         "form-action 'self'; " +
         "frame-ancestors 'none'; " + // Prevents clickjacking
-        "block-all-mixed-content; " +
-        "upgrade-insecure-requests;"
+        "block-all-mixed-content;"
     );
 
     response.headers.set('X-Content-Type-Options', 'nosniff');

@@ -42,6 +42,12 @@ export default function RootLayout({
                             About
                         </Link>
                         <Link
+                            href="/stats"
+                            className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                        >
+                            Stats
+                        </Link>
+                        <Link
                             href="/contact"
                             className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
                         >
