@@ -8,11 +8,11 @@ import {getSlugToDirectoryMap} from '@/lib/fileSystem';
 const stat = promisify(fsStat);
 
 function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal): ReadableStream {
-    let isAborted = false;
+    let isClosed = false;
 
     if (requestSignal) {
         requestSignal.addEventListener('abort', () => {
-            isAborted = true;
+            isClosed = true;
             if (fileStream && !fileStream.destroyed) {
                 fileStream.destroy();
             }
@@ -22,39 +22,59 @@ function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal
     return new ReadableStream({
         start(controller) {
             fileStream.on('data', (chunk: string | Buffer) => {
+                // Don't enqueue if stream is closed/canceled
+                if (isClosed) return;
+
                 try {
-                    if (!isAborted) {
-                        const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
-                        controller.enqueue(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
-                    }
+                    const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+                    controller.enqueue(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
                 } catch {
+                    isClosed = true;
+                    if (!fileStream.destroyed) {
+                        fileStream.destroy();
+                    }
                 }
             });
 
             fileStream.on('end', () => {
+                if (isClosed) return;
+
                 try {
-                    if (!isAborted) {
-                        controller.close();
-                    }
+                    controller.close();
+                    isClosed = true;
                 } catch {
+                    // Controller already closed
+                }
+
+                if (!fileStream.destroyed) {
+                    fileStream.destroy();
                 }
             });
 
             fileStream.on('error', (streamError: NodeJS.ErrnoException) => {
-                if (!isAborted &&
-                    streamError.code !== 'ERR_STREAM_PREMATURE_CLOSE' &&
-                    streamError.code !== 'ECONNRESET') {
+                if (streamError.code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+                    streamError.code === 'ECONNRESET') {
+                    return;
+                }
+
+                if (!isClosed) {
                     console.error('Stream error:', streamError);
                     try {
                         controller.error(streamError);
+                        isClosed = true;
                     } catch {
+                        // Controller already errored
                     }
+                }
+
+                if (!fileStream.destroyed) {
+                    fileStream.destroy();
                 }
             });
         },
 
         cancel() {
-            isAborted = true;
+            isClosed = true;
             if (fileStream && !fileStream.destroyed) {
                 fileStream.destroy();
             }
