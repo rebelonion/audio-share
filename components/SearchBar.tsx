@@ -8,7 +8,7 @@ interface SearchBarProps {
     placeholder?: string;
 }
 
-export default function SearchBar({ value, onChange, placeholder = 'Search files and folders...' }: SearchBarProps) {
+export default function SearchBar({ value, onChange, placeholder = 'Search current directory...' }: SearchBarProps) {
     return (
         <div className="relative w-full px-0.5">
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
