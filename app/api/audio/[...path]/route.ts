@@ -22,7 +22,6 @@ function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal
     return new ReadableStream({
         start(controller) {
             fileStream.on('data', (chunk: string | Buffer) => {
-                // Don't enqueue if stream is closed/canceled
                 if (isClosed) return;
 
                 try {

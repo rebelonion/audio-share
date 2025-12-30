@@ -58,13 +58,13 @@ export default function StatsPage() {
     const sourcesData = loadSourcesByDay();
 
     return (
-        <div className="max-w-7xl mx-auto px-4 py-8">
-            <h1 className="text-4xl font-bold mb-8 text-[var(--foreground)]">Statistics</h1>
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:py-8">
+            <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]">Statistics</h1>
 
             {/* Audio by Day Section */}
-            <section className="mb-12">
-                <div className="bg-[var(--card)] rounded-lg p-6 shadow-lg">
-                    <h2 className="text-2xl font-bold mb-2 text-[var(--foreground)]">Audio Files by Day</h2>
+            <section className="mb-8 sm:mb-12">
+                <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                    <h2 className="text-xl sm:text-2xl font-bold mb-2 text-[var(--foreground)]">Audio Files by Day</h2>
                     {audioData ? (
                         <AudioChart data={audioData} />
                     ) : (
@@ -76,9 +76,9 @@ export default function StatsPage() {
             </section>
 
             {/* Sources by Day Section */}
-            <section className="mb-12">
-                <div className="bg-[var(--card)] rounded-lg p-6 shadow-lg">
-                    <h2 className="text-2xl font-bold mb-2 text-[var(--foreground)]">Sources by Day</h2>
+            <section className="mb-8 sm:mb-12">
+                <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                    <h2 className="text-xl sm:text-2xl font-bold mb-2 text-[var(--foreground)]">Sources by Day</h2>
                     {sourcesData ? (
                         <SourcesChart data={sourcesData} />
                     ) : (
