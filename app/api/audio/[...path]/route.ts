@@ -9,33 +9,42 @@ const stat = promisify(fsStat);
 
 function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal): ReadableStream {
     let isClosed = false;
+    let onData: ((chunk: string | Buffer) => void) | null = null;
+    let onEnd: (() => void) | null = null;
+    let onError: ((streamError: NodeJS.ErrnoException) => void) | null = null;
+
+    const cleanup = () => {
+        if (onData) fileStream.removeListener('data', onData);
+        if (onEnd) fileStream.removeListener('end', onEnd);
+        if (onError) fileStream.removeListener('error', onError);
+
+        if (!fileStream.destroyed) {
+            fileStream.destroy();
+        }
+    };
 
     if (requestSignal) {
         requestSignal.addEventListener('abort', () => {
             isClosed = true;
-            if (fileStream && !fileStream.destroyed) {
-                fileStream.destroy();
-            }
-        });
+            cleanup();
+        }, { once: true });
     }
 
     return new ReadableStream({
         start(controller) {
-            fileStream.on('data', (chunk: string | Buffer) => {
+            onData = (chunk: string | Buffer) => {
                 if (isClosed) return;
 
                 try {
                     const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
-                    controller.enqueue(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
+                    controller.enqueue(new Uint8Array(buffer));
                 } catch {
                     isClosed = true;
-                    if (!fileStream.destroyed) {
-                        fileStream.destroy();
-                    }
+                    cleanup();
                 }
-            });
+            };
 
-            fileStream.on('end', () => {
+            onEnd = () => {
                 if (isClosed) return;
 
                 try {
@@ -44,13 +53,10 @@ function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal
                 } catch {
                     // Controller already closed
                 }
+                cleanup();
+            };
 
-                if (!fileStream.destroyed) {
-                    fileStream.destroy();
-                }
-            });
-
-            fileStream.on('error', (streamError: NodeJS.ErrnoException) => {
+            onError = (streamError: NodeJS.ErrnoException) => {
                 if (streamError.code === 'ERR_STREAM_PREMATURE_CLOSE' ||
                     streamError.code === 'ECONNRESET') {
                     return;
@@ -65,18 +71,17 @@ function createSafeWebStream(fileStream: ReadStream, requestSignal?: AbortSignal
                         // Controller already errored
                     }
                 }
+                cleanup();
+            };
 
-                if (!fileStream.destroyed) {
-                    fileStream.destroy();
-                }
-            });
+            fileStream.on('data', onData);
+            fileStream.on('end', onEnd);
+            fileStream.on('error', onError);
         },
 
         cancel() {
             isClosed = true;
-            if (fileStream && !fileStream.destroyed) {
-                fileStream.destroy();
-            }
+            cleanup();
         }
     });
 }
