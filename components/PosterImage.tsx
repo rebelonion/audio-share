@@ -4,10 +4,11 @@ import React, {useState} from 'react';
 
 interface PosterImageProps {
     path: string;
+    posterImage: string;
     className?: string;
 }
 
-export default function PosterImage({ path, className }: PosterImageProps) {
+export default function PosterImage({ path, posterImage, className }: PosterImageProps) {
     const [imageError, setImageError] = useState(false);
 
     if (imageError) {
@@ -15,7 +16,7 @@ export default function PosterImage({ path, className }: PosterImageProps) {
     }
 
     const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
-    const posterUrl = `/api/audio/${encodedPath}/poster.jpg`;
+    const posterUrl = `/api/audio/${encodedPath}/${posterImage}`;
 
     return (
         // eslint-disable-next-line @next/next/no-img-element

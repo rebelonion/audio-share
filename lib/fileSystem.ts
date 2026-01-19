@@ -185,12 +185,15 @@ export async function getDirectoryContents(
 
                 const displayName = folderMetadata?.name || file;
 
-                const posterPath = path.join(filePath, 'poster.jpg');
-                let hasPoster = false;
-                try {
-                    await fs.promises.access(posterPath);
-                    hasPoster = true;
-                } catch {}
+                const posterNames = ['poster.jpg', 'artist.jpg', 'cover.jpg', 'album.jpg'];
+                let posterImage: string | undefined;
+                for (const name of posterNames) {
+                    try {
+                        await fs.promises.access(path.join(filePath, name));
+                        posterImage = name;
+                        break;
+                    } catch {}
+                }
 
                 items.push({
                     name: displayName,
@@ -198,7 +201,7 @@ export async function getDirectoryContents(
                     modifiedAt: stats.mtime.toISOString(),
                     type: 'folder',
                     metadata: folderMetadata,
-                    hasPoster
+                    posterImage
                 });
             }
             else if (audioExts.includes(ext)) {

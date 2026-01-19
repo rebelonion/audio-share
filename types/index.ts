@@ -24,7 +24,7 @@ export interface Folder {
     modifiedAt: string;
     type: 'folder';
     metadata?: FolderMetadata;
-    hasPoster?: boolean;
+    posterImage?: string;
 }
 
 export type Notification = {

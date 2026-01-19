@@ -16,9 +16,10 @@ export default function MobileItemName({ item, isLoading, setIsLoading }: ItemNa
         <div className="p-3 flex items-center">
             <div className="mr-3 flex items-center">
                 {item.type === 'folder' ? (
-                    item.hasPoster ? (
+                    item.posterImage ? (
                         <PosterImage
                             path={item.path}
+                            posterImage={item.posterImage}
                             className="w-8 h-8 rounded object-cover shadow-sm"
                         />
                     ) : (

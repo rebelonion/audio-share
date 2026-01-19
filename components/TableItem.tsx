@@ -38,9 +38,10 @@ export default function TableItem({ item, isLoading, setIsLoading, handleAudioSe
                         {isLoading === item.path ? (
                             <Loader2
                                 className="h-6 w-6 min-w-[20px] mr-2 text-[var(--primary)] animate-spin"/>
-                        ) : item.hasPoster ? (
+                        ) : item.posterImage ? (
                             <PosterImage
                                 path={item.path}
+                                posterImage={item.posterImage}
                                 className="w-8 h-8 min-w-[32px] mr-2 rounded object-cover shadow-sm"
                             />
                         ) : (
