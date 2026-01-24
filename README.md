@@ -2,24 +2,63 @@
 
 A modern web application for browsing, playing, and sharing audio files from your local collection.
 
-![Next.js](https://img.shields.io/badge/Next.js-15.4.8-black)
+![React](https://img.shields.io/badge/React-19-61dafb)
+![Go](https://img.shields.io/badge/Go-1.23-00ADD8)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38b2ac)
-![React](https://img.shields.io/badge/React-19-61dafb)
 ![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
 
 ## Features
 
-- 📁 Browse your audio library with folder-based navigation (including from external directories)
-- 🎵 Stream audio files directly in the browser
-- 🔊 Fully-featured audio player with playback controls, volume adjustment, and progress bar
-- 📊 Display metadata for audio files including title, artist, and album art
-- 🔗 Share links to specific audio files
-- 📱 Responsive design that works on all devices
-- 🔄 Request new artists/channels to be added via ntfy notifications
-- 📂 Enhanced folder presentation with custom names, item counts, and source links
+- Browse your audio library with folder-based navigation (including from external directories)
+- Stream audio files directly in the browser
+- Fully-featured audio player with playback controls, volume adjustment, and progress bar
+- Display metadata for audio files including title, artist, and album art
+- Share links to specific audio files
+- Responsive design that works on all devices
+- Request new artists/channels to be added via ntfy notifications
+- Enhanced folder presentation with custom names, item counts, and source links
 
 ## Installation
+
+### Docker
+
+Build and run with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Or build the image manually:
+
+```bash
+docker build -t audio-share .
+docker run -p 8080:8080 \
+  -v /path/to/your/audio:/audio:ro \
+  -v /path/to/your/content:/app/content:ro \
+  -e AUDIO_DIR=/audio:Audio \
+  audio-share
+```
+
+#### Docker Compose
+
+The included `docker-compose.yml`:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/rebelonion/audio-share:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - AUDIO_DIR=/audio:Audio
+    volumes:
+      - /path/to/your/audio:/audio:ro
+      - /path/to/your/content:/app/content:ro
+    restart: unless-stopped
+```
+
+### Manual
 
 1. Clone the repository:
    ```bash
@@ -27,104 +66,39 @@ A modern web application for browsing, playing, and sharing audio files from you
    cd audio-share
    ```
 
-2. Install dependencies:
+2. Install frontend dependencies:
    ```bash
-   bun install
+   cd frontend
+   npm install
    ```
 
 3. Set up your audio directory:
-   - Option 1: Create a directory `public/audio` in the project root
-   - Option 2: Use any external directory by setting the `AUDIO_DIR` environment variable in `.env.local`
-   - Option 3: Configure multiple audio directories by providing a comma-separated list in the `AUDIO_DIR` environment variable:
+   - Configure the `AUDIO_DIR` environment variable
+   - Format: `/path/to/audio:Display Name` or comma-separated for multiple directories:
      ```
-     # Basic multi-directory setup (directory names will be used as display names)
-     AUDIO_DIR=/path/to/audio1,/path/to/audio2,/path/to/audio3
-     
-     # With custom display names (format: path:name)
-     AUDIO_DIR=/path/to/audio1:Music Library,/path/to/audio2:Podcasts,/path/to/audio3:Audiobooks
+     AUDIO_DIR=/path/to/music:Music Library,/path/to/podcasts:Podcasts
      ```
-   - Display names are shown in the UI and used to generate URL-friendly slugs
-   - URL paths automatically use slugified versions of directory names (e.g., "Music Library" becomes "music-library")
    - Add your audio files and folders to your chosen directory/directories
    - Optional: Add thumbnail images and metadata JSON files (see metadata section below)
 
-## Usage
+## Environment Variables
 
-### Development
+All configuration is done via environment variables on the Go server. Frontend config is injected at runtime, so you can use a pre-built Docker image with different settings.
 
-Run the development server:
-
-```bash
-bun run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Production Build
-
-Build for production:
-
-```bash
-bun run build
-```
-
-Start the production server:
-
-```bash
-bun run start
-```
-
-### Docker
-
-Run with Docker using a pre-built image:
-
-```bash
-docker run -p 3000:3000 \
-  -v /path/to/your/audio:/app/public/audio \
-  -e AUDIO_DIR=/app/public/audio \
-  ghcr.io/rebelonion/audio-share:latest
-```
-
-Or build and run locally:
-
-```bash
-docker build -t audio-share .
-docker run -p 3000:3000 \
-  -v /path/to/your/audio:/app/public/audio \
-  -e AUDIO_DIR=/app/public/audio \
-  audio-share
-```
-
-#### Docker Compose
-
-Create a `docker-compose.yml` file:
-
-```yaml
-services:
-  audio-share:
-    image: ghcr.io/rebelonion/audio-share:latest
-    # Or build locally:
-    # build: .
-    ports:
-      - '3000:3000'
-    volumes:
-      - /path/to/your/audio:/app/public/audio
-      # Optional: Mount content directory for custom About page
-      # - /path/to/your/content:/app/content
-    environment:
-      - AUDIO_DIR=/app/public/audio
-      # Optional: Add ntfy notifications
-      # - NTFY_URL=https://ntfy.sh
-      # - NTFY_TOPIC=your-topic
-      # - NTFY_TOKEN=your-token
-    restart: unless-stopped
-```
-
-Then run:
-
-```bash
-docker compose up -d
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `8080` |
+| `AUDIO_DIR` | Audio directories (format: `/path:Name,/path2:Name2`) | - |
+| `CONTENT_DIR` | Directory for about.md and stats JSON | `./content` |
+| `STATIC_DIR` | Directory for built frontend files | `./static` |
+| `CACHE_TTL` | Directory listing cache TTL in seconds (0 to disable) | `300` |
+| `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
+| `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen...` |
+| `UMAMI_URL` | Umami analytics script URL | - |
+| `UMAMI_WEBSITE_ID` | Umami website ID | - |
+| `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |
+| `NTFY_TOPIC` | Ntfy topic for notifications | - |
+| `NTFY_TOKEN` | Ntfy authentication token | - |
 
 ## Audio Files Organization
 
@@ -156,17 +130,9 @@ The metadata JSON can include:
 }
 ```
 
-Metadata fields:
-- `title`: Display title for the audio file
-- `meta_artist`: Artist or creator name
-- `upload_date`: Upload date in YYYYMMDD format
-- `webpage_url`: Link to the original source
-- `description`: Description or notes about the audio
-- `url_broken`: Set to `true` to indicate the source link is no longer available (displays a broken link icon instead of a clickable link)
-
 ### Folder Metadata
 
-You can add enhanced metadata for directories by adding a `folder.json` file in the parent directory. This file contains an array of metadata objects for subdirectories:
+You can add enhanced metadata for directories by adding a `folder.json` file in the parent directory:
 
 ```json
 [
@@ -176,34 +142,52 @@ You can add enhanced metadata for directories by adding a `folder.json` file in 
     "original_url": "https://source-url.com/channel",
     "items": 53,
     "directory_size": "3.0G"
-  },
-  {
-    "folder_name": "another_folder",
-    "name": "Another Display Name",
-    "original_url": "https://another-url.com",
-    "items": 42,
-    "directory_size": "1.2G"
   }
 ]
 ```
 
-Each entry maps a folder name to its display information:
-- `folder_name`: The actual directory name to match
-- `name`: The display name shown in the UI
-- `original_url`: Optional link to the original content source
-- `items`: Optional number of items in the folder
-- `directory_size`: Optional human-readable size of the directory
+## Content Directory
 
-## Customization
+The `content/` directory holds customizable content:
 
-You can customize the application by:
+- `about.md` - Markdown content for the About page
+- `audio_by_day.json` - Stats data for audio files chart
+- `sources_by_day.json` - Stats data for sources chart
 
-1. Modifying the Tailwind configuration in `tailwind.config.js`
-2. Adjusting the global styles in `app/globals.css`
-3. Updating audio file filters in `lib/fileSystem.ts`
-4. Setting a custom audio directory path in `.env.local` with the `AUDIO_DIR` environment variable
-5. Configure ntfy notification settings by setting `NTFY_URL`, `NTFY_TOPIC` and `NTFY_TOKEN` in `.env.local`
-6. Adjust rate limits for artist requests with `SHARE_REQUEST_LIMIT` and `SHARE_LIMIT_WINDOW`
+## Development
+
+Run both the Go backend and Vite dev server:
+
+```bash
+# Terminal 1 - Go backend
+cd backend
+CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run .
+
+# Terminal 2 - Vite dev server (with hot reload)
+cd frontend
+npm run dev
+```
+
+- Backend API: http://localhost:8080
+- Frontend dev server: http://localhost:5173 (proxies API calls to backend)
+
+### Production Build
+
+Build the frontend:
+
+```bash
+cd frontend
+npm run build
+```
+
+Run Go server with built frontend:
+
+```bash
+cd backend
+STATIC_DIR=../frontend/dist CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run .
+```
+
+Open http://localhost:8080 in your browser.
 
 ## License
 
@@ -211,5 +195,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- Built with [Next.js](https://nextjs.org)
+- Built with [React](https://react.dev) and [Go](https://go.dev)
+- Frontend tooling by [Vite](https://vitejs.dev)
 - Icons by [Lucide](https://lucide.dev)

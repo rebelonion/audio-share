@@ -1,46 +1,59 @@
-# Build stage
-FROM oven/bun:1 AS builder
+# Stage 1: Build React frontend
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json bun.lock ./
+# Copy frontend package files
+COPY frontend/package.json frontend/package-lock.json* ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN npm ci --legacy-peer-deps
 
-# Copy source files
-COPY . .
+# Copy frontend source
+COPY frontend/ ./
 
-# Build the application
-RUN bun run build
+# Build the frontend
+RUN npm run build
 
-# Production stage
-FROM oven/bun:1-slim AS runner
+# Stage 2: Build Go backend
+FROM golang:1.23-alpine AS backend-builder
 
 WORKDIR /app
 
-# Set environment to production
-ENV NODE_ENV=production
+# Copy go mod files
+COPY backend/go.mod ./
 
-# Create a non-root user
-RUN groupadd --system --gid 1001 nodejs && \
-    useradd --system --uid 1001 --gid nodejs nextjs
+# Download dependencies
+RUN go mod download
 
-# Copy necessary files from builder
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy backend source
+COPY backend/ .
 
-# Switch to non-root user
-USER nextjs
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /audio-share-backend
 
-# Expose the port
-EXPOSE 3000
+# Stage 3: Final image
+FROM alpine:3.20
 
-# Set default port
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+# Install ca-certificates for HTTPS requests (ntfy)
+RUN apk --no-cache add ca-certificates
 
-# Start the application
-CMD ["bun", "run", "server.js"]
+WORKDIR /app
+
+# Copy backend binary
+COPY --from=backend-builder /audio-share-backend .
+
+# Copy frontend build to static directory
+COPY --from=frontend-builder /app/dist ./static
+
+# Create non-root user
+RUN adduser -D -g '' appuser
+USER appuser
+
+EXPOSE 8080
+
+ENV PORT=8080
+ENV STATIC_DIR=/app/static
+ENV CONTENT_DIR=/app/content
+
+CMD ["./audio-share-backend"]
