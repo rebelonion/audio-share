@@ -135,6 +135,7 @@ interface AudioChartProps {
 
 export function AudioChart({data}: AudioChartProps) {
     const [hideZeroDays, setHideZeroDays] = useState(false);
+    const [showCumulative, setShowCumulative] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -146,6 +147,15 @@ export function AudioChart({data}: AudioChartProps) {
 
     const backfilledDays = backfillDays(data.days);
     const filteredDays = hideZeroDays ? backfilledDays.filter(day => day.count > 0) : backfilledDays;
+
+    const cumulativeDays = filteredDays.reduce((acc, day, index) => {
+        const previousTotal = index > 0 ? acc[index - 1].cumulative : 0;
+        acc.push({
+            ...day,
+            cumulative: previousTotal + day.count
+        });
+        return acc;
+    }, [] as (DayData & {cumulative: number})[]);
 
     const defaultStartIndex = Math.max(0, filteredDays.length - 30);
     const defaultEndIndex = Math.max(0, filteredDays.length - 1);
@@ -161,59 +171,118 @@ export function AudioChart({data}: AudioChartProps) {
                 <p className="text-[var(--muted-foreground)]">
                     Total: <span className="text-[var(--primary)] font-bold text-xl">{data.total.toLocaleString()}</span> files
                 </p>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                    <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
-                    <div
-                        className={`relative w-11 h-6 rounded-full transition-colors ${
-                            hideZeroDays ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
-                        }`}
-                        onClick={() => setHideZeroDays(!hideZeroDays)}
-                    >
+                <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                        <span className="text-sm text-[var(--muted-foreground)]">Cumulative</span>
                         <div
-                            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                                hideZeroDays ? 'translate-x-5' : 'translate-x-0'
+                            className={`relative w-11 h-6 rounded-full transition-colors ${
+                                showCumulative ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
                             }`}
-                        />
-                    </div>
-                </label>
+                            onClick={() => setShowCumulative(!showCumulative)}
+                        >
+                            <div
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                                    showCumulative ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </div>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                        <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
+                        <div
+                            className={`relative w-11 h-6 rounded-full transition-colors ${
+                                hideZeroDays ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
+                            }`}
+                            onClick={() => setHideZeroDays(!hideZeroDays)}
+                        >
+                            <div
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                                    hideZeroDays ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </div>
+                    </label>
+                </div>
             </div>
-            <ResponsiveContainer width="100%" height={chartHeight} key={`audio-${hideZeroDays}`}>
-                <BarChart data={filteredDays} margin={chartMargin}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis
-                        dataKey="date"
-                        stroke="var(--muted-foreground)"
-                        tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
-                        angle={isMobile ? -45 : 0}
-                        textAnchor={isMobile ? 'end' : 'middle'}
-                        height={isMobile ? 60 : 30}
-                        interval={isMobile ? Math.floor(filteredDays.length / 8) : 'preserveStartEnd'}
-                    />
-                    <YAxis
-                        stroke="var(--muted-foreground)"
-                        tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
-                        width={isMobile ? 30 : 60}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend
-                        wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
-                        iconType="circle"
-                    />
-                    <Bar
-                        dataKey="count"
-                        fill="#8b5cf6"
-                        name="Audio Files"
-                        radius={[8, 8, 0, 0]}
-                    />
-                    <Brush
-                        dataKey="date"
-                        height={isMobile ? 40 : 30}
-                        stroke="#8b5cf6"
-                        fill="var(--card)"
-                        startIndex={defaultStartIndex}
-                        endIndex={defaultEndIndex}
-                    />
-                </BarChart>
+            <ResponsiveContainer width="100%" height={chartHeight} key={`audio-${hideZeroDays}-${showCumulative}`}>
+                {showCumulative ? (
+                    <LineChart data={cumulativeDays} margin={chartMargin}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis
+                            dataKey="date"
+                            stroke="var(--muted-foreground)"
+                            tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                            angle={isMobile ? -45 : 0}
+                            textAnchor={isMobile ? 'end' : 'middle'}
+                            height={isMobile ? 60 : 30}
+                            interval={isMobile ? Math.floor(cumulativeDays.length / 8) : 'preserveStartEnd'}
+                        />
+                        <YAxis
+                            stroke="var(--muted-foreground)"
+                            tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                            width={isMobile ? 30 : 60}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend
+                            wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
+                            iconType="circle"
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="cumulative"
+                            stroke="#8b5cf6"
+                            strokeWidth={isMobile ? 2 : 3}
+                            name="Total Audio Files"
+                            dot={false}
+                            activeDot={{r: isMobile ? 6 : 8}}
+                        />
+                        <Brush
+                            dataKey="date"
+                            height={isMobile ? 40 : 30}
+                            stroke="#8b5cf6"
+                            fill="var(--card)"
+                            startIndex={defaultStartIndex}
+                            endIndex={defaultEndIndex}
+                        />
+                    </LineChart>
+                ) : (
+                    <BarChart data={filteredDays} margin={chartMargin}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis
+                            dataKey="date"
+                            stroke="var(--muted-foreground)"
+                            tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                            angle={isMobile ? -45 : 0}
+                            textAnchor={isMobile ? 'end' : 'middle'}
+                            height={isMobile ? 60 : 30}
+                            interval={isMobile ? Math.floor(filteredDays.length / 8) : 'preserveStartEnd'}
+                        />
+                        <YAxis
+                            stroke="var(--muted-foreground)"
+                            tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                            width={isMobile ? 30 : 60}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend
+                            wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
+                            iconType="circle"
+                        />
+                        <Bar
+                            dataKey="count"
+                            fill="#8b5cf6"
+                            name="Audio Files"
+                            radius={[8, 8, 0, 0]}
+                        />
+                        <Brush
+                            dataKey="date"
+                            height={isMobile ? 40 : 30}
+                            stroke="#8b5cf6"
+                            fill="var(--card)"
+                            startIndex={defaultStartIndex}
+                            endIndex={defaultEndIndex}
+                        />
+                    </BarChart>
+                )}
             </ResponsiveContainer>
         </>
     );
@@ -225,6 +294,7 @@ interface SourcesChartProps {
 
 export function SourcesChart({data}: SourcesChartProps) {
     const [hideZeroDays, setHideZeroDays] = useState(false);
+    const [showCumulative, setShowCumulative] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -236,6 +306,15 @@ export function SourcesChart({data}: SourcesChartProps) {
 
     const backfilledDays = backfillSourceDays(data.days);
     const filteredDays = hideZeroDays ? backfilledDays.filter(day => day.count > 0) : backfilledDays;
+
+    const cumulativeDays = filteredDays.reduce((acc, day, index) => {
+        const previousTotal = index > 0 ? acc[index - 1].cumulative : 0;
+        acc.push({
+            ...day,
+            cumulative: previousTotal + day.count
+        });
+        return acc;
+    }, [] as (SourceDayData & {cumulative: number})[]);
 
     const defaultStartIndex = Math.max(0, filteredDays.length - 30);
     const defaultEndIndex = Math.max(0, filteredDays.length - 1);
@@ -251,24 +330,41 @@ export function SourcesChart({data}: SourcesChartProps) {
                 <p className="text-[var(--muted-foreground)]">
                     Total: <span className="text-[var(--primary)] font-bold text-xl">{data.total.toLocaleString()}</span> sources
                 </p>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                    <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
-                    <div
-                        className={`relative w-11 h-6 rounded-full transition-colors ${
-                            hideZeroDays ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
-                        }`}
-                        onClick={() => setHideZeroDays(!hideZeroDays)}
-                    >
+                <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                        <span className="text-sm text-[var(--muted-foreground)]">Cumulative</span>
                         <div
-                            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                                hideZeroDays ? 'translate-x-5' : 'translate-x-0'
+                            className={`relative w-11 h-6 rounded-full transition-colors ${
+                                showCumulative ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
                             }`}
-                        />
-                    </div>
-                </label>
+                            onClick={() => setShowCumulative(!showCumulative)}
+                        >
+                            <div
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                                    showCumulative ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </div>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                        <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
+                        <div
+                            className={`relative w-11 h-6 rounded-full transition-colors ${
+                                hideZeroDays ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
+                            }`}
+                            onClick={() => setHideZeroDays(!hideZeroDays)}
+                        >
+                            <div
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                                    hideZeroDays ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </div>
+                    </label>
+                </div>
             </div>
-            <ResponsiveContainer width="100%" height={chartHeight} key={`sources-${hideZeroDays}`}>
-                <LineChart data={filteredDays} margin={chartMargin}>
+            <ResponsiveContainer width="100%" height={chartHeight} key={`sources-${hideZeroDays}-${showCumulative}`}>
+                <LineChart data={showCumulative ? cumulativeDays : filteredDays} margin={chartMargin}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis
                         dataKey="date"
@@ -284,18 +380,18 @@ export function SourcesChart({data}: SourcesChartProps) {
                         tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                         width={isMobile ? 30 : 60}
                     />
-                    <Tooltip content={<SourcesTooltip />} />
+                    <Tooltip content={showCumulative ? <CustomTooltip /> : <SourcesTooltip />} />
                     <Legend
                         wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                         iconType="circle"
                     />
                     <Line
                         type="monotone"
-                        dataKey="count"
+                        dataKey={showCumulative ? 'cumulative' : 'count'}
                         stroke="#8b5cf6"
                         strokeWidth={isMobile ? 2 : 3}
-                        name="New Sources"
-                        dot={{fill: '#8b5cf6', r: isMobile ? 3 : 5}}
+                        name={showCumulative ? 'Total Sources' : 'New Sources'}
+                        dot={showCumulative ? false : {fill: '#8b5cf6', r: isMobile ? 3 : 5}}
                         activeDot={{r: isMobile ? 6 : 8}}
                     />
                     <Brush
