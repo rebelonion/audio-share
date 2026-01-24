@@ -1,0 +1,21 @@
+services:
+  app:
+    image: ghcr.io/rebelonion/audio-share:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - PORT=8080
+      - AUDIO_DIR=/audio:Audio
+      - CONTENT_DIR=/app/content
+      - STATIC_DIR=/app/static
+    env_file:
+      - .env.local
+    volumes:
+      - ${AUDIO_PATH:-./audio}:/audio:ro
+      - ${CONTENT_PATH:-./content}:/app/content:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
