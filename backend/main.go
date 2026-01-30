@@ -20,7 +20,7 @@ func main() {
 	browseHandler := handlers.NewBrowseHandler(fsService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
 	contactHandler := handlers.NewContactHandler(ntfyService)
-	contentHandler := handlers.NewContentHandler(cfg.ContentDir)
+	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle)
 
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
@@ -42,6 +42,9 @@ func main() {
 	mux.Handle("/api/contact", contactHandler)
 	mux.HandleFunc("/api/about", contentHandler.AboutHandler())
 	mux.HandleFunc("/api/stats", contentHandler.StatsHandler())
+
+	mux.HandleFunc("/sitemap.xml", contentHandler.SitemapHandler())
+	mux.HandleFunc("/site.webmanifest", contentHandler.ManifestHandler())
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

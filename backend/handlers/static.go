@@ -30,7 +30,15 @@ func NewSPAHandler(staticDir string, config FrontendConfig) *SPAHandler {
 		configJSON, _ := json.Marshal(config)
 		configScript := `<script>window.__CONFIG__=` + string(configJSON) + `</script>`
 
-		indexContent = []byte(strings.Replace(string(data), "</head>", configScript+"</head>", 1))
+		ldJSON, _ := json.Marshal(map[string]string{
+			"@context":    "https://schema.org",
+			"@type":       "WebSite",
+			"name":        config.DefaultTitle,
+			"description": config.DefaultDescription,
+		})
+		ldScript := `<script type="application/ld+json">` + string(ldJSON) + `</script>`
+
+		indexContent = []byte(strings.Replace(string(data), "</head>", configScript+ldScript+"</head>", 1))
 	}
 
 	return &SPAHandler{
