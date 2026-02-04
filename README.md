@@ -3,7 +3,7 @@
 A modern web application for browsing, playing, and sharing audio files from your local collection.
 
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Go](https://img.shields.io/badge/Go-1.23-00ADD8)
+![Go](https://img.shields.io/badge/Go-1.24-00ADD8)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38b2ac)
 ![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
