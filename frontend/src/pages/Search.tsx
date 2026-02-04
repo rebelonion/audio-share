@@ -73,14 +73,13 @@ export default function Search() {
             if (query.length >= 2) {
                 setCurrentPage(1);
                 setSearchParams({ q: query }, { replace: true });
-                performSearch(query, 1);
             } else if (query.length === 0) {
                 setSearchParams({}, { replace: true });
                 setResults([]);
                 setTotal(0);
                 setHasSearched(false);
             }
-        }, 300);
+        }, 500);
 
         return () => {
             if (debounceRef.current) {

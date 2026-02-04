@@ -17,6 +17,7 @@ export default function Layout() {
             defer
             src={UMAMI_URL}
             data-website-id={UMAMI_WEBSITE_ID}
+            data-exclude-search="true"
           />
         )}
       </Helmet>
