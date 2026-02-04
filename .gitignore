@@ -5,6 +5,7 @@ CLAUDE.md
 # build output
 /frontend/dist/
 /backend/audio-share-backend
+/backend/audio-share.db*
 
 # misc
 .DS_Store

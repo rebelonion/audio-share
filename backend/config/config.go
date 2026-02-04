@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func init() {
@@ -77,6 +78,9 @@ type Config struct {
 
 	CacheTTL int // seconds, 0 to disable
 
+	DBPath        string
+	IndexInterval time.Duration
+
 	UmamiURL string
 
 	DefaultTitle       string
@@ -106,7 +110,10 @@ func Load() *Config {
 
 		CacheTTL: getEnvInt("CACHE_TTL", 300),
 
-		UmamiURL:           getEnv("UMAMI_URL", ""),
+		DBPath:        getEnv("DB_PATH", "./audio-share.db"),
+		IndexInterval: getEnvDuration("INDEX_INTERVAL", 0),
+
+		UmamiURL: getEnv("UMAMI_URL", ""),
 		UmamiWebsiteID:     getEnv("UMAMI_WEBSITE_ID", ""),
 		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
@@ -124,6 +131,15 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
 		}
 	}
 	return defaultValue

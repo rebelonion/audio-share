@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/onion/audio-share-backend/config"
 	"github.com/onion/audio-share-backend/handlers"
@@ -14,6 +15,24 @@ func main() {
 	cfg := config.Load()
 
 	fsService := services.NewFileSystemService(cfg.AudioDir, cfg.CacheTTL)
+
+	if len(os.Args) > 1 && os.Args[1] == "reindex" {
+		db := services.NewDatabase(cfg.DBPath)
+		defer db.Close()
+		searchService := services.NewSearchService(db, fsService)
+		if err := searchService.RebuildIndex(); err != nil {
+			log.Fatalf("Reindex failed: %v", err)
+		}
+		os.Exit(0)
+	}
+
+	db := services.NewDatabase(cfg.DBPath)
+	searchService := services.NewSearchService(db, fsService)
+
+	if cfg.IndexInterval > 0 {
+		go searchService.StartPeriodicReindex(cfg.IndexInterval)
+	}
+
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
 
 	audioHandler := handlers.NewAudioHandler(fsService)
@@ -21,6 +40,7 @@ func main() {
 	shareHandler := handlers.NewShareHandler(ntfyService)
 	contactHandler := handlers.NewContactHandler(ntfyService)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle)
+	searchHandler := handlers.NewSearchHandler(searchService)
 
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
@@ -38,6 +58,7 @@ func main() {
 	mux.Handle("/api/audio/", audioHandler)
 	mux.Handle("/api/browse", browseHandler)
 	mux.Handle("/api/browse/", browseHandler)
+	mux.Handle("/api/search", searchHandler)
 	mux.Handle("/api/share", shareHandler)
 	mux.Handle("/api/contact", contactHandler)
 	mux.HandleFunc("/api/about", contentHandler.AboutHandler())

@@ -1,0 +1,85 @@
+package services
+
+import (
+	"database/sql"
+	"log"
+
+	_ "modernc.org/sqlite"
+)
+
+type Database struct {
+	db *sql.DB
+}
+
+func NewDatabase(dbPath string) *Database {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		log.Printf("Warning: could not enable WAL mode: %v", err)
+	}
+
+	database := &Database{db: db}
+	database.migrate()
+
+	return database
+}
+
+func (d *Database) migrate() {
+	schema := `
+		CREATE TABLE IF NOT EXISTS folders (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			path TEXT NOT NULL UNIQUE,
+			parent_path TEXT,
+			folder_name TEXT NOT NULL,
+			name TEXT NOT NULL,
+			original_url TEXT,
+			url_broken INTEGER DEFAULT 0,
+			item_count INTEGER,
+			directory_size TEXT,
+			poster_image TEXT,
+			modified_at TEXT,
+			indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS audio_files (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			path TEXT NOT NULL UNIQUE,
+			parent_path TEXT,
+			filename TEXT NOT NULL,
+			size INTEGER,
+			mime_type TEXT,
+			modified_at TEXT,
+			title TEXT,
+			meta_artist TEXT,
+			upload_date TEXT,
+			webpage_url TEXT,
+			description TEXT,
+			indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+
+		-- Folder indexes
+		CREATE INDEX IF NOT EXISTS idx_folders_path ON folders(path);
+		CREATE INDEX IF NOT EXISTS idx_folders_parent_path ON folders(parent_path);
+		CREATE INDEX IF NOT EXISTS idx_folders_search ON folders(name, folder_name);
+
+		-- Audio file indexes
+		CREATE INDEX IF NOT EXISTS idx_audio_files_path ON audio_files(path);
+		CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path);
+		CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist, description);
+	`
+
+	if _, err := d.db.Exec(schema); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+}
+
+func (d *Database) DB() *sql.DB {
+	return d.db
+}
+
+func (d *Database) Close() error {
+	return d.db.Close()
+}

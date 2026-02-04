@@ -11,6 +11,7 @@ A modern web application for browsing, playing, and sharing audio files from you
 ## Features
 
 - Browse your audio library with folder-based navigation (including from external directories)
+- **Global search** across the entire library by name, artist, title, or description
 - Stream audio files directly in the browser
 - Fully-featured audio player with playback controls, volume adjustment, and progress bar
 - Display metadata for audio files including title, artist, and album art
@@ -92,6 +93,8 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `CONTENT_DIR` | Directory for about.md and stats JSON | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
 | `CACHE_TTL` | Directory listing cache TTL in seconds (0 to disable) | `300` |
+| `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
+| `INDEX_INTERVAL` | Interval for automatic reindexing (e.g., `24h`, `6h`) | - (disabled) |
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
 | `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen...` |
 | `UMAMI_URL` | Umami analytics script URL | - |
@@ -125,8 +128,7 @@ The metadata JSON can include:
   "meta_artist": "Artist Name",
   "upload_date": "20230215",
   "webpage_url": "https://original-source-url.com",
-  "description": "Description text about the song",
-  "url_broken": false
+  "description": "Description text about the song"
 }
 ```
 
@@ -141,7 +143,8 @@ You can add enhanced metadata for directories by adding a `folder.json` file in 
     "name": "Display Name",
     "original_url": "https://source-url.com/channel",
     "items": 53,
-    "directory_size": "3.0G"
+    "directory_size": "3.0G",
+    "url_broken": false
   }
 ]
 ```
@@ -153,6 +156,42 @@ The `content/` directory holds customizable content:
 - `about.md` - Markdown content for the About page
 - `audio_by_day.json` - Stats data for audio files chart
 - `sources_by_day.json` - Stats data for sources chart
+
+## Search Index
+
+The application uses a SQLite database to enable fast global search across your entire audio library. The database stores metadata from your audio files and folders.
+
+### Building the Index
+
+Before search will work, you need to build the index:
+
+```bash
+cd backend
+go run . reindex
+```
+
+This walks through all configured audio directories and indexes:
+- Folder names and metadata from `folder.json` files
+- Audio filenames and metadata from `.info.json` files
+
+### Automatic Reindexing
+
+Set the `INDEX_INTERVAL` environment variable to automatically rebuild the index periodically:
+
+```bash
+INDEX_INTERVAL=24h go run .  # Reindex every 24 hours
+INDEX_INTERVAL=6h go run .   # Reindex every 6 hours
+```
+
+If not set, the index is only rebuilt when you manually run the `reindex` command.
+
+### Database Location
+
+By default, the database is stored at `./audio-share.db`. Override with:
+
+```bash
+DB_PATH=/path/to/audio-share.db go run .
+```
 
 ## Development
 

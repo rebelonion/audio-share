@@ -2,6 +2,7 @@ import { Outlet, Link } from 'react-router'
 import { Helmet } from 'react-helmet-async'
 import { Music } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
+import GlobalSearchBar from './GlobalSearchBar'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION, UMAMI_URL, UMAMI_WEBSITE_ID } from '@/lib/config'
 
 export default function Layout() {
@@ -30,7 +31,8 @@ export default function Layout() {
                   {DEFAULT_TITLE}
                 </h1>
               </Link>
-              <nav className="flex gap-6 pr-12">
+              <nav className="flex items-center gap-6 pr-12">
+                <GlobalSearchBar />
                 <Link
                   to="/about"
                   className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
