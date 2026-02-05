@@ -215,7 +215,7 @@ export default function Search() {
                                         )}
 
                                         <div className="flex items-center gap-2 mt-2 text-xs text-[var(--muted-foreground)]">
-                                            <span className="px-2 py-0.5 bg-[var(--card-hover)] rounded">
+                                            <span className="px-2 py-0.5 bg-[var(--border)] rounded">
                                                 {result.type}
                                             </span>
                                             {result.parentPath && (
