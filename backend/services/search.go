@@ -194,7 +194,8 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath string) erro
 					ModifiedAt: modifiedAt,
 				}
 
-				infoPath := filepath.Join(fullPath, name+".info.json")
+				baseName := strings.TrimSuffix(name, filepath.Ext(name))
+				infoPath := filepath.Join(fullPath, baseName+".info.json")
 				if data, err := os.ReadFile(infoPath); err == nil {
 					var infoJSON AudioInfoJSON
 					if json.Unmarshal(data, &infoJSON) == nil {
