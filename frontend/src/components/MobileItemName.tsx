@@ -1,6 +1,6 @@
 import {Folder, Music} from "lucide-react";
 import {FileSystemItem} from "@/types";
-import {Link} from 'react-router';
+import {Link, useSearchParams} from 'react-router';
 import PosterImage from '@/components/PosterImage';
 
 interface ItemNameProps {
@@ -8,7 +8,9 @@ interface ItemNameProps {
 }
 
 export default function MobileItemName({ item }: ItemNameProps) {
-    const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+    const [searchParams] = useSearchParams();
+    const rawParam = searchParams.get('raw') === 'true' ? '?raw=true' : '';
+    const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}${rawParam}`;
 
     return (
         <div className="p-3 flex items-center">

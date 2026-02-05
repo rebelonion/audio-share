@@ -8,11 +8,19 @@ export interface DirectoryContents {
     currentPath: string;
 }
 
-export async function fetchDirectoryContents(path: string = ''): Promise<DirectoryContents> {
+export interface FetchDirectoryOptions {
+    raw?: boolean;
+}
+
+export async function fetchDirectoryContents(path: string = '', options?: FetchDirectoryOptions): Promise<DirectoryContents> {
     let url = `${API_BASE}/api/browse`;
     if (path) {
         const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
         url = `${API_BASE}/api/browse/${encodedPath}`;
+    }
+
+    if (options?.raw) {
+        url += '?raw=true';
     }
 
     const response = await fetch(url);

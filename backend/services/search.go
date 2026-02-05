@@ -86,18 +86,18 @@ func (s *SearchService) RebuildIndex() error {
 	log.Println("Starting index rebuild...")
 	start := time.Now()
 
-	if _, err := s.db.DB().Exec("DELETE FROM folders"); err != nil {
-		return err
-	}
-	if _, err := s.db.DB().Exec("DELETE FROM audio_files"); err != nil {
-		return err
-	}
-
 	for slug, dirConfig := range s.fs.GetSlugToDirectoryMap() {
 		log.Printf("Indexing directory: %s (%s)", dirConfig.Name, slug)
 		if err := s.indexDirectory(slug, dirConfig.Path, ""); err != nil {
 			log.Printf("Error indexing %s: %v", slug, err)
 		}
+	}
+
+	if _, err := s.db.DB().Exec("DELETE FROM folders WHERE indexed_at < ?", start); err != nil {
+		log.Printf("Error cleaning up stale folders: %v", err)
+	}
+	if _, err := s.db.DB().Exec("DELETE FROM audio_files WHERE indexed_at < ?", start); err != nil {
+		log.Printf("Error cleaning up stale audio files: %v", err)
 	}
 
 	elapsed := time.Since(start)
@@ -371,5 +371,125 @@ func (s *SearchService) StartPeriodicReindex(interval time.Duration) {
 		if err := s.RebuildIndex(); err != nil {
 			log.Printf("Periodic reindex error: %v", err)
 		}
+	}
+}
+
+func (s *SearchService) BrowseDirectory(path string) (*DirectoryContents, error) {
+	// Root path: delegate to filesystem (slugs are config-driven)
+	if path == "" {
+		return s.fs.GetDirectoryContents("")
+	}
+	folders, err := s.getFoldersByParentPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	audioFiles, err := s.getAudioFilesByParentPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]FileSystemItem, 0, len(folders)+len(audioFiles))
+
+	for _, f := range folders {
+		items = append(items, s.folderToFileSystemItem(f))
+	}
+	for _, a := range audioFiles {
+		items = append(items, s.audioToFileSystemItem(a))
+	}
+
+	return &DirectoryContents{
+		Items:       items,
+		CurrentPath: path,
+	}, nil
+}
+
+func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecord, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT id, path, parent_path, folder_name, name, original_url, url_broken,
+		       item_count, directory_size, poster_image, modified_at
+		FROM folders
+		WHERE parent_path = ?
+		ORDER BY name ASC
+	`, parentPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var folders []FolderRecord
+	for rows.Next() {
+		var f FolderRecord
+		var urlBroken int
+		if err := rows.Scan(&f.ID, &f.Path, &f.ParentPath, &f.FolderName, &f.Name,
+			&f.OriginalURL, &urlBroken, &f.ItemCount, &f.DirectorySize,
+			&f.PosterImage, &f.ModifiedAt); err != nil {
+			return nil, err
+		}
+		f.URLBroken = urlBroken == 1
+		folders = append(folders, f)
+	}
+
+	return folders, nil
+}
+
+func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFileRecord, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT id, path, parent_path, filename, size, mime_type, modified_at,
+		       title, meta_artist, upload_date, webpage_url, description
+		FROM audio_files
+		WHERE parent_path = ?
+		ORDER BY modified_at DESC
+	`, parentPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var audioFiles []AudioFileRecord
+	for rows.Next() {
+		var a AudioFileRecord
+		if err := rows.Scan(&a.ID, &a.Path, &a.ParentPath, &a.Filename, &a.Size,
+			&a.MimeType, &a.ModifiedAt, &a.Title, &a.MetaArtist, &a.UploadDate,
+			&a.WebpageURL, &a.Description); err != nil {
+			return nil, err
+		}
+		audioFiles = append(audioFiles, a)
+	}
+
+	return audioFiles, nil
+}
+
+func (s *SearchService) folderToFileSystemItem(f FolderRecord) FileSystemItem {
+	item := FileSystemItem{
+		Name:        f.Name,
+		Path:        f.Path,
+		ModifiedAt:  f.ModifiedAt,
+		Type:        "folder",
+		PosterImage: f.PosterImage,
+	}
+
+	if f.OriginalURL != "" || f.URLBroken || f.ItemCount > 0 || f.DirectorySize != "" {
+		item.Metadata = &FolderMetadata{
+			FolderName:    f.FolderName,
+			Name:          f.Name,
+			OriginalURL:   f.OriginalURL,
+			URLBroken:     f.URLBroken,
+			Items:         f.ItemCount,
+			DirectorySize: f.DirectorySize,
+		}
+	}
+
+	return item
+}
+
+func (s *SearchService) audioToFileSystemItem(a AudioFileRecord) FileSystemItem {
+	return FileSystemItem{
+		Name:       a.Filename,
+		Path:       a.Path,
+		Size:       a.Size,
+		ModifiedAt: a.ModifiedAt,
+		Type:       "audio",
+		MimeType:   a.MimeType,
 	}
 }

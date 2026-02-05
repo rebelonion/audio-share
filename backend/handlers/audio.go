@@ -114,11 +114,12 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type BrowseHandler struct {
-	fs *services.FileSystemService
+	fs     *services.FileSystemService
+	search *services.SearchService
 }
 
-func NewBrowseHandler(fs *services.FileSystemService) *BrowseHandler {
-	return &BrowseHandler{fs: fs}
+func NewBrowseHandler(fs *services.FileSystemService, search *services.SearchService) *BrowseHandler {
+	return &BrowseHandler{fs: fs, search: search}
 }
 
 func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +127,16 @@ func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/browse")
 	path = strings.TrimPrefix(path, "/")
 
-	contents, err := h.fs.GetDirectoryContents(path)
+	var contents *services.DirectoryContents
+	var err error
+
+	// Use filesystem directly if ?raw=true, otherwise use database
+	if r.URL.Query().Get("raw") == "true" {
+		contents, err = h.fs.GetDirectoryContents(path)
+	} else {
+		contents, err = h.search.BrowseDirectory(path)
+	}
+
 	if err != nil {
 		http.Error(w, "Error reading directory", http.StatusInternalServerError)
 		return

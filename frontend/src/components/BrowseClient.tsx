@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { fetchDirectoryContents, FileSystemItem } from '@/lib/api';
 import FolderView from './FolderView';
 import Breadcrumb from './Breadcrumb';
@@ -35,10 +36,13 @@ function BrowseSkeleton() {
 }
 
 export default function BrowseClient({ initialPath = '', showTitle = false }: BrowseClientProps) {
+    const [searchParams] = useSearchParams();
     const [items, setItems] = useState<FileSystemItem[]>([]);
     const [currentPath, setCurrentPath] = useState(initialPath);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const raw = searchParams.get('raw') === 'true';
 
     useEffect(() => {
         let mounted = true;
@@ -48,7 +52,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
             setError(null);
 
             try {
-                const data = await fetchDirectoryContents(initialPath);
+                const data = await fetchDirectoryContents(initialPath, { raw });
                 if (mounted) {
                     setItems(data.items);
                     setCurrentPath(data.currentPath);
@@ -69,7 +73,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
         return () => {
             mounted = false;
         };
-    }, [initialPath]);
+    }, [initialPath, raw]);
 
     if (loading) {
         return (

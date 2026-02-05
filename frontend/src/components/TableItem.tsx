@@ -3,7 +3,7 @@ import {formatDate, formatFileSize} from "@/lib/utils";
 import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
-import {Link} from 'react-router';
+import {Link, useSearchParams} from 'react-router';
 import PosterImage from '@/components/PosterImage';
 
 interface TableItemProps {
@@ -14,7 +14,9 @@ interface TableItemProps {
 }
 
 export default function TableItem({ item, handleAudioSelect, notification, copyToClipboard }: TableItemProps) {
-    const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+    const [searchParams] = useSearchParams();
+    const rawParam = searchParams.get('raw') === 'true' ? '?raw=true' : '';
+    const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}${rawParam}`;
 
     return (
         <tr

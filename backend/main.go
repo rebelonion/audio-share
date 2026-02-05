@@ -36,7 +36,7 @@ func main() {
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
 
 	audioHandler := handlers.NewAudioHandler(fsService)
-	browseHandler := handlers.NewBrowseHandler(fsService)
+	browseHandler := handlers.NewBrowseHandler(fsService, searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
 	contactHandler := handlers.NewContactHandler(ntfyService)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle)
