@@ -131,7 +131,8 @@ func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	// Use filesystem directly if ?raw=true, otherwise use database
-	if r.URL.Query().Get("raw") == "true" {
+	raw := r.URL.Query().Get("raw") == "true"
+	if raw {
 		contents, err = h.fs.GetDirectoryContents(path)
 	} else {
 		contents, err = h.search.BrowseDirectory(path)
@@ -140,6 +141,24 @@ func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Error reading directory", http.StatusInternalServerError)
 		return
+	}
+
+	const maxSkipDepth = 20
+	for i := 0; i < maxSkipDepth; i++ {
+		if len(contents.Items) != 1 || contents.Items[0].Type != "folder" {
+			break
+		}
+		nextPath := contents.Items[0].Path
+		var next *services.DirectoryContents
+		if raw {
+			next, err = h.fs.GetDirectoryContents(nextPath)
+		} else {
+			next, err = h.search.BrowseDirectory(nextPath)
+		}
+		if err != nil {
+			break
+		}
+		contents = next
 	}
 
 	w.Header().Set("Content-Type", "application/json")
