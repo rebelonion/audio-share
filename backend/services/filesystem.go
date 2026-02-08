@@ -2,14 +2,11 @@ package services
 
 import (
 	"encoding/json"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 )
 
 type AudioDirConfig struct {
@@ -44,22 +41,14 @@ type DirectoryContents struct {
 	CurrentPath string           `json:"currentPath"`
 }
 
-type cacheEntry struct {
-	contents  *DirectoryContents
-	timestamp int64
-}
-
 type FileSystemService struct {
 	audioDirs   []AudioDirConfig
 	slugToDir   map[string]AudioDirConfig
 	audioExts   map[string]string
 	posterNames []string
-	cacheTTL    int64
-	cache       map[string]*cacheEntry
-	cacheMu     sync.RWMutex
 }
 
-func NewFileSystemService(audioDirEnv string, cacheTTL int) *FileSystemService {
+func NewFileSystemService(audioDirEnv string) *FileSystemService {
 	fs := &FileSystemService{
 		slugToDir: make(map[string]AudioDirConfig),
 		audioExts: map[string]string{
@@ -72,8 +61,6 @@ func NewFileSystemService(audioDirEnv string, cacheTTL int) *FileSystemService {
 			".opus": "audio/opus",
 		},
 		posterNames: []string{"poster.jpg", "artist.jpg", "cover.jpg", "album.jpg"},
-		cacheTTL:    int64(cacheTTL),
-		cache:       make(map[string]*cacheEntry),
 	}
 
 	fs.audioDirs = fs.parseAudioDirs(audioDirEnv)
@@ -162,17 +149,6 @@ func (fs *FileSystemService) GetSlugToDirectoryMap() map[string]AudioDirConfig {
 }
 
 func (fs *FileSystemService) GetDirectoryContents(dirPath string) (*DirectoryContents, error) {
-	now := time.Now().Unix()
-
-	if fs.cacheTTL > 0 {
-		fs.cacheMu.RLock()
-		if entry, ok := fs.cache[dirPath]; ok && now-entry.timestamp < fs.cacheTTL {
-			fs.cacheMu.RUnlock()
-			return entry.contents, nil
-		}
-		fs.cacheMu.RUnlock()
-	}
-
 	items := []FileSystemItem{}
 
 	if dirPath == "" {
@@ -301,23 +277,7 @@ func (fs *FileSystemService) GetDirectoryContents(dirPath string) (*DirectoryCon
 		return items[i].ModifiedAt > items[j].ModifiedAt
 	})
 
-	result := &DirectoryContents{Items: items, CurrentPath: dirPath}
-
-	if fs.cacheTTL > 0 {
-		fs.cacheMu.Lock()
-		fs.cache[dirPath] = &cacheEntry{contents: result, timestamp: now}
-
-		if rand.Float64() < 0.01 {
-			for key, entry := range fs.cache {
-				if now-entry.timestamp >= fs.cacheTTL {
-					delete(fs.cache, key)
-				}
-			}
-		}
-		fs.cacheMu.Unlock()
-	}
-
-	return result, nil
+	return &DirectoryContents{Items: items, CurrentPath: dirPath}, nil
 }
 
 func (fs *FileSystemService) ValidatePath(slug, relativePath string) (string, bool) {

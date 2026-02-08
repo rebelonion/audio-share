@@ -75,8 +75,6 @@ type Config struct {
 	ContactRequestLimit  int
 	ContactLimitWindow   int // milliseconds
 
-	CacheTTL int // seconds, 0 to disable
-
 	DBPath        string
 	IndexSchedule string
 
@@ -106,8 +104,6 @@ func Load() *Config {
 		ShareLimitWindow:     getEnvInt("SHARE_LIMIT_WINDOW", 86400000),
 		ContactRequestLimit:  getEnvInt("CONTACT_REQUEST_LIMIT", 5),
 		ContactLimitWindow:   getEnvInt("CONTACT_LIMIT_WINDOW", 86400000),
-
-		CacheTTL: getEnvInt("CACHE_TTL", 300),
 
 		DBPath:        getEnv("DB_PATH", "./audio-share.db"),
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),

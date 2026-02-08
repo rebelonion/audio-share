@@ -14,7 +14,7 @@ import (
 func main() {
 	cfg := config.Load()
 
-	fsService := services.NewFileSystemService(cfg.AudioDir, cfg.CacheTTL)
+	fsService := services.NewFileSystemService(cfg.AudioDir)
 
 	if len(os.Args) > 1 && os.Args[1] == "reindex" {
 		db := services.NewDatabase(cfg.DBPath)
@@ -80,7 +80,6 @@ func main() {
 	log.Printf("Audio directories: %v", fsService.GetSlugToDirectoryMap())
 	log.Printf("Content directory: %s", cfg.ContentDir)
 	log.Printf("Static directory: %s", cfg.StaticDir)
-	log.Printf("Cache TTL: %ds", cfg.CacheTTL)
 
 	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
 		log.Fatal(err)
