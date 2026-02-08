@@ -29,8 +29,8 @@ func main() {
 	db := services.NewDatabase(cfg.DBPath)
 	searchService := services.NewSearchService(db, fsService)
 
-	if cfg.IndexInterval > 0 {
-		go searchService.StartPeriodicReindex(cfg.IndexInterval)
+	if cfg.IndexSchedule != "" {
+		searchService.StartScheduledReindex(cfg.IndexSchedule)
 	}
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
@@ -39,7 +39,7 @@ func main() {
 	browseHandler := handlers.NewBrowseHandler(fsService, searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
 	contactHandler := handlers.NewContactHandler(ntfyService)
-	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle)
+	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
 
 	frontendConfig := handlers.FrontendConfig{

@@ -3,19 +3,23 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/onion/audio-share-backend/services"
 )
 
 type ContentHandler struct {
-	contentDir string
-	title      string
+	contentDir    string
+	title         string
+	searchService *services.SearchService
 }
 
-func NewContentHandler(contentDir string, title string) *ContentHandler {
-	return &ContentHandler{contentDir: contentDir, title: title}
+func NewContentHandler(contentDir string, title string, searchService *services.SearchService) *ContentHandler {
+	return &ContentHandler{contentDir: contentDir, title: title, searchService: searchService}
 }
 
 func (h *ContentHandler) AboutHandler() http.HandlerFunc {
@@ -114,22 +118,23 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			return
 		}
 
-		result := make(map[string]interface{})
-
-		audioPath := filepath.Join(h.contentDir, "audio_by_day.json")
-		if audioData, err := os.ReadFile(audioPath); err == nil {
-			var audio interface{}
-			if json.Unmarshal(audioData, &audio) == nil {
-				result["audio"] = audio
-			}
+		audioStats, err := h.searchService.GetAudioStats()
+		if err != nil {
+			log.Printf("Error getting audio stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
 
-		sourcesPath := filepath.Join(h.contentDir, "sources_by_day.json")
-		if sourcesData, err := os.ReadFile(sourcesPath); err == nil {
-			var sources interface{}
-			if json.Unmarshal(sourcesData, &sources) == nil {
-				result["sources"] = sources
-			}
+		sourcesStats, err := h.searchService.GetSourcesStats()
+		if err != nil {
+			log.Printf("Error getting sources stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		result := map[string]interface{}{
+			"audio":   audioStats,
+			"sources": sourcesStats,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

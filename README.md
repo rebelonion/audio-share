@@ -94,7 +94,7 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
 | `CACHE_TTL` | Directory listing cache TTL in seconds (0 to disable) | `300` |
 | `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
-| `INDEX_INTERVAL` | Interval for automatic reindexing (e.g., `24h`, `6h`) | - (disabled) |
+| `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
 | `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen...` |
 | `UMAMI_URL` | Umami analytics script URL | - |
@@ -128,9 +128,12 @@ The metadata JSON can include:
   "meta_artist": "Artist Name",
   "upload_date": "20230215",
   "webpage_url": "https://original-source-url.com",
-  "description": "Description text about the song"
+  "description": "Description text about the song",
+  "epoch": 1707955200.0
 }
 ```
+
+The `epoch` field (Unix timestamp of when the file was downloaded) is used to generate stats. This is automatically present in `.info.json` files created by yt-dlp.
 
 ### Folder Metadata
 
@@ -154,8 +157,15 @@ You can add enhanced metadata for directories by adding a `folder.json` file in 
 The `content/` directory holds customizable content:
 
 - `about.md` - Markdown content for the About page
-- `audio_by_day.json` - Stats data for audio files chart
-- `sources_by_day.json` - Stats data for sources chart
+
+## Stats
+
+The stats page (`/stats`) is generated directly from the search index database — no external scripts or static JSON files needed. It tracks:
+
+- **Audio by day**: Number of audio files downloaded per day, based on the `epoch` field in `.info.json` files
+- **Sources by day**: New sources (channels) discovered per day, based on the first download date of files in each source folder
+
+A folder is considered a "source" if it has an `original_url` in its `folder.json` metadata. All audio files within that folder (and its subfolders) are attributed to that source.
 
 ## Search Index
 
@@ -176,14 +186,14 @@ This walks through all configured audio directories and indexes:
 
 ### Automatic Reindexing
 
-Set the `INDEX_INTERVAL` environment variable to automatically rebuild the index periodically:
+Set the `INDEX_SCHEDULE` environment variable to a cron expression for automatic reindexing:
 
 ```bash
-INDEX_INTERVAL=24h go run .  # Reindex every 24 hours
-INDEX_INTERVAL=6h go run .   # Reindex every 6 hours
+INDEX_SCHEDULE="0 */6 * * *" go run .  # Reindex every 6 hours
+INDEX_SCHEDULE="0 0 * * *" go run .    # Reindex daily at midnight
 ```
 
-If not set, the index is only rebuilt when you manually run the `reindex` command.
+If not set, the index is only rebuilt when you manually run the `reindex` command. Concurrent reindex attempts (e.g., a manual `reindex` while the scheduler is running) are prevented via a file lock — the second caller skips gracefully.
 
 ### Database Location
 

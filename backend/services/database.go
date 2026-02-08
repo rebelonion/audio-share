@@ -8,7 +8,8 @@ import (
 )
 
 type Database struct {
-	db *sql.DB
+	db   *sql.DB
+	path string
 }
 
 func NewDatabase(dbPath string) *Database {
@@ -21,7 +22,7 @@ func NewDatabase(dbPath string) *Database {
 		log.Printf("Warning: could not enable WAL mode: %v", err)
 	}
 
-	database := &Database{db: db}
+	database := &Database{db: db, path: dbPath}
 	database.migrate()
 
 	return database
@@ -73,6 +74,22 @@ func (d *Database) migrate() {
 
 	if _, err := d.db.Exec(schema); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	alterations := []string{
+		"ALTER TABLE audio_files ADD COLUMN downloaded_at TEXT",
+		"ALTER TABLE audio_files ADD COLUMN source_path TEXT",
+	}
+	for _, stmt := range alterations {
+		d.db.Exec(stmt)
+	}
+
+	indexes := `
+		CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at);
+		CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path);
+	`
+	if _, err := d.db.Exec(indexes); err != nil {
+		log.Printf("Warning: could not create new indexes: %v", err)
 	}
 }
 

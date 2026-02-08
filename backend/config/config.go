@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func init() {
@@ -79,7 +78,7 @@ type Config struct {
 	CacheTTL int // seconds, 0 to disable
 
 	DBPath        string
-	IndexInterval time.Duration
+	IndexSchedule string
 
 	UmamiURL string
 
@@ -111,7 +110,7 @@ func Load() *Config {
 		CacheTTL: getEnvInt("CACHE_TTL", 300),
 
 		DBPath:        getEnv("DB_PATH", "./audio-share.db"),
-		IndexInterval: getEnvDuration("INDEX_INTERVAL", 0),
+		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
 		UmamiURL: getEnv("UMAMI_URL", ""),
 		UmamiWebsiteID:     getEnv("UMAMI_WEBSITE_ID", ""),
@@ -136,11 +135,3 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	if value := os.Getenv(key); value != "" {
-		if duration, err := time.ParseDuration(value); err == nil {
-			return duration
-		}
-	}
-	return defaultValue
-}

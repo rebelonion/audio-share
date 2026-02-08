@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/robfig/cron/v3"
 )
 
 type FolderRecord struct {
@@ -24,18 +27,20 @@ type FolderRecord struct {
 }
 
 type AudioFileRecord struct {
-	ID          int64
-	Path        string
-	ParentPath  string
-	Filename    string
-	Size        int64
-	MimeType    string
-	ModifiedAt  string
-	Title       string
-	MetaArtist  string
-	UploadDate  string
-	WebpageURL  string
-	Description string
+	ID           int64
+	Path         string
+	ParentPath   string
+	Filename     string
+	Size         int64
+	MimeType     string
+	ModifiedAt   string
+	Title        string
+	MetaArtist   string
+	UploadDate   string
+	WebpageURL   string
+	Description  string
+	DownloadedAt string
+	SourcePath   string
 }
 
 type SearchResult struct {
@@ -63,32 +68,48 @@ type SearchResult struct {
 }
 
 type AudioInfoJSON struct {
-	Title       string `json:"title"`
-	MetaArtist  string `json:"meta_artist"`
-	UploadDate  string `json:"upload_date"`
-	WebpageURL  string `json:"webpage_url"`
-	Description string `json:"description"`
+	Title       string  `json:"title"`
+	MetaArtist  string  `json:"meta_artist"`
+	UploadDate  string  `json:"upload_date"`
+	WebpageURL  string  `json:"webpage_url"`
+	Description string  `json:"description"`
+	Epoch       float64 `json:"epoch"`
 }
 
 type SearchService struct {
-	db *Database
-	fs *FileSystemService
+	db       *Database
+	fs       *FileSystemService
+	lockPath string
 }
 
 func NewSearchService(db *Database, fs *FileSystemService) *SearchService {
 	return &SearchService{
-		db: db,
-		fs: fs,
+		db:       db,
+		fs:       fs,
+		lockPath: db.path + ".reindex.lock",
 	}
 }
 
 func (s *SearchService) RebuildIndex() error {
+	lockFile, err := os.OpenFile(s.lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer lockFile.Close()
+
+	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err != nil {
+		log.Println("Reindex already in progress, skipping")
+		return nil
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+
 	log.Println("Starting index rebuild...")
 	start := time.Now()
 
 	for slug, dirConfig := range s.fs.GetSlugToDirectoryMap() {
 		log.Printf("Indexing directory: %s (%s)", dirConfig.Name, slug)
-		if err := s.indexDirectory(slug, dirConfig.Path, ""); err != nil {
+		if err := s.indexDirectory(slug, dirConfig.Path, "", ""); err != nil {
 			log.Printf("Error indexing %s: %v", slug, err)
 		}
 	}
@@ -106,7 +127,7 @@ func (s *SearchService) RebuildIndex() error {
 	return nil
 }
 
-func (s *SearchService) indexDirectory(slug, basePath, relativePath string) error {
+func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath string) error {
 	fullPath := filepath.Join(basePath, relativePath)
 
 	entries, err := os.ReadDir(fullPath)
@@ -126,12 +147,13 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath string) erro
 
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
+		if strings.HasPrefix(name, ".") && entry.IsDir() {
 			continue
 		}
 
 		info, err := entry.Info()
 		if err != nil {
+			log.Printf("Skipping %s: %v", name, err)
 			continue
 		}
 
@@ -175,11 +197,16 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath string) erro
 				log.Printf("Error indexing folder %s: %v", virtualPath, err)
 			}
 
+			childSourcePath := sourcePath
+			if record.OriginalURL != "" {
+				childSourcePath = virtualPath
+			}
+
 			subRelativePath := name
 			if relativePath != "" {
 				subRelativePath = relativePath + "/" + name
 			}
-			if err := s.indexDirectory(slug, basePath, subRelativePath); err != nil {
+			if err := s.indexDirectory(slug, basePath, subRelativePath, childSourcePath); err != nil {
 				log.Printf("Error indexing subdirectory %s: %v", subRelativePath, err)
 			}
 		} else {
@@ -192,6 +219,7 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath string) erro
 					Size:       info.Size(),
 					MimeType:   mimeType,
 					ModifiedAt: modifiedAt,
+					SourcePath: sourcePath,
 				}
 
 				baseName := strings.TrimSuffix(name, filepath.Ext(name))
@@ -204,6 +232,9 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath string) erro
 						record.UploadDate = infoJSON.UploadDate
 						record.WebpageURL = infoJSON.WebpageURL
 						record.Description = infoJSON.Description
+						if infoJSON.Epoch > 0 {
+							record.DownloadedAt = time.Unix(int64(infoJSON.Epoch), 0).Format("2006-01-02T15:04:05Z")
+						}
 					}
 				}
 
@@ -241,14 +272,23 @@ func (s *SearchService) insertFolder(f FolderRecord) error {
 	return err
 }
 
+func nullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 	_, err := s.db.DB().Exec(`
 		INSERT OR REPLACE INTO audio_files
 		(path, parent_path, filename, size, mime_type, modified_at,
-		 title, meta_artist, upload_date, webpage_url, description, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		 title, meta_artist, upload_date, webpage_url, description,
+		 downloaded_at, source_path, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType, a.ModifiedAt,
-		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description)
+		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
+		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath))
 	return err
 }
 
@@ -360,18 +400,21 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 	return results, total, nil
 }
 
-func (s *SearchService) StartPeriodicReindex(interval time.Duration) {
-	log.Printf("Starting periodic reindex every %v", interval)
+func (s *SearchService) StartScheduledReindex(schedule string) {
+	log.Printf("Starting scheduled reindex with schedule: %s", schedule)
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		log.Println("Running periodic reindex...")
+	c := cron.New()
+	_, err := c.AddFunc(schedule, func() {
+		log.Println("Running scheduled reindex...")
 		if err := s.RebuildIndex(); err != nil {
-			log.Printf("Periodic reindex error: %v", err)
+			log.Printf("Scheduled reindex error: %v", err)
 		}
+	})
+	if err != nil {
+		log.Printf("Error setting up reindex schedule: %v", err)
+		return
 	}
+	c.Start()
 }
 
 func (s *SearchService) BrowseDirectory(path string) (*DirectoryContents, error) {
