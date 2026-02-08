@@ -19,7 +19,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
         const sortOrder = searchParams?.get('order') === 'desc' ? 'desc' : 'asc';
 
         const letters = items
-            .map(item => item.name.charAt(0).toUpperCase())
+            .map(item => ([...item.name][0] ?? '').toUpperCase())
             .filter((letter, index, self) => self.indexOf(letter) === index)
             .sort((a, b) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
 

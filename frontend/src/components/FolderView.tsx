@@ -178,7 +178,7 @@ export default function FolderView({items}: FolderViewProps) {
         const grouped: Record<string, FileSystemItem[]> = {};
 
         sortedItems.forEach(item => {
-            const firstLetter = item.name.charAt(0).toUpperCase();
+            const firstLetter = ([...item.name][0] ?? '').toUpperCase();
             if (!grouped[firstLetter]) {
                 grouped[firstLetter] = [];
             }
