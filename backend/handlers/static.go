@@ -38,7 +38,14 @@ func NewSPAHandler(staticDir string, config FrontendConfig) *SPAHandler {
 		})
 		ldScript := `<script type="application/ld+json">` + string(ldJSON) + `</script>`
 
-		indexContent = []byte(strings.Replace(string(data), "</head>", configScript+ldScript+"</head>", 1))
+		html := string(data)
+		html = strings.Replace(html, "<title>Audio Share</title>", "<title>"+config.DefaultTitle+"</title>", 1)
+
+		metaTags := `<meta name="description" content="` + config.DefaultDescription + `">` +
+			`<meta property="og:title" content="` + config.DefaultTitle + `">` +
+			`<meta property="og:description" content="` + config.DefaultDescription + `">`
+
+		indexContent = []byte(strings.Replace(html, "</head>", metaTags+configScript+ldScript+"</head>", 1))
 	}
 
 	return &SPAHandler{
