@@ -70,6 +70,14 @@ func (d *Database) migrate() {
 		CREATE INDEX IF NOT EXISTS idx_audio_files_path ON audio_files(path);
 		CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path);
 		CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist, description);
+
+		CREATE TABLE IF NOT EXISTS play_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			audio_file_id INTEGER NOT NULL REFERENCES audio_files(id),
+			played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id);
+		CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at);
 	`
 
 	if _, err := d.db.Exec(schema); err != nil {
@@ -79,6 +87,7 @@ func (d *Database) migrate() {
 	alterations := []string{
 		"ALTER TABLE audio_files ADD COLUMN downloaded_at TEXT",
 		"ALTER TABLE audio_files ADD COLUMN source_path TEXT",
+		"ALTER TABLE audio_files ADD COLUMN thumbnail TEXT",
 	}
 	for _, stmt := range alterations {
 		d.db.Exec(stmt)

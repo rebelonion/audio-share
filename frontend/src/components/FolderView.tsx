@@ -10,6 +10,7 @@ import SearchBar from "@/components/SearchBar";
 import {reverseIf, sizeFromString} from "@/lib/utils";
 import {useSearchParams} from "react-router";
 import {useUmami} from "@/hooks/useUmami";
+import {recordPlayEvent} from "@/lib/api";
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -22,6 +23,7 @@ export default function FolderView({items}: FolderViewProps) {
     const {track} = useUmami();
     const [searchParams] = useSearchParams();
     const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
+    const [selectedAudioPath, setSelectedAudioPath] = useState<string>('');
     const [selectedAudioName, setSelectedAudioName] = useState<string>('');
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
@@ -209,6 +211,7 @@ export default function FolderView({items}: FolderViewProps) {
             const audioPath = (item.path.startsWith('audio/') ? `/${path}` : `/audio/${path}`);
             console.log('Setting audio path:', audioPath);
             setSelectedAudio(audioPath);
+            setSelectedAudioPath(item.path);
             setSelectedAudioName(item.name);
             track('audio-player-open', { path: item.path, name: item.name });
             setTimeout(() => {
@@ -302,7 +305,11 @@ export default function FolderView({items}: FolderViewProps) {
             </div>
 
             {selectedAudio && (
-                <AudioPlayer src={selectedAudio} name={selectedAudioName}/>
+                <AudioPlayer
+                    src={selectedAudio}
+                    name={selectedAudioName}
+                    onPlay={() => recordPlayEvent(selectedAudioPath).catch(() => {})}
+                />
             )}
 
             {items.length === 0 ? (

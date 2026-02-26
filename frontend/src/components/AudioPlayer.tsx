@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useState, useRef, useCallback} from 'react';
 import {
     Play,
     Pause,
@@ -20,12 +20,14 @@ import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 interface AudioPlayerProps {
     src: string;
     name?: string;
+    onPlay?: () => void;
 }
 
-export default function AudioPlayer({src}: AudioPlayerProps) {
+export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
     const [isExpanded, setIsExpanded] = useState(true);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+    const hasTracked = useRef(false);
 
     const {
         isPlaying,
@@ -47,6 +49,14 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
         handleProgressClick,
         formatTime
     } = useAudioPlayer(src);
+
+    const handlePlay = useCallback(() => {
+        if (!isPlaying && onPlay && !hasTracked.current) {
+            hasTracked.current = true;
+            onPlay();
+        }
+        togglePlay();
+    }, [isPlaying, onPlay, togglePlay]);
 
     const toggleExpand = () => {
         setIsExpanded(!isExpanded);
@@ -113,7 +123,7 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
             {isMinimized && (
                 <div className="p-2 flex justify-center">
                     <button
-                        onClick={togglePlay}
+                        onClick={handlePlay}
                         className="p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-opacity-50"
                         aria-label={isPlaying ? "Pause" : "Play"}
                     >
@@ -182,7 +192,7 @@ export default function AudioPlayer({src}: AudioPlayerProps) {
                             </span>
 
                             <button
-                                onClick={togglePlay}
+                                onClick={handlePlay}
                                 className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-opacity-50 mx-2"
                                 aria-label={isPlaying ? "Pause" : "Play"}
                             >

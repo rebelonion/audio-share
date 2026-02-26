@@ -68,6 +68,48 @@ export interface SearchResponse {
     limit: number;
 }
 
+export interface PlaybackTrack {
+    path: string;
+    filename: string;
+    title: string | null;
+    artist: string | null;
+    parentPath: string | null;
+    parentFolderName: string | null;
+    audioImage: string | null;
+    posterImage: string | null;
+    playCount: number;
+    lastPlayed: string | null;
+}
+
+export async function recordPlayEvent(path: string): Promise<void> {
+    await fetch(`${API_BASE}/api/playback/record`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+}
+
+export async function getRecentlyPlayed(): Promise<PlaybackTrack[]> {
+    const response = await fetch(`${API_BASE}/api/playback/recent`);
+    if (!response.ok) throw new Error(`Failed to fetch recent tracks: ${response.status}`);
+    const data = await response.json();
+    return data.tracks;
+}
+
+export async function getPopularTracks(): Promise<PlaybackTrack[]> {
+    const response = await fetch(`${API_BASE}/api/playback/popular`);
+    if (!response.ok) throw new Error(`Failed to fetch popular tracks: ${response.status}`);
+    const data = await response.json();
+    return data.tracks;
+}
+
+export async function getRecentlyAdded(): Promise<PlaybackTrack[]> {
+    const response = await fetch(`${API_BASE}/api/playback/new`);
+    if (!response.ok) throw new Error(`Failed to fetch new tracks: ${response.status}`);
+    const data = await response.json();
+    return data.tracks;
+}
+
 export async function searchAudio(query: string, limit?: number, offset?: number): Promise<SearchResponse> {
     const params = new URLSearchParams({ q: query });
     if (limit) {

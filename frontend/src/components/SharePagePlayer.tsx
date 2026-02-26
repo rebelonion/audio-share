@@ -12,9 +12,10 @@ import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 
 interface SharePagePlayerProps {
     src: string;
+    onPlay?: () => void;
 }
 
-export default function SharePagePlayer({src}: SharePagePlayerProps) {
+export default function SharePagePlayer({src, onPlay}: SharePagePlayerProps) {
     const {
         isPlaying,
         duration,
@@ -92,7 +93,7 @@ export default function SharePagePlayer({src}: SharePagePlayerProps) {
 
                 <div className="flex justify-center mb-4">
                     <button
-                        onClick={togglePlay}
+                        onClick={() => { if (!isPlaying && onPlay) onPlay(); togglePlay(); }}
                         className="p-4 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
                         aria-label={isPlaying ? "Pause" : "Play"}
                     >

@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useLocation, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Share2, Home, Music } from 'lucide-react';
+import { Home, Music, FolderOpen } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, recordPlayEvent } from '@/lib/api';
 import { DEFAULT_TITLE } from '@/lib/config';
+import { useUmami } from '@/hooks/useUmami';
 
 export default function Share() {
     const location = useLocation();
+    const { track } = useUmami();
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const hasTracked = useRef(false);
 
     // Extract source and path from URL
     // /share/source/path/to/file.mp3 -> source = "source", pathSegments = ["path", "to", "file.mp3"]
@@ -18,6 +21,8 @@ export default function Share() {
     const pathSegments = pathParts.slice(1);
     const encodedPath = pathSegments.join('/');
     const apiAudioPath = `${API_BASE}/api/audio/${source}/${encodedPath}`;
+
+    const audioPath = decodeURIComponent(`${source}/${encodedPath}`);
 
     useEffect(() => {
         const checkFile = async () => {
@@ -40,6 +45,17 @@ export default function Share() {
     const fileName = pathSegments.length > 0
         ? decodeURIComponent(pathSegments[pathSegments.length - 1])
         : 'Unknown';
+
+    const folderPath = pathSegments.length > 1
+        ? `/browse/${source}/${pathSegments.slice(0, -1).join('/')}`
+        : `/browse/${source}`;
+
+    const handlePlay = useCallback(() => {
+        if (hasTracked.current) return;
+        hasTracked.current = true;
+        track('audio-share-play', { path: audioPath });
+        recordPlayEvent(audioPath).catch(() => {});
+    }, [audioPath, track]);
 
     if (isLoading) {
         return (
@@ -89,35 +105,26 @@ export default function Share() {
             </Helmet>
             <div className="container mx-auto p-4 max-w-4xl">
                 <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-6 mb-8">
-                    <Link to="/">
-                        <h1 className="text-2xl font-bold mb-6 break-words line-clamp-4 hover:text-[var(--primary)] transition-colors cursor-pointer">
-                            {fileName}
-                        </h1>
-                    </Link>
+                    <h1 className="text-2xl font-bold mb-6 break-words line-clamp-4">
+                        {fileName}
+                    </h1>
 
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                         <p className="text-[var(--muted-foreground)] mb-4 md:mb-0">
-                            From directory: <span className="font-medium">{decodeURIComponent(source)}</span>
+                            From directory: <span className="font-medium">{pathSegments.length > 1 ? decodeURIComponent(pathSegments[pathSegments.length - 2]) : decodeURIComponent(source)}</span>
                         </p>
 
                         <Link
-                            to="/"
-                            className="px-4 py-2 bg-[var(--card-hover)] hover:bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-md flex items-center gap-2 transition-colors"
+                            to={folderPath}
+                            className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-md flex items-center gap-2 transition-colors"
                         >
-                            <Home className="h-5 w-5" />
-                            <span className="font-medium">Browse Library</span>
+                            <FolderOpen className="h-5 w-5" />
+                            <span className="font-medium">Browse Folder</span>
                         </Link>
                     </div>
 
-                    <div className="mb-8">
-                        <p className="flex items-center gap-2 text-[var(--muted-foreground)]">
-                            <Share2 className="h-5 w-5" />
-                            Share this page to let others play this audio file
-                        </p>
-                    </div>
-
                     <div className="bg-[var(--card-hover)]/40 rounded-lg p-6">
-                        <SharePagePlayer src={`/audio/${source}/${encodedPath}`} />
+                        <SharePagePlayer src={`/audio/${source}/${encodedPath}`} onPlay={handlePlay} />
                     </div>
                 </div>
             </div>

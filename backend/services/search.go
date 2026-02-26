@@ -41,6 +41,7 @@ type AudioFileRecord struct {
 	Description  string
 	DownloadedAt string
 	SourcePath   string
+	Thumbnail    string
 }
 
 type SearchResult struct {
@@ -223,6 +224,15 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 				}
 
 				baseName := strings.TrimSuffix(name, filepath.Ext(name))
+
+				for _, suffix := range []string{"-thumb.jpg", "-thumb.webp", "-thumb.png", ".jpg", ".webp", ".png"} {
+					thumbPath := filepath.Join(fullPath, baseName+suffix)
+					if _, err := os.Stat(thumbPath); err == nil {
+						record.Thumbnail = baseName + suffix
+						break
+					}
+				}
+
 				infoPath := filepath.Join(fullPath, baseName+".info.json")
 				if data, err := os.ReadFile(infoPath); err == nil {
 					var infoJSON AudioInfoJSON
@@ -284,11 +294,11 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 		INSERT OR REPLACE INTO audio_files
 		(path, parent_path, filename, size, mime_type, modified_at,
 		 title, meta_artist, upload_date, webpage_url, description,
-		 downloaded_at, source_path, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		 downloaded_at, source_path, thumbnail, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType, a.ModifiedAt,
 		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
-		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath))
+		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail))
 	return err
 }
 

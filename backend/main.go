@@ -34,6 +34,7 @@ func main() {
 	}
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
+	playbackService := services.NewPlaybackService(db)
 
 	audioHandler := handlers.NewAudioHandler(fsService)
 	browseHandler := handlers.NewBrowseHandler(fsService, searchService)
@@ -41,6 +42,7 @@ func main() {
 	contactHandler := handlers.NewContactHandler(ntfyService)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
+	playbackHandler := handlers.NewPlaybackHandler(playbackService)
 
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
@@ -63,6 +65,10 @@ func main() {
 	mux.Handle("/api/contact", contactHandler)
 	mux.HandleFunc("/api/about", contentHandler.AboutHandler())
 	mux.HandleFunc("/api/stats", contentHandler.StatsHandler())
+	mux.HandleFunc("/api/playback/record", playbackHandler.RecordHandler())
+	mux.HandleFunc("/api/playback/recent", playbackHandler.RecentHandler())
+	mux.HandleFunc("/api/playback/popular", playbackHandler.PopularHandler())
+	mux.HandleFunc("/api/playback/new", playbackHandler.NewHandler())
 
 	mux.HandleFunc("/sitemap.xml", contentHandler.SitemapHandler())
 	mux.HandleFunc("/site.webmanifest", contentHandler.ManifestHandler())
