@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useLocation, Link } from 'react-router';
-import { Helmet } from 'react-helmet-async';
 import { Home, Music, FolderOpen } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
 import { API_BASE, recordPlayEvent } from '@/lib/api';
@@ -57,26 +56,23 @@ export default function Share() {
         recordPlayEvent(audioPath).catch(() => {});
     }, [audioPath, track]);
 
-    if (isLoading) {
-        return (
-            <>
-                <Helmet>
-                    <title>Loading... - {DEFAULT_TITLE}</title>
-                </Helmet>
+    useEffect(() => {
+        const title = isLoading
+            ? `Loading... - ${DEFAULT_TITLE}`
+            : notFound
+                ? `Not Found - ${DEFAULT_TITLE}`
+                : `${fileName} - ${DEFAULT_TITLE}`;
+        document.title = title;
+    }, [isLoading, notFound, fileName]);
+
+    return (
+        <>
+            {isLoading ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--primary)] mb-4"></div>
                     <h1 className="text-xl font-semibold">Loading audio...</h1>
                 </div>
-            </>
-        );
-    }
-
-    if (notFound) {
-        return (
-            <>
-                <Helmet>
-                    <title>Not Found - {DEFAULT_TITLE}</title>
-                </Helmet>
+            ) : notFound ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
                     <div className="text-red-500 mb-4">
                         <Music className="h-16 w-16 mx-auto" />
@@ -93,41 +89,33 @@ export default function Share() {
                         Go to home page
                     </Link>
                 </div>
-            </>
-        );
-    }
+            ) : (
+                <div className="container mx-auto p-4 max-w-4xl">
+                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-6 mb-8">
+                        <h1 className="text-2xl font-bold mb-6 break-words line-clamp-4">
+                            {fileName}
+                        </h1>
 
-    return (
-        <>
-            <Helmet>
-                <title>{fileName} - {DEFAULT_TITLE}</title>
-                <meta name="description" content={`Listen to ${fileName} from ${source}`} />
-            </Helmet>
-            <div className="container mx-auto p-4 max-w-4xl">
-                <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-6 mb-8">
-                    <h1 className="text-2xl font-bold mb-6 break-words line-clamp-4">
-                        {fileName}
-                    </h1>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                            <p className="text-[var(--muted-foreground)] mb-4 md:mb-0">
+                                From directory: <span className="font-medium">{pathSegments.length > 1 ? decodeURIComponent(pathSegments[pathSegments.length - 2]) : decodeURIComponent(source)}</span>
+                            </p>
 
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                        <p className="text-[var(--muted-foreground)] mb-4 md:mb-0">
-                            From directory: <span className="font-medium">{pathSegments.length > 1 ? decodeURIComponent(pathSegments[pathSegments.length - 2]) : decodeURIComponent(source)}</span>
-                        </p>
+                            <Link
+                                to={folderPath}
+                                className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-md flex items-center gap-2 transition-colors"
+                            >
+                                <FolderOpen className="h-5 w-5" />
+                                <span className="font-medium">Browse Folder</span>
+                            </Link>
+                        </div>
 
-                        <Link
-                            to={folderPath}
-                            className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-md flex items-center gap-2 transition-colors"
-                        >
-                            <FolderOpen className="h-5 w-5" />
-                            <span className="font-medium">Browse Folder</span>
-                        </Link>
-                    </div>
-
-                    <div className="bg-[var(--card-hover)]/40 rounded-lg p-6">
-                        <SharePagePlayer src={`/audio/${source}/${encodedPath}`} onPlay={handlePlay} />
+                        <div className="bg-[var(--card-hover)]/40 rounded-lg p-6">
+                            <SharePagePlayer src={`/audio/${source}/${encodedPath}`} onPlay={handlePlay} />
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </>
     );
 }
