@@ -273,10 +273,21 @@ func (s *SearchService) insertFolder(f FolderRecord) error {
 	}
 
 	_, err := s.db.DB().Exec(`
-		INSERT OR REPLACE INTO folders
+		INSERT INTO folders
 		(path, parent_path, folder_name, name, original_url, url_broken,
 		 item_count, directory_size, poster_image, modified_at, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(path) DO UPDATE SET
+			parent_path = excluded.parent_path,
+			folder_name = excluded.folder_name,
+			name = excluded.name,
+			original_url = excluded.original_url,
+			url_broken = excluded.url_broken,
+			item_count = excluded.item_count,
+			directory_size = excluded.directory_size,
+			poster_image = excluded.poster_image,
+			modified_at = excluded.modified_at,
+			indexed_at = CURRENT_TIMESTAMP
 	`, f.Path, f.ParentPath, f.FolderName, f.Name, f.OriginalURL, urlBroken,
 		f.ItemCount, f.DirectorySize, f.PosterImage, f.ModifiedAt)
 	return err
@@ -291,11 +302,26 @@ func nullIfEmpty(s string) interface{} {
 
 func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 	_, err := s.db.DB().Exec(`
-		INSERT OR REPLACE INTO audio_files
+		INSERT INTO audio_files
 		(path, parent_path, filename, size, mime_type, modified_at,
 		 title, meta_artist, upload_date, webpage_url, description,
 		 downloaded_at, source_path, thumbnail, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(path) DO UPDATE SET
+			parent_path = excluded.parent_path,
+			filename = excluded.filename,
+			size = excluded.size,
+			mime_type = excluded.mime_type,
+			modified_at = excluded.modified_at,
+			title = excluded.title,
+			meta_artist = excluded.meta_artist,
+			upload_date = excluded.upload_date,
+			webpage_url = excluded.webpage_url,
+			description = excluded.description,
+			downloaded_at = excluded.downloaded_at,
+			source_path = excluded.source_path,
+			thumbnail = excluded.thumbnail,
+			indexed_at = CURRENT_TIMESTAMP
 	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType, a.ModifiedAt,
 		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
 		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail))
