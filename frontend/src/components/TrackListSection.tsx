@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Music, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PlaybackTrack, API_BASE } from '@/lib/api';
 import { useState } from 'react';
+import { useUmami } from '@/hooks/useUmami';
 
 interface TrackListSectionProps {
     title: string;
@@ -62,6 +63,7 @@ function getShareUrl(path: string): string {
 }
 
 export default function TrackListSection({ title, tracks }: TrackListSectionProps) {
+    const { track: trackEvent } = useUmami();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
@@ -125,6 +127,7 @@ export default function TrackListSection({ title, tracks }: TrackListSectionProp
                     <Link
                         key={track.path}
                         to={getShareUrl(track.path)}
+                        onClick={() => trackEvent('carousel-click', { section: title, path: track.path, title: track.title || track.filename })}
                         className="flex-shrink-0 w-36 md:w-44 snap-start group"
                     >
                         <div className="rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] hover:border-[var(--primary)] transition-colors">
