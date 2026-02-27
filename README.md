@@ -92,7 +92,6 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `AUDIO_DIR` | Audio directories (format: `/path:Name,/path2:Name2`) | - |
 | `CONTENT_DIR` | Directory for about.md and stats JSON | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
-| `CACHE_TTL` | Directory listing cache TTL in seconds (0 to disable) | `300` |
 | `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
 | `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
@@ -115,8 +114,9 @@ Organize your audio files in your configured audio directory. The application wi
 
 For each audio file, you can add optional metadata:
 
-1. **Thumbnails**: Add an image file with the same name as your audio file, but with "-thumb.jpg" suffix:
-   - Example: For `song.mp3`, add `song-thumb.jpg` in the same directory
+1. **Thumbnails**: Add an image file with the same base name as your audio file. Supported suffixes (checked in order):
+   `-thumb.jpg`, `-thumb.webp`, `-thumb.png`, `.jpg`, `.webp`, `.png`
+   - Example: For `song.mp3`, add `song-thumb.jpg` or `song.jpg` in the same directory
 
 2. **Metadata JSON**: Add a JSON file with the same name as your audio file, but with ".info.json" suffix:
    - Example: For `song.mp3`, add `song.info.json` in the same directory
@@ -169,11 +169,11 @@ A folder is considered a "source" if it has an `original_url` in its `folder.jso
 
 ## Search Index
 
-The application uses a SQLite database to enable fast global search across your entire audio library. The database stores metadata from your audio files and folders.
+The application uses a SQLite database to index your audio library. All browsing and search is served from the database, so the index must be built before the application is useful.
 
 ### Building the Index
 
-Before search will work, you need to build the index:
+Build the index before starting the server (or immediately after adding new files):
 
 ```bash
 cd backend
