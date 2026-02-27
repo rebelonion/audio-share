@@ -120,6 +120,16 @@ func (s *SearchService) RebuildIndex() error {
 		log.Printf("Error soft-deleting stale audio files: %v", err)
 	}
 
+	if _, err := s.db.DB().Exec(`
+		UPDATE folders SET item_count = (
+			SELECT COUNT(*) FROM folders f2 WHERE f2.parent_path = folders.path
+		) + (
+			SELECT COUNT(*) FROM audio_files WHERE parent_path = folders.path AND deleted = 0
+		)
+	`); err != nil {
+		log.Printf("Error updating folder item counts: %v", err)
+	}
+
 	elapsed := time.Since(start)
 	log.Printf("Index rebuild completed in %v", elapsed)
 
@@ -179,7 +189,6 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 				record.Name = m.Name
 				record.OriginalURL = m.OriginalURL
 				record.URLBroken = m.URLBroken
-				record.ItemCount = m.Items
 				record.DirectorySize = m.DirectorySize
 			}
 

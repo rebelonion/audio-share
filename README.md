@@ -145,7 +145,6 @@ You can add enhanced metadata for directories by adding a `folder.json` file in 
     "folder_name": "actual_folder_name",
     "name": "Display Name",
     "original_url": "https://source-url.com/channel",
-    "items": 53,
     "directory_size": "3.0G",
     "url_broken": false
   }
