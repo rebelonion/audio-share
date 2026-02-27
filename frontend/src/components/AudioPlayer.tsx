@@ -1,4 +1,4 @@
-import {useState, useRef, useCallback} from 'react';
+import {useState, useRef, useCallback, useEffect} from 'react';
 import {
     Play,
     Pause,
@@ -28,6 +28,10 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const hasTracked = useRef(false);
+
+    useEffect(() => {
+        hasTracked.current = false;
+    }, [src]);
 
     const {
         isPlaying,
