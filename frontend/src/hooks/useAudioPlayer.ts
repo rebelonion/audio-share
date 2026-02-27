@@ -195,7 +195,7 @@ export function useAudioPlayer(src: string) {
                             setIsPlaying(true);
                             setIsLoading(false);
                             setError(null);
-                            trackEvent('audio-play');
+                            trackEvent('audio-play', { title: metadata?.title || src });
                         })
                         .catch(async (err) => {
                             setIsPlaying(false);
@@ -237,7 +237,7 @@ export function useAudioPlayer(src: string) {
                             setIsPlaying(true);
                             setIsLoading(false);
                             setError(null);
-                            trackEvent('audio-play');
+                            trackEvent('audio-play', { title: metadata?.title || src });
                         })
                         .catch(async (err) => {
                             setIsPlaying(false);
@@ -269,7 +269,7 @@ export function useAudioPlayer(src: string) {
                 }
             }
         }
-    }, [isPlaying, audioLoaded, error, src, volume, isMuted, handleTimeUpdate, handleLoadedMetadata, trackEvent]);
+    }, [isPlaying, audioLoaded, error, src, volume, isMuted, handleTimeUpdate, handleLoadedMetadata, trackEvent, metadata]);
 
     const toggleMute = useCallback(() => {
         if (audioRef.current) {

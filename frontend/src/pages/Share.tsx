@@ -56,7 +56,7 @@ export default function Share() {
     const handlePlay = useCallback(() => {
         if (hasTracked.current || !key) return;
         hasTracked.current = true;
-        track('audio-share-play', { key });
+        track('audio-share-play', { key, title: meta?.title || key });
         recordPlayEvent(key).catch(() => {});
     }, [key, track]);
 
