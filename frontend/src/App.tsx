@@ -20,7 +20,7 @@ export default function App() {
           <Route path="/stats" element={<Stats />} />
           <Route path="/search" element={<Search />} />
           <Route path="/browse/*" element={<Browse />} />
-          <Route path="/share/:source/*" element={<Share />} />
+          <Route path="/share/:key" element={<Share />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 import { ChevronRight, Home } from 'lucide-react';
 
 interface BreadcrumbProps {
@@ -6,14 +6,12 @@ interface BreadcrumbProps {
 }
 
 export default function Breadcrumb({ path }: BreadcrumbProps) {
-    const [searchParams] = useSearchParams();
-    const rawParam = searchParams.get('raw') === 'true' ? '?raw=true' : '';
     const segments = path ? path.split('/').filter(Boolean) : [];
 
     return (
         <nav className="flex items-center space-x-1 text-sm text-[var(--muted-foreground)] mb-4">
             <Link
-                to={`/${rawParam}`}
+                to="/"
                 className="flex items-center text-[var(--primary)] hover:text-[var(--primary-hover)] transition-colors duration-200"
             >
                 <Home className="h-4 w-4 mr-1" />
@@ -28,7 +26,7 @@ export default function Breadcrumb({ path }: BreadcrumbProps) {
                     <div key={segmentPath} className="flex items-center">
                         <ChevronRight className="h-4 w-4 mx-1 text-[var(--muted)]" />
                         <Link
-                            to={`/browse${segmentPath}${rawParam}`}
+                            to={`/browse${segmentPath}`}
                             className={index === segments.length - 1
                                 ? "font-medium text-[var(--foreground)]"
                                 : "text-[var(--primary)] hover:text-[var(--primary-hover)] transition-colors duration-200"

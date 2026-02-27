@@ -11,24 +11,17 @@ interface TrackListSectionProps {
 }
 
 function TrackPoster({ track }: { track: PlaybackTrack }) {
-    const [audioImageError, setAudioImageError] = useState(false);
-    const [posterError, setPosterError] = useState(false);
+    const [imageError, setImageError] = useState(false);
 
-    const encodedParent = track.parentPath
-        ? track.parentPath.split('/').map(s => encodeURIComponent(s)).join('/')
+    // Use key-based thumbnail; fall back to key-based folder poster
+    const thumbnailUrl = track.shareKey && track.audioImage
+        ? `${API_BASE}/api/audio/key/${track.shareKey}/thumbnail`
         : null;
-    const audioImageUrl = track.audioImage && encodedParent
-        ? `${API_BASE}/api/audio/${encodedParent}/${encodeURIComponent(track.audioImage)}`
-        : null;
-    const posterUrl = track.posterImage && encodedParent
-        ? `${API_BASE}/api/audio/${encodedParent}/${encodeURIComponent(track.posterImage)}`
+    const posterUrl = !thumbnailUrl && track.parentShareKey && track.posterImage
+        ? `${API_BASE}/api/folder/key/${track.parentShareKey}/poster`
         : null;
 
-    const imageUrl = (audioImageUrl && !audioImageError)
-        ? audioImageUrl
-        : (posterUrl && !posterError)
-            ? posterUrl
-            : null;
+    const imageUrl = imageError ? null : (thumbnailUrl || posterUrl);
 
     if (!imageUrl) {
         return (
@@ -38,28 +31,19 @@ function TrackPoster({ track }: { track: PlaybackTrack }) {
         );
     }
 
-    const handleError = () => {
-        if (audioImageUrl && !audioImageError) {
-            setAudioImageError(true);
-        } else {
-            setPosterError(true);
-        }
-    };
-
     return (
         <img
             src={imageUrl}
             alt=""
             className="w-full h-24 md:h-28 object-cover"
             loading="lazy"
-            onError={handleError}
+            onError={() => setImageError(true)}
         />
     );
 }
 
-function getShareUrl(path: string): string {
-    const encoded = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
-    return `/share/${encoded}`;
+function getShareUrl(track: PlaybackTrack): string {
+    return `/share/${track.shareKey}`;
 }
 
 export default function TrackListSection({ title, tracks }: TrackListSectionProps) {
@@ -125,8 +109,8 @@ export default function TrackListSection({ title, tracks }: TrackListSectionProp
             >
                 {tracks.map((track) => (
                     <Link
-                        key={track.path}
-                        to={getShareUrl(track.path)}
+                        key={track.shareKey || track.path}
+                        to={getShareUrl(track)}
                         onClick={() => trackEvent('carousel-click', { section: title, path: track.path, title: track.title || track.filename })}
                         className="flex-shrink-0 w-36 md:w-44 snap-start group"
                     >

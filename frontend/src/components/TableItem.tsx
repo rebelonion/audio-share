@@ -3,7 +3,7 @@ import {formatDate, formatFileSize} from "@/lib/utils";
 import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
-import {Link, useSearchParams} from 'react-router';
+import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
 
 interface TableItemProps {
@@ -14,9 +14,7 @@ interface TableItemProps {
 }
 
 export default function TableItem({ item, handleAudioSelect, notification, copyToClipboard }: TableItemProps) {
-    const [searchParams] = useSearchParams();
-    const rawParam = searchParams.get('raw') === 'true' ? '?raw=true' : '';
-    const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}${rawParam}`;
+    const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
 
     return (
         <tr
@@ -33,10 +31,9 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
                         className="flex items-center text-[var(--primary)] hover:text-[var(--primary-hover)]"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        {item.posterImage ? (
+                        {item.posterImage && item.type === 'folder' && item.shareKey ? (
                             <PosterImage
-                                path={item.path}
-                                posterImage={item.posterImage}
+                                shareKey={item.shareKey}
                                 className="w-8 h-8 min-w-[32px] mr-2 rounded object-cover shadow-sm"
                             />
                         ) : (

@@ -23,20 +23,15 @@ type rateLimitData struct {
 }
 
 type RateLimiter struct {
-	mu       sync.RWMutex
-	limits   map[string]*rateLimitData
-	cfg      *config.Config
-	audioExt map[string]bool
+	mu     sync.RWMutex
+	limits map[string]*rateLimitData
+	cfg    *config.Config
 }
 
 func NewRateLimiter(cfg *config.Config) *RateLimiter {
 	return &RateLimiter{
 		limits: make(map[string]*rateLimitData),
 		cfg:    cfg,
-		audioExt: map[string]bool{
-			".mp3": true, ".wav": true, ".ogg": true, ".flac": true,
-			".aac": true, ".m4a": true, ".opus": true,
-		},
 	}
 }
 
@@ -61,24 +56,15 @@ func (rl *RateLimiter) getClientIP(r *http.Request) string {
 }
 
 func (rl *RateLimiter) isAudioRequest(path string) bool {
-	path = strings.ToLower(path)
-	for ext := range rl.audioExt {
-		if strings.HasSuffix(path, ext) {
-			return true
-		}
+	if !strings.HasPrefix(path, "/api/audio/key/") {
+		return false
 	}
-	return false
+	return !strings.HasSuffix(path, "/thumbnail") && !strings.HasSuffix(path, "/meta")
 }
 
 func (rl *RateLimiter) isImageRequest(path string) bool {
 	path = strings.ToLower(path)
-	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp"}
-	for _, ext := range imageExts {
-		if strings.HasSuffix(path, ext) {
-			return true
-		}
-	}
-	return false
+	return strings.HasSuffix(path, "/poster") || strings.HasSuffix(path, "/thumbnail")
 }
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {

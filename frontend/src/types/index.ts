@@ -6,6 +6,7 @@ export interface AudioFile {
     modifiedAt: string;
     type: 'audio';
     mimeType: string;
+    shareKey?: string;
 }
 
 export interface FolderMetadata {
@@ -25,6 +26,7 @@ export interface Folder {
     type: 'folder';
     metadata?: FolderMetadata;
     posterImage?: string;
+    shareKey?: string;
 }
 
 export type Notification = {

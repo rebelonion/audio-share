@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { fetchDirectoryContents, FileSystemItem } from '@/lib/api';
 import FolderView from './FolderView';
 import Breadcrumb from './Breadcrumb';
@@ -36,14 +36,11 @@ function BrowseSkeleton() {
 }
 
 export default function BrowseClient({ initialPath = '', showTitle = false }: BrowseClientProps) {
-    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [items, setItems] = useState<FileSystemItem[]>([]);
     const [currentPath, setCurrentPath] = useState(initialPath);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    const raw = searchParams.get('raw') === 'true';
 
     useEffect(() => {
         let mounted = true;
@@ -53,7 +50,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
             setError(null);
 
             try {
-                const data = await fetchDirectoryContents(initialPath, { raw });
+                const data = await fetchDirectoryContents(initialPath);
                 if (mounted) {
                     setItems(data.items);
                     setCurrentPath(data.currentPath);
@@ -63,8 +60,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
                             .split('/')
                             .map(segment => encodeURIComponent(segment))
                             .join('/');
-                        const rawParam = raw ? '?raw=true' : '';
-                        navigate(`/browse/${encodedPath}${rawParam}`, { replace: true });
+                        navigate(`/browse/${encodedPath}`, { replace: true });
                     }
                 }
             } catch (err) {
@@ -83,7 +79,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
         return () => {
             mounted = false;
         };
-    }, [initialPath, raw]);
+    }, [initialPath]);
 
     if (loading) {
         return (
@@ -117,7 +113,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
                 <h2 className="text-2xl font-bold mb-6">{directoryTitle}</h2>
             )}
             {currentPath !== '' && <Breadcrumb path={currentPath} />}
-            <FolderView items={items} currentPath={currentPath} />
+            <FolderView items={items} />
         </div>
     );
 }

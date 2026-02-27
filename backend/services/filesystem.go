@@ -1,11 +1,9 @@
 package services
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -34,6 +32,7 @@ type FileSystemItem struct {
 	MimeType    string          `json:"mimeType,omitempty"`
 	Metadata    *FolderMetadata `json:"metadata,omitempty"`
 	PosterImage string          `json:"posterImage,omitempty"`
+	ShareKey    string          `json:"shareKey,omitempty"`
 }
 
 type DirectoryContents struct {
@@ -148,137 +147,6 @@ func (fs *FileSystemService) GetSlugToDirectoryMap() map[string]AudioDirConfig {
 	return fs.slugToDir
 }
 
-func (fs *FileSystemService) GetDirectoryContents(dirPath string) (*DirectoryContents, error) {
-	items := []FileSystemItem{}
-
-	if dirPath == "" {
-		for _, dirConfig := range fs.audioDirs {
-			info, err := os.Stat(dirConfig.Path)
-			if err != nil {
-				continue
-			}
-			if info.IsDir() {
-				items = append(items, FileSystemItem{
-					Name:       dirConfig.Name,
-					Path:       dirConfig.Slug,
-					ModifiedAt: info.ModTime().Format("2006-01-02T15:04:05.000Z"),
-					Type:       "folder",
-				})
-			}
-		}
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].Name < items[j].Name
-		})
-		return &DirectoryContents{Items: items, CurrentPath: dirPath}, nil
-	}
-
-	pathParts := strings.Split(dirPath, "/")
-	dirSlug := pathParts[0]
-
-	dirConfig, ok := fs.slugToDir[dirSlug]
-	if !ok {
-		return &DirectoryContents{Items: items, CurrentPath: dirPath}, nil
-	}
-
-	relativePath := ""
-	if len(pathParts) > 1 {
-		relativePath = strings.Join(pathParts[1:], "/")
-	}
-
-	normalizedPath := filepath.Clean(relativePath)
-	if strings.HasPrefix(normalizedPath, "..") || filepath.IsAbs(normalizedPath) {
-		return &DirectoryContents{Items: items, CurrentPath: dirPath}, nil
-	}
-
-	fullPath := filepath.Join(dirConfig.Path, normalizedPath)
-
-	entries, err := os.ReadDir(fullPath)
-	if err != nil {
-		return &DirectoryContents{Items: items, CurrentPath: dirPath}, nil
-	}
-
-	var folderMetadataList []FolderMetadata
-	metadataPath := filepath.Join(fullPath, "folder.json")
-	if data, err := os.ReadFile(metadataPath); err == nil {
-		json.Unmarshal(data, &folderMetadataList)
-	}
-
-	metadataMap := make(map[string]FolderMetadata)
-	for _, m := range folderMetadataList {
-		metadataMap[m.FolderName] = m
-	}
-
-	for _, entry := range entries {
-		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		virtualPath := dirPath + "/" + name
-		if dirPath == "" {
-			virtualPath = name
-		}
-
-		ext := strings.ToLower(filepath.Ext(name))
-
-		if entry.IsDir() {
-			displayName := name
-			var metadata *FolderMetadata
-			if m, ok := metadataMap[name]; ok {
-				displayName = m.Name
-				metadata = &m
-			}
-
-			var posterImage string
-			entryPath := filepath.Join(fullPath, name)
-			for _, posterName := range fs.posterNames {
-				posterPath := filepath.Join(entryPath, posterName)
-				if _, err := os.Stat(posterPath); err == nil {
-					posterImage = posterName
-					break
-				}
-			}
-
-			items = append(items, FileSystemItem{
-				Name:        displayName,
-				Path:        virtualPath,
-				ModifiedAt:  info.ModTime().Format("2006-01-02T15:04:05.000Z"),
-				Type:        "folder",
-				Metadata:    metadata,
-				PosterImage: posterImage,
-			})
-		} else if mimeType, ok := fs.audioExts[ext]; ok {
-			items = append(items, FileSystemItem{
-				Name:       name,
-				Path:       virtualPath,
-				Size:       info.Size(),
-				ModifiedAt: info.ModTime().Format("2006-01-02T15:04:05.000Z"),
-				Type:       "audio",
-				MimeType:   mimeType,
-			})
-		}
-	}
-
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].Type == "folder" && items[j].Type != "folder" {
-			return true
-		}
-		if items[i].Type != "folder" && items[j].Type == "folder" {
-			return false
-		}
-		if items[i].Type == "folder" && items[j].Type == "folder" {
-			return items[i].Name < items[j].Name
-		}
-		return items[i].ModifiedAt > items[j].ModifiedAt
-	})
-
-	return &DirectoryContents{Items: items, CurrentPath: dirPath}, nil
-}
 
 func (fs *FileSystemService) ValidatePath(slug, relativePath string) (string, bool) {
 	dirConfig, ok := fs.slugToDir[slug]

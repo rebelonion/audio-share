@@ -27,39 +27,29 @@ export function useAudioPlayer(src: string) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const progressRef = useRef<HTMLDivElement>(null);
 
-    const getDisplayName = useCallback((filename: string): { artist: string, track: string } => {
-        const decodedFilename = decodeURIComponent(filename);
-        const parts = decodedFilename.split('/');
-
-        if (parts.length >= 2) {
-            const artist = parts[parts.length - 2];
-            const track = parts[parts.length - 1].replace(/\.[^/.]+$/, "");
-            return {artist, track};
-        }
-
-        return {
-            artist: 'Unknown Artist',
-            track: decodedFilename.replace(/\.[^/.]+$/, "")
-        };
+    const getDisplayName = useCallback((src: string): { artist: string, track: string } => {
+        // Fallback display name derived from the src path
+        const key = src.replace(/^\/audio\/key\//, '');
+        return { artist: '', track: key };
     }, []);
 
-    const loadMetadata = useCallback(async (filePath: string, signal?: AbortSignal) => {
+    const loadMetadata = useCallback(async (src: string, signal?: AbortSignal) => {
         try {
-            const jsonPath = filePath.replace(/\.[^/.]+$/, ".info.json");
-            const apiJsonPath = jsonPath.replace(/^\/audio\//, `${API_BASE}/api/audio/`);
-            const response = await fetch(apiJsonPath, { signal });
+            // src format: /audio/key/{key}
+            const key = src.replace(/^\/audio\/key\//, '');
+            const metaUrl = `${API_BASE}/api/audio/key/${key}/meta`;
+            const response = await fetch(metaUrl, { signal });
 
             if (response.ok) {
                 const data = await response.json();
                 if (signal && signal.aborted) return;
 
                 setMetadata({
-                    title: data.title || data.fulltitle || '',
-                    artist: data.meta_artist || data.uploader || data.channel || '',
-                    uploadDate: data.upload_date || '',
-                    webpageUrl: data.webpage_url || '',
+                    title: data.title || '',
+                    artist: data.artist || '',
+                    uploadDate: data.uploadDate || '',
+                    webpageUrl: data.webpageUrl || '',
                     description: data.description || '',
-                    duration: data.duration
                 });
             }
         } catch (error) {
@@ -68,7 +58,7 @@ export function useAudioPlayer(src: string) {
             }
             if (signal && signal.aborted) return;
 
-            const {artist, track} = getDisplayName(filePath);
+            const {artist, track} = getDisplayName(src);
             setMetadata({
                 title: track,
                 artist: artist
@@ -98,18 +88,18 @@ export function useAudioPlayer(src: string) {
         const controller = new AbortController();
         const signal = controller.signal;
 
-        const potentialThumbPath = src.replace(/\.[^/.]+$/, "-thumb.jpg");
-        const apiThumbPath = potentialThumbPath.replace(/^\/audio\//, `${API_BASE}/api/audio/`);
+        const key = src.replace(/^\/audio\/key\//, '');
+        const apiThumbUrl = `${API_BASE}/api/audio/key/${key}/thumbnail`;
         setThumbnail(null);
         setMetadata(null);
 
-        fetch(apiThumbPath, {
+        fetch(apiThumbUrl, {
             method: 'HEAD',
             signal: controller.signal
         })
         .then(response => {
             if (!signal.aborted && response.ok) {
-                setThumbnail(apiThumbPath);
+                setThumbnail(apiThumbUrl);
             } else if (!signal.aborted) {
                 setThumbnail(null);
             }
@@ -161,7 +151,7 @@ export function useAudioPlayer(src: string) {
                 setError(null);
                 setAudioLoaded(false);
 
-                const apiAudioPath = src.replace(/^\/audio\//, `${API_BASE}/api/audio/`);
+                const apiAudioPath = src.replace(/^\/audio\/key\//, `${API_BASE}/api/audio/key/`);
                 const newAudio = new Audio(apiAudioPath);
 
                 newAudio.addEventListener('timeupdate', handleTimeUpdate);
@@ -260,7 +250,7 @@ export function useAudioPlayer(src: string) {
                                 setError('This audio format is not supported by your browser.');
                             } else {
                                 try {
-                                    const apiAudioPath = src.replace(/^\/audio\//, `${API_BASE}/api/audio/`);
+                                    const apiAudioPath = src.replace(/^\/audio\/key\//, `${API_BASE}/api/audio/key/`);
                                     const response = await fetch(apiAudioPath, {method: 'HEAD'});
                                     if (response.status === 429) {
                                         setError('Rate limit exceeded. Please try again later.');

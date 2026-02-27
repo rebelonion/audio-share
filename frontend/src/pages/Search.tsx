@@ -108,10 +108,7 @@ export default function Search() {
         });
 
         if (result.type === 'audio') {
-            const pathParts = result.path.split('/');
-            const source = encodeURIComponent(pathParts[0]);
-            const filePath = pathParts.slice(1).map(s => encodeURIComponent(s)).join('/');
-            navigate(`/share/${source}/${filePath}`);
+            navigate(`/share/${result.shareKey}`);
         } else {
             const encodedPath = result.path.split('/').map(s => encodeURIComponent(s)).join('/');
             navigate(`/browse/${encodedPath}`);

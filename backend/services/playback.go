@@ -3,12 +3,14 @@ package services
 import "database/sql"
 
 type PlaybackResult struct {
+	ShareKey         string  `json:"shareKey"`
 	Path             string  `json:"path"`
 	Filename         string  `json:"filename"`
 	Title            *string `json:"title"`
 	Artist           *string `json:"artist"`
 	ParentPath       *string `json:"parentPath"`
 	ParentFolderName *string `json:"parentFolderName"`
+	ParentShareKey   *string `json:"parentShareKey"`
 	AudioImage       *string `json:"audioImage"`
 	PosterImage      *string `json:"posterImage"`
 	PlayCount        int     `json:"playCount"`
@@ -23,9 +25,12 @@ func NewPlaybackService(db *Database) *PlaybackService {
 	return &PlaybackService{db: db}
 }
 
-func (s *PlaybackService) RecordPlayEvent(audioPath string) error {
+func (s *PlaybackService) RecordPlayEvent(shareKey string) error {
 	var id int64
-	err := s.db.DB().QueryRow("SELECT id FROM audio_files WHERE path = ?", audioPath).Scan(&id)
+	err := s.db.DB().QueryRow(
+		"SELECT id FROM audio_files WHERE share_key = ? AND deleted = 0",
+		shareKey,
+	).Scan(&id)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -53,12 +58,14 @@ func (s *PlaybackService) RecordPlayEvent(audioPath string) error {
 func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT
+			af.share_key,
 			af.path,
 			af.filename,
 			af.title,
 			af.meta_artist,
 			af.parent_path,
 			f.name,
+			f.share_key,
 			af.thumbnail,
 			f.poster_image,
 			COUNT(*) as play_count,
@@ -66,6 +73,7 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 		FROM play_events pe
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
+		WHERE af.deleted = 0
 		GROUP BY pe.audio_file_id
 		ORDER BY last_played DESC
 		LIMIT ?
@@ -79,8 +87,8 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 	for rows.Next() {
 		var r PlaybackResult
 		if err := rows.Scan(
-			&r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.AudioImage, &r.PosterImage,
+			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
+			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
 			&r.PlayCount, &r.LastPlayed,
 		); err != nil {
 			return nil, err
@@ -97,12 +105,14 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT
+			af.share_key,
 			af.path,
 			af.filename,
 			af.title,
 			af.meta_artist,
 			af.parent_path,
 			f.name,
+			f.share_key,
 			af.thumbnail,
 			f.poster_image,
 			COUNT(*) as play_count,
@@ -110,6 +120,7 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 		FROM play_events pe
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
+		WHERE af.deleted = 0
 		GROUP BY pe.audio_file_id
 		ORDER BY play_count DESC
 		LIMIT ?
@@ -123,8 +134,8 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 	for rows.Next() {
 		var r PlaybackResult
 		if err := rows.Scan(
-			&r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.AudioImage, &r.PosterImage,
+			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
+			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
 			&r.PlayCount, &r.LastPlayed,
 		); err != nil {
 			return nil, err
@@ -141,17 +152,19 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT
+			af.share_key,
 			af.path,
 			af.filename,
 			af.title,
 			af.meta_artist,
 			af.parent_path,
 			f.name,
+			f.share_key,
 			af.thumbnail,
 			f.poster_image
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.downloaded_at IS NOT NULL
+		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0
 		ORDER BY af.downloaded_at DESC
 		LIMIT ?
 	`, limit)
@@ -164,8 +177,8 @@ func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) 
 	for rows.Next() {
 		var r PlaybackResult
 		if err := rows.Scan(
-			&r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.AudioImage, &r.PosterImage,
+			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
+			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
 		); err != nil {
 			return nil, err
 		}

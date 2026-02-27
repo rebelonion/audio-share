@@ -14,7 +14,6 @@ import {recordPlayEvent} from "@/lib/api";
 
 interface FolderViewProps {
     items: FileSystemItem[];
-    currentPath: string;
 }
 
 type SortMethod = 'alpha' | 'modified' | 'size' | 'type';
@@ -23,7 +22,7 @@ export default function FolderView({items}: FolderViewProps) {
     const {track} = useUmami();
     const [searchParams] = useSearchParams();
     const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
-    const [selectedAudioPath, setSelectedAudioPath] = useState<string>('');
+    const [selectedAudioKey, setSelectedAudioKey] = useState<string>('');
     const [selectedAudioName, setSelectedAudioName] = useState<string>('');
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
@@ -207,11 +206,9 @@ export default function FolderView({items}: FolderViewProps) {
         if (item.type === 'audio' && !isAudioSelectionLocked) {
             setIsAudioSelectionLocked(true);
 
-            const path = item.path.split('/').map(encodeURIComponent).join('/');
-            const audioPath = (item.path.startsWith('audio/') ? `/${path}` : `/audio/${path}`);
-            console.log('Setting audio path:', audioPath);
-            setSelectedAudio(audioPath);
-            setSelectedAudioPath(item.path);
+            const key = item.shareKey || '';
+            setSelectedAudio(key ? `/audio/key/${key}` : null);
+            setSelectedAudioKey(key);
             setSelectedAudioName(item.name);
             track('audio-player-open', { path: item.path, name: item.name });
             setTimeout(() => {
@@ -251,18 +248,15 @@ export default function FolderView({items}: FolderViewProps) {
         }
     };
 
-    const copyToClipboard = (path: string, e: React.MouseEvent) => {
+    const copyToClipboard = (shareKey: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        const pathParts = path.split('/');
-        const source = encodeURIComponent(pathParts[0]);
-        const filePath = pathParts.slice(1).map(segment => encodeURIComponent(segment)).join('/');
-        const url = `${window.location.origin}/share/${source}/${filePath}`;
+        const url = `${window.location.origin}/share/${shareKey}`;
 
         try {
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(url).then(() => {
                     setNotification({
-                        path: path,
+                        path: shareKey,
                         message: 'Share link copied to clipboard!',
                         isError: false,
                         visible: true
@@ -271,7 +265,7 @@ export default function FolderView({items}: FolderViewProps) {
             } else {
                 console.error('Clipboard API not available');
                 setNotification({
-                    path: path,
+                    path: shareKey,
                     message: 'Copy feature not supported in this browser',
                     isError: true,
                     visible: true
@@ -280,7 +274,7 @@ export default function FolderView({items}: FolderViewProps) {
         } catch (err) {
             console.error('Clipboard API failed:', err);
             setNotification({
-                path: path,
+                path: shareKey,
                 message: 'Failed to copy to clipboard',
                 isError: true,
                 visible: true
@@ -308,7 +302,7 @@ export default function FolderView({items}: FolderViewProps) {
                 <AudioPlayer
                     src={selectedAudio}
                     name={selectedAudioName}
-                    onPlay={() => recordPlayEvent(selectedAudioPath).catch(() => {})}
+                    onPlay={() => recordPlayEvent(selectedAudioKey).catch(() => {})}
                 />
             )}
 
@@ -440,9 +434,10 @@ export default function FolderView({items}: FolderViewProps) {
                                     ) : (
                                         // Non-alphabetical view - flat list
                                         sortedItems.map((item) => (
-                                            <TableItem item={item}                                                        handleAudioSelect={handleAudioSelect} notification={notification}
-                                                       copyToClipboard={copyToClipboard}
-                                                       key={`desktop-flat-${item.path}`}/>
+                                            <TableItem item={item}
+                                                handleAudioSelect={handleAudioSelect} notification={notification}
+                                                copyToClipboard={copyToClipboard}
+                                                key={`desktop-flat-${item.path}`}/>
                                         ))
                                     )}
                                     </tbody>

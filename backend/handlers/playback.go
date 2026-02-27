@@ -16,7 +16,7 @@ func NewPlaybackHandler(playbackService *services.PlaybackService) *PlaybackHand
 }
 
 type recordRequest struct {
-	Path string `json:"path"`
+	ShareKey string `json:"shareKey"`
 }
 
 func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
@@ -32,12 +32,12 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			return
 		}
 
-		if req.Path == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Path is required"})
+		if req.ShareKey == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shareKey is required"})
 			return
 		}
 
-		if err := h.playbackService.RecordPlayEvent(req.Path); err != nil {
+		if err := h.playbackService.RecordPlayEvent(req.ShareKey); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record play event"})
 			return
 		}

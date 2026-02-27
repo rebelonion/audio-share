@@ -88,6 +88,9 @@ func (d *Database) migrate() {
 		"ALTER TABLE audio_files ADD COLUMN downloaded_at TEXT",
 		"ALTER TABLE audio_files ADD COLUMN source_path TEXT",
 		"ALTER TABLE audio_files ADD COLUMN thumbnail TEXT",
+		"ALTER TABLE audio_files ADD COLUMN share_key TEXT",
+		"ALTER TABLE audio_files ADD COLUMN deleted INTEGER DEFAULT 0",
+		"ALTER TABLE folders ADD COLUMN share_key TEXT",
 	}
 	for _, stmt := range alterations {
 		d.db.Exec(stmt)
@@ -96,6 +99,8 @@ func (d *Database) migrate() {
 	indexes := `
 		CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at);
 		CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key);
 	`
 	if _, err := d.db.Exec(indexes); err != nil {
 		log.Printf("Warning: could not create new indexes: %v", err)

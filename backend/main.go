@@ -36,8 +36,9 @@ func main() {
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
 	playbackService := services.NewPlaybackService(db)
 
-	audioHandler := handlers.NewAudioHandler(fsService)
-	browseHandler := handlers.NewBrowseHandler(fsService, searchService)
+	audioHandler := handlers.NewAudioHandler(fsService, db.DB())
+	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
+	browseHandler := handlers.NewBrowseHandler(searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
 	contactHandler := handlers.NewContactHandler(ntfyService)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
@@ -57,7 +58,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/api/audio/", audioHandler)
+	mux.Handle("/api/audio/key/", audioHandler)
+	mux.Handle("/api/folder/key/", folderHandler)
 	mux.Handle("/api/browse", browseHandler)
 	mux.Handle("/api/browse/", browseHandler)
 	mux.Handle("/api/search", searchHandler)

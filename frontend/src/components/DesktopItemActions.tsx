@@ -7,7 +7,7 @@ import {API_BASE} from "@/lib/api";
 interface DesktopItemActionsProps {
     item: FileSystemItem;
     notification: Notification,
-    copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+    copyToClipboard: (shareKey: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
 }
 
 export default function DesktopItemActions({ item, notification, copyToClipboard }: DesktopItemActionsProps) {
@@ -20,18 +20,19 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                     <button
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {
-                            copyToClipboard(item.path, e);
+                            const key = item.type === 'audio' ? (item.shareKey || '') : '';
+                            copyToClipboard(key, e);
                             track('audio-share', { path: item.path, name: item.name });
                         }}
                         title="Share"
                     >
-                        {notification.visible && notification.path === item.path && !notification.isError ?
+                        {notification.visible && notification.path === (item.type === 'audio' ? item.shareKey : '') && !notification.isError ?
                             <Check className="h-4 w-4"/> :
                             <Share2 className="h-4 w-4"/>
                         }
                     </button>
                     <a
-                        href={`${API_BASE}/api/audio/${item.path.split('/').map(segment => encodeURIComponent(segment)).join('/')}`}
+                        href={item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}` : '#'}
                         download
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {

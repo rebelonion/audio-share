@@ -8,19 +8,11 @@ export interface DirectoryContents {
     currentPath: string;
 }
 
-export interface FetchDirectoryOptions {
-    raw?: boolean;
-}
-
-export async function fetchDirectoryContents(path: string = '', options?: FetchDirectoryOptions): Promise<DirectoryContents> {
+export async function fetchDirectoryContents(path: string = ''): Promise<DirectoryContents> {
     let url = `${API_BASE}/api/browse`;
     if (path) {
         const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
         url = `${API_BASE}/api/browse/${encodedPath}`;
-    }
-
-    if (options?.raw) {
-        url += '?raw=true';
     }
 
     const response = await fetch(url);
@@ -30,10 +22,6 @@ export async function fetchDirectoryContents(path: string = '', options?: FetchD
     return response.json();
 }
 
-export function getAudioUrl(path: string): string {
-    const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
-    return `${API_BASE}/api/audio/${encodedPath}`;
-}
 
 export interface SearchResult {
     id: number;
@@ -41,6 +29,7 @@ export interface SearchResult {
     path: string;
     type: 'audio' | 'folder';
     parentPath?: string;
+    shareKey?: string;
 
     // Audio fields
     size?: number;
@@ -69,23 +58,25 @@ export interface SearchResponse {
 }
 
 export interface PlaybackTrack {
+    shareKey: string;
     path: string;
     filename: string;
     title: string | null;
     artist: string | null;
     parentPath: string | null;
     parentFolderName: string | null;
+    parentShareKey: string | null;
     audioImage: string | null;
     posterImage: string | null;
     playCount: number;
     lastPlayed: string | null;
 }
 
-export async function recordPlayEvent(path: string): Promise<void> {
+export async function recordPlayEvent(shareKey: string): Promise<void> {
     await fetch(`${API_BASE}/api/playback/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ shareKey }),
     });
 }
 
