@@ -89,6 +89,7 @@ func (s *SearchService) RebuildIndex() error {
 
 	log.Println("Starting index rebuild...")
 	start := time.Now()
+	startSQL := start.UTC().Truncate(time.Second).Format("2006-01-02 15:04:05")
 
 	for slug, dirConfig := range s.fs.GetSlugToDirectoryMap() {
 		log.Printf("Indexing directory: %s (%s)", dirConfig.Name, slug)
@@ -112,10 +113,10 @@ func (s *SearchService) RebuildIndex() error {
 		}
 	}
 
-	if _, err := s.db.DB().Exec("DELETE FROM folders WHERE indexed_at < ?", start); err != nil {
+	if _, err := s.db.DB().Exec("DELETE FROM folders WHERE indexed_at < ?", startSQL); err != nil {
 		log.Printf("Error cleaning up stale folders: %v", err)
 	}
-	if _, err := s.db.DB().Exec("UPDATE audio_files SET deleted = 1 WHERE indexed_at < ? AND deleted = 0", start); err != nil {
+	if _, err := s.db.DB().Exec("UPDATE audio_files SET deleted = 1 WHERE indexed_at < ? AND deleted = 0", startSQL); err != nil {
 		log.Printf("Error soft-deleting stale audio files: %v", err)
 	}
 
