@@ -133,7 +133,51 @@ func (s *SearchService) RebuildIndex() error {
 	elapsed := time.Since(start)
 	log.Printf("Index rebuild completed in %v", elapsed)
 
+	if s.webhookService != nil && s.webhookService.IsConfigured() {
+		newFolders, err := s.getNewFoldersForWebhook(startSQL)
+		if err != nil {
+			log.Printf("Error fetching new folders for webhook: %v", err)
+		} else if err := s.webhookService.SendIndexComplete(elapsed, newFolders); err != nil {
+			log.Printf("Error sending webhook: %v", err)
+		} else {
+			log.Printf("Webhook sent successfully with %d new folders", len(newFolders))
+		}
+	}
+
 	return nil
+}
+
+func (s *SearchService) getNewFoldersForWebhook(startSQL string) ([]NewFolder, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT share_key, name, original_url
+		FROM folders
+		WHERE original_url IS NOT NULL AND original_url != ''
+		AND indexed_at >= ?
+	`, startSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var newFolders []NewFolder
+	for rows.Next() {
+		var shareKey, name string
+		var originalURL *string
+		if err := rows.Scan(&shareKey, &name, &originalURL); err != nil {
+			return nil, err
+		}
+		url := ""
+		if originalURL != nil {
+			url = *originalURL
+		}
+		newFolders = append(newFolders, NewFolder{
+			ShareKey:    shareKey,
+			Name:        name,
+			OriginalURL: url,
+		})
+	}
+
+	return newFolders, nil
 }
 
 func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath string) error {

@@ -7,6 +7,7 @@ import Stats from './pages/Stats'
 import Browse from './pages/Browse'
 import Share from './pages/Share'
 import Search from './pages/Search'
+import Requests from './pages/Requests'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/requests" element={<Requests />} />
           <Route path="/browse/*" element={<Browse />} />
           <Route path="/share/:key" element={<Share />} />
           <Route path="*" element={<NotFound />} />

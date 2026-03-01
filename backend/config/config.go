@@ -83,6 +83,10 @@ type Config struct {
 	DefaultTitle       string
 	DefaultDescription string
 	UmamiWebsiteID     string
+
+	RequestsAPIKey    string
+	IndexWebhookURL   string
+	IndexWebhookToken string
 }
 
 func Load() *Config {
@@ -108,10 +112,14 @@ func Load() *Config {
 		DBPath:        getEnv("DB_PATH", "./audio-share.db"),
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
-		UmamiURL: getEnv("UMAMI_URL", ""),
+		UmamiURL:           getEnv("UMAMI_URL", ""),
 		UmamiWebsiteID:     getEnv("UMAMI_WEBSITE_ID", ""),
 		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
+
+		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),
+		IndexWebhookURL:   getEnv("INDEX_WEBHOOK_URL", ""),
+		IndexWebhookToken: getEnv("INDEX_WEBHOOK_TOKEN", ""),
 	}
 }
 

@@ -15,11 +15,12 @@ func main() {
 	cfg := config.Load()
 
 	fsService := services.NewFileSystemService(cfg.AudioDir)
+	webhookService := services.NewWebhookService(cfg.IndexWebhookURL, cfg.IndexWebhookToken)
 
 	if len(os.Args) > 1 && os.Args[1] == "reindex" {
 		db := services.NewDatabase(cfg.DBPath)
 		defer db.Close()
-		searchService := services.NewSearchService(db, fsService)
+		searchService := services.NewSearchService(db, fsService, webhookService)
 		if err := searchService.RebuildIndex(); err != nil {
 			log.Fatalf("Reindex failed: %v", err)
 		}
@@ -27,7 +28,7 @@ func main() {
 	}
 
 	db := services.NewDatabase(cfg.DBPath)
-	searchService := services.NewSearchService(db, fsService)
+	searchService := services.NewSearchService(db, fsService, webhookService)
 
 	if cfg.IndexSchedule != "" {
 		searchService.StartScheduledReindex(cfg.IndexSchedule)
@@ -35,6 +36,7 @@ func main() {
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
 	playbackService := services.NewPlaybackService(db)
+	requestsService := services.NewRequestsService(db)
 
 	audioHandler := handlers.NewAudioHandler(fsService, db.DB())
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
@@ -44,6 +46,7 @@ func main() {
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
 	playbackHandler := handlers.NewPlaybackHandler(playbackService)
+	requestsHandler := handlers.NewRequestsHandler(requestsService)
 
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
@@ -55,6 +58,7 @@ func main() {
 
 	rateLimiter := middleware.NewRateLimiter(cfg)
 	securityHeaders := middleware.NewSecurityHeaders(cfg.UmamiURL)
+	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)
 
 	mux := http.NewServeMux()
 
@@ -71,6 +75,9 @@ func main() {
 	mux.HandleFunc("/api/playback/recent", playbackHandler.RecentHandler())
 	mux.HandleFunc("/api/playback/popular", playbackHandler.PopularHandler())
 	mux.HandleFunc("/api/playback/new", playbackHandler.NewHandler())
+
+	mux.Handle("/api/requests", apiKeyAuth.Middleware(requestsHandler))
+	mux.Handle("/api/requests/", apiKeyAuth.Middleware(requestsHandler))
 
 	mux.HandleFunc("/sitemap.xml", contentHandler.SitemapHandler())
 	mux.HandleFunc("/site.webmanifest", contentHandler.ManifestHandler())
@@ -99,8 +106,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range, X-API-Key")
 			w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}

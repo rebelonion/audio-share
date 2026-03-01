@@ -47,6 +47,12 @@ export default function Layout() {
                   Stats
                 </Link>
                 <Link
+                  to="/requests"
+                  className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                >
+                  Requests
+                </Link>
+                <Link
                   to="/contact"
                   className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
                 >

@@ -37,3 +37,31 @@ export type Notification = {
 }
 
 export type FileSystemItem = AudioFile | Folder;
+
+export interface Tag {
+    name: string;
+    color: string;
+}
+
+export type RequestStatus = 'requested' | 'downloading' | 'indexing' | 'added' | 'rejected';
+
+export interface SourceRequest {
+    id: number;
+    submittedUrl: string;
+    canonicalId?: string;
+    title: string;
+    imageUrl?: string;
+    status: RequestStatus;
+    tags: Tag[];
+    folderShareKey?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface RequestsByStatus {
+    requested: SourceRequest[];
+    downloading: SourceRequest[];
+    indexing: SourceRequest[];
+    added: SourceRequest[];
+    rejected: SourceRequest[];
+}

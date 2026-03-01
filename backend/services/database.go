@@ -78,6 +78,20 @@ func (d *Database) migrate() {
 		);
 		CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id);
 		CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at);
+
+		CREATE TABLE IF NOT EXISTS source_requests (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			submitted_url TEXT NOT NULL,
+			canonical_id TEXT,
+			title TEXT NOT NULL,
+			image_url TEXT,
+			status TEXT NOT NULL DEFAULT 'requested',
+			tags TEXT DEFAULT '[]',
+			folder_share_key TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status);
 	`
 
 	if _, err := d.db.Exec(schema); err != nil {
