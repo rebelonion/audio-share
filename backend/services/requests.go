@@ -3,9 +3,12 @@ package services
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type Tag struct {
 	Name  string `json:"name"`
@@ -119,6 +122,10 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 		}
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -170,21 +177,33 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 func (s *RequestsService) UpdateStatus(id int64, status string, folderShareKey NullableString) error {
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
+	var result sql.Result
+	var err error
+
 	if folderShareKey.Set {
-		_, err := s.db.DB().Exec(`
+		result, err = s.db.DB().Exec(`
 			UPDATE source_requests
 			SET status = ?, folder_share_key = ?, updated_at = ?
 			WHERE id = ?
 		`, status, folderShareKey.Value, now, id)
+	} else {
+		result, err = s.db.DB().Exec(`
+			UPDATE source_requests
+			SET status = ?, updated_at = ?
+			WHERE id = ?
+		`, status, now, id)
+	}
+	if err != nil {
 		return err
 	}
-
-	_, err := s.db.DB().Exec(`
-		UPDATE source_requests
-		SET status = ?, updated_at = ?
-		WHERE id = ?
-	`, status, now, id)
-	return err
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *RequestsService) Update(id int64, title string, tags []Tag) error {
@@ -195,15 +214,35 @@ func (s *RequestsService) Update(id int64, title string, tags []Tag) error {
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
-	_, err = s.db.DB().Exec(`
+	result, err := s.db.DB().Exec(`
 		UPDATE source_requests
 		SET title = ?, tags = ?, updated_at = ?
 		WHERE id = ?
 	`, title, string(tagsJSON), now, id)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *RequestsService) Delete(id int64) error {
-	_, err := s.db.DB().Exec(`DELETE FROM source_requests WHERE id = ?`, id)
-	return err
+	result, err := s.db.DB().Exec(`DELETE FROM source_requests WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -9,6 +10,11 @@ import (
 	"strings"
 
 	"github.com/onion/audio-share-backend/services"
+)
+
+const (
+	maxTitleLen = 500
+	maxURLLen   = 2048
 )
 
 var validRequestStatuses = map[string]bool{
@@ -91,8 +97,18 @@ func (h *RequestsHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(body.Title) > maxTitleLen {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Title is too long"})
+		return
+	}
+
 	if body.SubmittedURL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Submitted URL is required"})
+		return
+	}
+
+	if len(body.SubmittedURL) > maxURLLen {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "URL is too long"})
 		return
 	}
 
@@ -143,6 +159,10 @@ func (h *RequestsHandler) handleUpdateStatus(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.service.UpdateStatus(id, body.Status, body.FolderShareKey); err != nil {
+		if errors.Is(err, services.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
+			return
+		}
 		log.Printf("requests: failed to update status for id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update status"})
 		return
@@ -169,11 +189,20 @@ func (h *RequestsHandler) handleUpdate(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
+	if len(body.Title) > maxTitleLen {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Title is too long"})
+		return
+	}
+
 	if body.Tags == nil {
 		body.Tags = []services.Tag{}
 	}
 
 	if err := h.service.Update(id, body.Title, body.Tags); err != nil {
+		if errors.Is(err, services.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
+			return
+		}
 		log.Printf("requests: failed to update id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update request"})
 		return
@@ -190,6 +219,10 @@ func (h *RequestsHandler) handleDelete(w http.ResponseWriter, r *http.Request, i
 	}
 
 	if err := h.service.Delete(id); err != nil {
+		if errors.Is(err, services.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
+			return
+		}
 		log.Printf("requests: failed to delete id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to delete request"})
 		return
