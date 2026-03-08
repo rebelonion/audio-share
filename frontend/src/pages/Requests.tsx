@@ -50,9 +50,9 @@ function RequestCard({ request, accentColor }: { request: SourceRequest; accentC
 
                 {request.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                        {request.tags.map((tag, idx) => (
+                        {request.tags.map((tag) => (
                             <span
-                                key={idx}
+                                key={`${tag.name}-${tag.color}`}
                                 className="text-xs px-1.5 py-0.5 rounded-full text-white"
                                 style={{ backgroundColor: tag.color }}
                             >
@@ -79,7 +79,7 @@ function RequestCard({ request, accentColor }: { request: SourceRequest; accentC
 
                     {request.status === 'added' && request.folderPath && (
                         <Link
-                            to={`/browse/${request.folderPath}`}
+                            to={`/browse/${request.folderPath.split('/').map(encodeURIComponent).join('/')}`}
                             className="text-xs text-[var(--primary)] hover:text-[var(--primary-hover)] flex items-center gap-1 flex-shrink-0"
                         >
                             <Folder className="w-3 h-3 flex-shrink-0" />

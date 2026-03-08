@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -38,7 +39,7 @@ func (n *NtfyService) SendShareNotification(requestURL string) error {
 
 	var actions string
 	if n.reviewURL != "" {
-		actions = fmt.Sprintf("view, Review, %s?Channel=%s", n.reviewURL, requestURL)
+		actions = fmt.Sprintf("view, Review, %s?Channel=%s", n.reviewURL, url.QueryEscape(requestURL))
 	}
 
 	return n.send(body, "New Audio Source Request", "audio,request,source", actions)

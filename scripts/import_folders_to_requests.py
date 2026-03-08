@@ -26,46 +26,45 @@ def main():
     db_path = sys.argv[1] if len(sys.argv) > 1 else './audio-share.db'
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    with sqlite3.connect(db_path) as con:
+        con.row_factory = sqlite3.Row
 
-    folders = con.execute(
-        'SELECT name, original_url, share_key, modified_at FROM folders WHERE original_url IS NOT NULL AND original_url != ""'
-    ).fetchall()
+        folders = con.execute(
+            'SELECT name, original_url, share_key, modified_at FROM folders WHERE original_url IS NOT NULL AND original_url != ""'
+        ).fetchall()
 
-    if not folders:
-        print('No folders with original_url found.')
-        return
+        if not folders:
+            print('No folders with original_url found.')
+            return
 
-    existing = {
-        row[0] for row in con.execute('SELECT submitted_url FROM source_requests')
-    }
+        existing = {
+            row[0] for row in con.execute('SELECT submitted_url FROM source_requests')
+        }
 
-    inserted = 0
-    skipped = 0
+        inserted = 0
+        skipped = 0
 
-    for folder in folders:
-        url = folder['original_url']
+        for folder in folders:
+            url = folder['original_url']
 
-        if url in existing:
-            print(f'  skip (already exists): {folder["name"]}')
-            skipped += 1
-            continue
+            if url in existing:
+                print(f'  skip (already exists): {folder["name"]}')
+                skipped += 1
+                continue
 
-        tag = tag_for(url)
-        tags = [tag] if tag else []
+            tag = tag_for(url)
+            tags = [tag] if tag else []
 
-        con.execute(
-            '''INSERT INTO source_requests
-               (submitted_url, title, status, tags, folder_share_key, created_at, updated_at)
-               VALUES (?, ?, 'added', ?, ?, ?, ?)''',
-            (url, folder['name'], json.dumps(tags), folder['share_key'], folder['modified_at'] or now, now),
-        )
-        print(f'  added: {folder["name"]} ({url})')
-        inserted += 1
+            con.execute(
+                '''INSERT INTO source_requests
+                   (submitted_url, title, status, tags, folder_share_key, created_at, updated_at)
+                   VALUES (?, ?, 'added', ?, ?, ?, ?)''',
+                (url, folder['name'], json.dumps(tags), folder['share_key'], folder['modified_at'] or now, now),
+            )
+            print(f'  added: {folder["name"]} ({url})')
+            inserted += 1
 
-    con.commit()
-    con.close()
+        con.commit()
     print(f'\nDone. {inserted} inserted, {skipped} skipped.')
 
 if __name__ == '__main__':

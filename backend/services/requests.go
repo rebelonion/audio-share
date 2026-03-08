@@ -1,6 +1,7 @@
 package services
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
 )
@@ -82,7 +83,7 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 	for rows.Next() {
 		var req SourceRequest
 		var folderShareKey, folderPath *string
-		var tagsJSON string
+		var tagsJSON sql.NullString
 
 		if err := rows.Scan(
 			&req.ID, &req.SubmittedURL, &req.Title,
@@ -94,7 +95,11 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 		req.FolderShareKey = folderShareKey
 		req.FolderPath = folderPath
 
-		if err := json.Unmarshal([]byte(tagsJSON), &req.Tags); err != nil {
+		if tagsJSON.Valid {
+			if err := json.Unmarshal([]byte(tagsJSON.String), &req.Tags); err != nil {
+				req.Tags = []Tag{}
+			}
+		} else {
 			req.Tags = []Tag{}
 		}
 

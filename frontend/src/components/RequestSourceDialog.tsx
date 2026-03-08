@@ -106,6 +106,9 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                         <p className="text-xs text-[var(--muted-foreground)] mt-1">
                             Enter a YouTube, Twitch, or other content creator URL
                         </p>
+                        <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                            Requests are manually reviewed before appearing on the requests page.
+                        </p>
                     </div>
 
                     {status.message && (
