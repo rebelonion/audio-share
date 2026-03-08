@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import { Outlet, Link } from 'react-router'
 import { Helmet } from 'react-helmet-async'
-import { Music } from 'lucide-react'
+import { Music, Menu, X } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION, UMAMI_URL, UMAMI_WEBSITE_ID } from '@/lib/config'
 
 export default function Layout() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <>
       <Helmet>
@@ -24,7 +27,7 @@ export default function Layout() {
 
       <div className="bg-[var(--background)] text-[var(--foreground)] min-h-screen flex flex-col">
         <header className="bg-[var(--card)] shadow-md border-b border-[var(--border)]">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
               <Link to="/" className="flex items-center group">
                 <Music className="h-8 w-8 text-[var(--primary)] mr-3 group-hover:text-[var(--primary-hover)] transition-colors" />
@@ -32,41 +35,71 @@ export default function Layout() {
                   {DEFAULT_TITLE}
                 </h1>
               </Link>
-              <nav className="flex items-center gap-6 pr-12">
+              <div className="flex items-center gap-3 sm:gap-6">
                 <GlobalSearchBar />
-                <Link
-                  to="/about"
-                  className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                <nav className="hidden sm:flex items-center gap-6">
+                  <Link
+                    to="/about"
+                    className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                  >
+                    About
+                  </Link>
+                  <Link
+                    to="/stats"
+                    className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                  >
+                    Stats
+                  </Link>
+                  <Link
+                    to="/requests"
+                    className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                  >
+                    Requests
+                  </Link>
+                  <Link
+                    to="/contact"
+                    className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                  >
+                    Contact
+                  </Link>
+                </nav>
+                <button
+                  className="sm:hidden relative h-6 w-6 text-[var(--foreground)] hover:text-[var(--primary)] transition-colors"
+                  onClick={() => setMenuOpen(o => !o)}
+                  aria-label="Toggle menu"
                 >
-                  About
-                </Link>
-                <Link
-                  to="/stats"
-                  className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
-                >
-                  Stats
-                </Link>
-                <Link
-                  to="/contact"
-                  className="text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
-                >
-                  Contact
-                </Link>
-              </nav>
+                  <Menu className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} />
+                  <X className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className={`sm:hidden grid transition-[grid-template-rows] duration-300 ease-in-out ${menuOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+            <div className="overflow-hidden">
+              <div className="border-t border-[var(--border)] px-4 py-2">
+                {(['About', 'Stats', 'Requests', 'Contact'] as const).map(page => (
+                  <Link
+                    key={page}
+                    to={`/${page.toLowerCase()}`}
+                    className="block py-2 text-[var(--foreground)] hover:text-[var(--primary)] transition-colors font-medium"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {page}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-          <div className="w-full overflow-x-auto">
-            <Outlet />
-          </div>
+        <main className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+          <Outlet />
         </main>
 
         <FloatingActionButton />
 
         <footer className="bg-[var(--card)] border-t border-[var(--border)] mt-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex justify-center items-center mb-2">
               <a
                 href="https://github.com/rebelonion/audio-share"

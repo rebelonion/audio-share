@@ -78,6 +78,18 @@ func (d *Database) migrate() {
 		);
 		CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id);
 		CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at);
+
+		CREATE TABLE IF NOT EXISTS source_requests (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			submitted_url TEXT NOT NULL,
+			title TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'requested',
+			tags TEXT DEFAULT '[]',
+			folder_share_key TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status);
 	`
 
 	if _, err := d.db.Exec(schema); err != nil {
@@ -101,6 +113,7 @@ func (d *Database) migrate() {
 		CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url);
 	`
 	if _, err := d.db.Exec(indexes); err != nil {
 		log.Printf("Warning: could not create new indexes: %v", err)

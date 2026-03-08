@@ -62,10 +62,11 @@ type Config struct {
 
 	StaticDir string
 
-	NtfyURL      string
-	NtfyTopic    string
-	NtfyToken    string
-	NtfyPriority int
+	NtfyURL       string
+	NtfyTopic     string
+	NtfyToken     string
+	NtfyPriority  int
+	NtfyReviewURL string
 
 	RateLimitWindow      int // milliseconds
 	MaxRequestsPerWindow int
@@ -83,6 +84,10 @@ type Config struct {
 	DefaultTitle       string
 	DefaultDescription string
 	UmamiWebsiteID     string
+
+	RequestsAPIKey    string
+	IndexWebhookURL   string
+	IndexWebhookToken string
 }
 
 func Load() *Config {
@@ -92,10 +97,11 @@ func Load() *Config {
 		ContentDir: getEnv("CONTENT_DIR", "./content"),
 		StaticDir:  getEnv("STATIC_DIR", "./static"),
 
-		NtfyURL:      getEnv("NTFY_URL", "https://ntfy.sh"),
-		NtfyTopic:    getEnv("NTFY_TOPIC", ""),
-		NtfyToken:    getEnv("NTFY_TOKEN", ""),
-		NtfyPriority: getEnvInt("NTFY_PRIORITY", 1),
+		NtfyURL:       getEnv("NTFY_URL", "https://ntfy.sh"),
+		NtfyTopic:     getEnv("NTFY_TOPIC", ""),
+		NtfyToken:     getEnv("NTFY_TOKEN", ""),
+		NtfyPriority:  getEnvInt("NTFY_PRIORITY", 1),
+		NtfyReviewURL: getEnv("NTFY_REVIEW_URL", ""),
 
 		RateLimitWindow:      getEnvInt("RATE_LIMIT_WINDOW", 60000),
 		MaxRequestsPerWindow: getEnvInt("MAX_REQUESTS_PER_WINDOW", 100),
@@ -108,10 +114,14 @@ func Load() *Config {
 		DBPath:        getEnv("DB_PATH", "./audio-share.db"),
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
-		UmamiURL: getEnv("UMAMI_URL", ""),
+		UmamiURL:           getEnv("UMAMI_URL", ""),
 		UmamiWebsiteID:     getEnv("UMAMI_WEBSITE_ID", ""),
 		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
+
+		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),
+		IndexWebhookURL:   getEnv("INDEX_WEBHOOK_URL", ""),
+		IndexWebhookToken: getEnv("INDEX_WEBHOOK_TOKEN", ""),
 	}
 }
 

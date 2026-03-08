@@ -1,7 +1,7 @@
 export const API_BASE = import.meta.env.VITE_API_URL || '';
 
-export type { FileSystemItem, FolderMetadata, AudioFile, Folder } from '@/types';
-import type { FileSystemItem } from '@/types';
+export type { FileSystemItem, FolderMetadata, AudioFile, Folder, Tag, RequestStatus, SourceRequest, RequestsByStatus } from '@/types';
+import type { FileSystemItem, RequestsByStatus } from '@/types';
 
 export interface DirectoryContents {
     items: FileSystemItem[];
@@ -113,6 +113,14 @@ export async function searchAudio(query: string, limit?: number, offset?: number
     const response = await fetch(`${API_BASE}/api/search?${params}`);
     if (!response.ok) {
         throw new Error(`Search failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+export async function fetchRequests(): Promise<RequestsByStatus> {
+    const response = await fetch(`${API_BASE}/api/requests`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch requests: ${response.status}`);
     }
     return response.json();
 }

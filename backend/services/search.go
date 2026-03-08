@@ -26,16 +26,18 @@ type SearchResult struct {
 }
 
 type SearchService struct {
-	db       *Database
-	fs       *FileSystemService
-	lockPath string
+	db             *Database
+	fs             *FileSystemService
+	webhookService *WebhookService
+	lockPath       string
 }
 
-func NewSearchService(db *Database, fs *FileSystemService) *SearchService {
+func NewSearchService(db *Database, fs *FileSystemService, webhookService *WebhookService) *SearchService {
 	return &SearchService{
-		db:       db,
-		fs:       fs,
-		lockPath: db.path + ".reindex.lock",
+		db:             db,
+		fs:             fs,
+		webhookService: webhookService,
+		lockPath:       db.path + ".reindex.lock",
 	}
 }
 

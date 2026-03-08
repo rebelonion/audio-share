@@ -133,7 +133,58 @@ func (s *SearchService) RebuildIndex() error {
 	elapsed := time.Since(start)
 	log.Printf("Index rebuild completed in %v", elapsed)
 
+	if s.webhookService != nil && s.webhookService.IsConfigured() {
+		folders, err := s.getIndexedFoldersWithURLForWebhook(startSQL)
+		if err != nil {
+			log.Printf("Error fetching folders for webhook: %v", err)
+		} else if err := s.webhookService.SendIndexComplete(elapsed, folders); err != nil {
+			log.Printf("Error sending webhook: %v", err)
+		} else {
+			log.Printf("Webhook sent successfully with %d folders", len(folders))
+		}
+	}
+
 	return nil
+}
+
+// getIndexedFoldersWithURLForWebhook returns all folders with an original_url that were
+// present (or re-indexed) during this run. The name reflects that this includes both
+// newly added and re-indexed folders — the webhook consumer needs all of them.
+func (s *SearchService) getIndexedFoldersWithURLForWebhook(startSQL string) ([]NewFolder, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT share_key, name, original_url
+		FROM folders
+		WHERE original_url IS NOT NULL AND original_url != ''
+		AND indexed_at >= ?
+	`, startSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	folders := make([]NewFolder, 0)
+	for rows.Next() {
+		var shareKey, name string
+		var originalURL *string
+		if err := rows.Scan(&shareKey, &name, &originalURL); err != nil {
+			return nil, err
+		}
+		url := ""
+		if originalURL != nil {
+			url = *originalURL
+		}
+		folders = append(folders, NewFolder{
+			ShareKey:    shareKey,
+			Name:        name,
+			OriginalURL: url,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return folders, nil
 }
 
 func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath string) error {
