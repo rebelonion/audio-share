@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"time"
 )
 
@@ -97,6 +98,7 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 
 		if tagsJSON.Valid {
 			if err := json.Unmarshal([]byte(tagsJSON.String), &req.Tags); err != nil {
+				log.Printf("requests: failed to unmarshal tags for id=%d url=%s: %v", req.ID, req.SubmittedURL, err)
 				req.Tags = []Tag{}
 			}
 		} else {
@@ -134,7 +136,7 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 	}
 
 	result, err := s.db.DB().Exec(`
-		INSERT INTO source_requests (submitted_url, title, tags, status, created_at, updated_at)
+		INSERT OR IGNORE INTO source_requests (submitted_url, title, tags, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, submittedURL, title, string(tagsJSON), initialStatus, now, now)
 	if err != nil {
@@ -144,6 +146,9 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 	id, err := result.LastInsertId()
 	if err != nil {
 		return nil, err
+	}
+	if id == 0 {
+		return nil, nil
 	}
 
 	return &SourceRequest{

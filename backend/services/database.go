@@ -113,6 +113,7 @@ func (d *Database) migrate() {
 		CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url);
 	`
 	if _, err := d.db.Exec(indexes); err != nil {
 		log.Printf("Warning: could not create new indexes: %v", err)

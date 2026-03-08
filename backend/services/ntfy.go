@@ -39,7 +39,12 @@ func (n *NtfyService) SendShareNotification(requestURL string) error {
 
 	var actions string
 	if n.reviewURL != "" {
-		actions = fmt.Sprintf("view, Review, %s?Channel=%s", n.reviewURL, url.QueryEscape(requestURL))
+		if u, err := url.Parse(n.reviewURL); err == nil {
+			q := u.Query()
+			q.Set("Channel", requestURL)
+			u.RawQuery = q.Encode()
+			actions = fmt.Sprintf("view, Review, %s", u.String())
+		}
 	}
 
 	return n.send(body, "New Audio Source Request", "audio,request,source", actions)

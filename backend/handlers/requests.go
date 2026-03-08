@@ -2,12 +2,26 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/onion/audio-share-backend/services"
 )
+
+var validRequestStatuses = map[string]bool{
+	"requested":   true,
+	"downloading": true,
+	"indexing":    true,
+	"added":       true,
+	"rejected":    true,
+}
+
+func isValidRequestStatus(s string) bool {
+	return validRequestStatuses[s]
+}
 
 type RequestsHandler struct {
 	service *services.RequestsService
@@ -58,6 +72,7 @@ func (h *RequestsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *RequestsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.GetAllGroupedByStatus()
 	if err != nil {
+		log.Printf("requests: failed to fetch: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch requests"})
 		return
 	}
@@ -81,26 +96,28 @@ func (h *RequestsHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, err := url.ParseRequestURI(body.SubmittedURL); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Please enter a valid URL"})
+		return
+	}
+
 	if body.Tags == nil {
 		body.Tags = []services.Tag{}
 	}
 
-	validStatuses := map[string]bool{
-		"requested":   true,
-		"downloading": true,
-		"indexing":    true,
-		"added":       true,
-		"rejected":    true,
-	}
-
-	if body.Status != nil && !validStatuses[*body.Status] {
+	if body.Status != nil && !isValidRequestStatus(*body.Status) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid status"})
 		return
 	}
 
 	request, err := h.service.Create(body.Title, body.SubmittedURL, body.Tags, body.Status)
 	if err != nil {
+		log.Printf("requests: failed to create: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create request"})
+		return
+	}
+	if request == nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "A request for this URL already exists"})
 		return
 	}
 
@@ -120,20 +137,13 @@ func (h *RequestsHandler) handleUpdateStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	validStatuses := map[string]bool{
-		"requested":   true,
-		"downloading": true,
-		"indexing":    true,
-		"added":       true,
-		"rejected":    true,
-	}
-
-	if !validStatuses[body.Status] {
+	if !isValidRequestStatus(body.Status) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid status"})
 		return
 	}
 
 	if err := h.service.UpdateStatus(id, body.Status, body.FolderShareKey); err != nil {
+		log.Printf("requests: failed to update status for id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update status"})
 		return
 	}
@@ -154,11 +164,17 @@ func (h *RequestsHandler) handleUpdate(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
+	if body.Title == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Title is required"})
+		return
+	}
+
 	if body.Tags == nil {
 		body.Tags = []services.Tag{}
 	}
 
 	if err := h.service.Update(id, body.Title, body.Tags); err != nil {
+		log.Printf("requests: failed to update id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update request"})
 		return
 	}
@@ -174,6 +190,7 @@ func (h *RequestsHandler) handleDelete(w http.ResponseWriter, r *http.Request, i
 	}
 
 	if err := h.service.Delete(id); err != nil {
+		log.Printf("requests: failed to delete id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to delete request"})
 		return
 	}

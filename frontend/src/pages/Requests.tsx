@@ -50,9 +50,9 @@ function RequestCard({ request, accentColor }: { request: SourceRequest; accentC
 
                 {request.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                        {request.tags.map((tag) => (
+                        {request.tags.map((tag, i) => (
                             <span
-                                key={`${tag.name}-${tag.color}`}
+                                key={`${i}-${tag.name}-${tag.color}`}
                                 className="text-xs px-1.5 py-0.5 rounded-full text-white"
                                 style={{ backgroundColor: tag.color }}
                             >

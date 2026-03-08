@@ -134,20 +134,23 @@ func (s *SearchService) RebuildIndex() error {
 	log.Printf("Index rebuild completed in %v", elapsed)
 
 	if s.webhookService != nil && s.webhookService.IsConfigured() {
-		newFolders, err := s.getNewFoldersForWebhook(startSQL)
+		folders, err := s.getIndexedFoldersWithURLForWebhook(startSQL)
 		if err != nil {
-			log.Printf("Error fetching new folders for webhook: %v", err)
-		} else if err := s.webhookService.SendIndexComplete(elapsed, newFolders); err != nil {
+			log.Printf("Error fetching folders for webhook: %v", err)
+		} else if err := s.webhookService.SendIndexComplete(elapsed, folders); err != nil {
 			log.Printf("Error sending webhook: %v", err)
 		} else {
-			log.Printf("Webhook sent successfully with %d new folders", len(newFolders))
+			log.Printf("Webhook sent successfully with %d folders", len(folders))
 		}
 	}
 
 	return nil
 }
 
-func (s *SearchService) getNewFoldersForWebhook(startSQL string) ([]NewFolder, error) {
+// getIndexedFoldersWithURLForWebhook returns all folders with an original_url that were
+// present (or re-indexed) during this run. The name reflects that this includes both
+// newly added and re-indexed folders — the webhook consumer needs all of them.
+func (s *SearchService) getIndexedFoldersWithURLForWebhook(startSQL string) ([]NewFolder, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT share_key, name, original_url
 		FROM folders
@@ -159,7 +162,7 @@ func (s *SearchService) getNewFoldersForWebhook(startSQL string) ([]NewFolder, e
 	}
 	defer rows.Close()
 
-	var newFolders []NewFolder
+	folders := make([]NewFolder, 0)
 	for rows.Next() {
 		var shareKey, name string
 		var originalURL *string
@@ -170,14 +173,14 @@ func (s *SearchService) getNewFoldersForWebhook(startSQL string) ([]NewFolder, e
 		if originalURL != nil {
 			url = *originalURL
 		}
-		newFolders = append(newFolders, NewFolder{
+		folders = append(folders, NewFolder{
 			ShareKey:    shareKey,
 			Name:        name,
 			OriginalURL: url,
 		})
 	}
 
-	return newFolders, nil
+	return folders, nil
 }
 
 func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath string) error {
