@@ -143,12 +143,17 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 		return nil, err
 	}
 
-	id, err := result.LastInsertId()
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return nil, err
 	}
-	if id == 0 {
+	if affected == 0 {
 		return nil, nil
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
 	}
 
 	return &SourceRequest{

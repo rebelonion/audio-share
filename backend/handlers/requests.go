@@ -96,7 +96,7 @@ func (h *RequestsHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := url.ParseRequestURI(body.SubmittedURL); err != nil {
+	if u, err := url.ParseRequestURI(body.SubmittedURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Please enter a valid URL"})
 		return
 	}

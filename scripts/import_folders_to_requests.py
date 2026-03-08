@@ -61,6 +61,7 @@ def main():
                    VALUES (?, ?, 'added', ?, ?, ?, ?)''',
                 (url, folder['name'], json.dumps(tags), folder['share_key'], folder['modified_at'] or now, now),
             )
+            existing.add(url)
             print(f'  added: {folder["name"]} ({url})')
             inserted += 1
 

@@ -60,7 +60,7 @@ func main() {
 	securityHeaders := middleware.NewSecurityHeaders(cfg.UmamiURL)
 	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)
 	if cfg.RequestsAPIKey == "" {
-		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are unprotected")
+		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are disabled")
 	}
 
 	mux := http.NewServeMux()
