@@ -23,7 +23,9 @@ export default function Browse() {
                 <title>{folderName} - Audio Browser</title>
                 <meta name="description" content={`Browse ${folderName} audio files and folders`} />
             </Helmet>
-            <BrowseClient initialPath={pathStr} />
+            <div className="max-w-7xl mx-auto">
+                <BrowseClient initialPath={pathStr} />
+            </div>
         </>
     );
 }

@@ -20,19 +20,18 @@ func NewRequestsHandler(service *services.RequestsService) *RequestsHandler {
 type createRequestBody struct {
 	Title        string         `json:"title"`
 	SubmittedURL string         `json:"submittedUrl"`
-	ImageURL     *string        `json:"imageUrl,omitempty"`
 	Tags         []services.Tag `json:"tags"`
+	Status       *string        `json:"status,omitempty"`
 }
 
 type updateStatusBody struct {
-	Status         string  `json:"status"`
-	FolderShareKey *string `json:"folderShareKey,omitempty"`
+	Status         string                  `json:"status"`
+	FolderShareKey services.NullableString `json:"folderShareKey"`
 }
 
 type updateRequestBody struct {
-	Title    string         `json:"title"`
-	ImageURL *string        `json:"imageUrl,omitempty"`
-	Tags     []services.Tag `json:"tags"`
+	Title string         `json:"title"`
+	Tags  []services.Tag `json:"tags"`
 }
 
 func (h *RequestsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +85,20 @@ func (h *RequestsHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		body.Tags = []services.Tag{}
 	}
 
-	request, err := h.service.Create(body.Title, body.SubmittedURL, body.ImageURL, body.Tags)
+	validStatuses := map[string]bool{
+		"requested":   true,
+		"downloading": true,
+		"indexing":    true,
+		"added":       true,
+		"rejected":    true,
+	}
+
+	if body.Status != nil && !validStatuses[*body.Status] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid status"})
+		return
+	}
+
+	request, err := h.service.Create(body.Title, body.SubmittedURL, body.Tags, body.Status)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create request"})
 		return
@@ -146,7 +158,7 @@ func (h *RequestsHandler) handleUpdate(w http.ResponseWriter, r *http.Request, i
 		body.Tags = []services.Tag{}
 	}
 
-	if err := h.service.Update(id, body.Title, body.ImageURL, body.Tags); err != nil {
+	if err := h.service.Update(id, body.Title, body.Tags); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update request"})
 		return
 	}

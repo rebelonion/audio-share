@@ -62,10 +62,11 @@ type Config struct {
 
 	StaticDir string
 
-	NtfyURL      string
-	NtfyTopic    string
-	NtfyToken    string
-	NtfyPriority int
+	NtfyURL       string
+	NtfyTopic     string
+	NtfyToken     string
+	NtfyPriority  int
+	NtfyReviewURL string
 
 	RateLimitWindow      int // milliseconds
 	MaxRequestsPerWindow int
@@ -96,10 +97,11 @@ func Load() *Config {
 		ContentDir: getEnv("CONTENT_DIR", "./content"),
 		StaticDir:  getEnv("STATIC_DIR", "./static"),
 
-		NtfyURL:      getEnv("NTFY_URL", "https://ntfy.sh"),
-		NtfyTopic:    getEnv("NTFY_TOPIC", ""),
-		NtfyToken:    getEnv("NTFY_TOKEN", ""),
-		NtfyPriority: getEnvInt("NTFY_PRIORITY", 1),
+		NtfyURL:       getEnv("NTFY_URL", "https://ntfy.sh"),
+		NtfyTopic:     getEnv("NTFY_TOPIC", ""),
+		NtfyToken:     getEnv("NTFY_TOKEN", ""),
+		NtfyPriority:  getEnvInt("NTFY_PRIORITY", 1),
+		NtfyReviewURL: getEnv("NTFY_REVIEW_URL", ""),
 
 		RateLimitWindow:      getEnvInt("RATE_LIMIT_WINDOW", 60000),
 		MaxRequestsPerWindow: getEnvInt("MAX_REQUESTS_PER_WINDOW", 100),

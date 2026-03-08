@@ -34,7 +34,7 @@ func main() {
 		searchService.StartScheduledReindex(cfg.IndexSchedule)
 	}
 
-	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority)
+	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
 	playbackService := services.NewPlaybackService(db)
 	requestsService := services.NewRequestsService(db)
 

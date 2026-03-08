@@ -82,9 +82,7 @@ func (d *Database) migrate() {
 		CREATE TABLE IF NOT EXISTS source_requests (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			submitted_url TEXT NOT NULL,
-			canonical_id TEXT,
 			title TEXT NOT NULL,
-			image_url TEXT,
 			status TEXT NOT NULL DEFAULT 'requested',
 			tags TEXT DEFAULT '[]',
 			folder_share_key TEXT,

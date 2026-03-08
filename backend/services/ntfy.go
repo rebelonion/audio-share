@@ -8,18 +8,20 @@ import (
 )
 
 type NtfyService struct {
-	url      string
-	topic    string
-	token    string
-	priority int
+	url       string
+	topic     string
+	token     string
+	priority  int
+	reviewURL string
 }
 
-func NewNtfyService(url, topic, token string, priority int) *NtfyService {
+func NewNtfyService(url, topic, token string, priority int, reviewURL string) *NtfyService {
 	return &NtfyService{
-		url:      url,
-		topic:    topic,
-		token:    token,
-		priority: priority,
+		url:       url,
+		topic:     topic,
+		token:     token,
+		priority:  priority,
+		reviewURL: reviewURL,
 	}
 }
 
@@ -33,7 +35,13 @@ func (n *NtfyService) SendShareNotification(requestURL string) error {
 	}
 
 	body := fmt.Sprintf("New source request: %s", requestURL)
-	return n.send(body, "New Audio Source Request", "audio,request,source")
+
+	var actions string
+	if n.reviewURL != "" {
+		actions = fmt.Sprintf("view, Review, %s?Channel=%s", n.reviewURL, requestURL)
+	}
+
+	return n.send(body, "New Audio Source Request", "audio,request,source", actions)
 }
 
 func (n *NtfyService) SendContactNotification(topic, email, message string) error {
@@ -60,10 +68,10 @@ func (n *NtfyService) SendContactNotification(topic, email, message string) erro
 	}
 
 	body := fmt.Sprintf("Topic: %s\nEmail: %s\n\nMessage:\n%s", topicLabel, emailInfo, message)
-	return n.send(body, "New Contact Form Submission", "contact,message,form")
+	return n.send(body, "New Contact Form Submission", "contact,message,form", "")
 }
 
-func (n *NtfyService) send(body, title, tags string) error {
+func (n *NtfyService) send(body, title, tags, actions string) error {
 	endpoint := fmt.Sprintf("%s/%s", n.url, n.topic)
 
 	req, err := http.NewRequest("POST", endpoint, strings.NewReader(body))
@@ -75,6 +83,10 @@ func (n *NtfyService) send(body, title, tags string) error {
 	req.Header.Set("X-Title", title)
 	req.Header.Set("X-Priority", strconv.Itoa(n.priority))
 	req.Header.Set("X-Tags", tags)
+
+	if actions != "" {
+		req.Header.Set("X-Actions", actions)
+	}
 
 	if n.token != "" {
 		req.Header.Set("Authorization", "Bearer "+n.token)

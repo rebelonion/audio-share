@@ -13,12 +13,11 @@ type Tag struct {
 type SourceRequest struct {
 	ID             int64   `json:"id"`
 	SubmittedURL   string  `json:"submittedUrl"`
-	CanonicalID    *string `json:"canonicalId,omitempty"`
 	Title          string  `json:"title"`
-	ImageURL       *string `json:"imageUrl,omitempty"`
 	Status         string  `json:"status"`
 	Tags           []Tag   `json:"tags"`
 	FolderShareKey *string `json:"folderShareKey,omitempty"`
+	FolderPath     *string `json:"folderPath,omitempty"`
 	CreatedAt      string  `json:"createdAt"`
 	UpdatedAt      string  `json:"updatedAt"`
 }
@@ -31,6 +30,27 @@ type RequestsByStatus struct {
 	Rejected    []SourceRequest `json:"rejected"`
 }
 
+// NullableString distinguishes between a field being omitted (Set=false)
+// and explicitly set to null (Set=true, Value=nil) in JSON.
+type NullableString struct {
+	Value *string
+	Set   bool
+}
+
+func (n *NullableString) UnmarshalJSON(data []byte) error {
+	n.Set = true
+	if string(data) == "null" {
+		n.Value = nil
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	n.Value = &s
+	return nil
+}
+
 type RequestsService struct {
 	db *Database
 }
@@ -41,9 +61,10 @@ func NewRequestsService(db *Database) *RequestsService {
 
 func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT id, submitted_url, canonical_id, title, image_url, status, tags, folder_share_key, created_at, updated_at
-		FROM source_requests
-		ORDER BY created_at DESC
+		SELECT sr.id, sr.submitted_url, sr.title, sr.status, sr.tags, sr.folder_share_key, f.path, sr.created_at, sr.updated_at
+		FROM source_requests sr
+		LEFT JOIN folders f ON f.share_key = sr.folder_share_key
+		ORDER BY sr.created_at DESC
 	`)
 	if err != nil {
 		return nil, err
@@ -60,19 +81,18 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 
 	for rows.Next() {
 		var req SourceRequest
-		var canonicalID, imageURL, folderShareKey *string
+		var folderShareKey, folderPath *string
 		var tagsJSON string
 
 		if err := rows.Scan(
-			&req.ID, &req.SubmittedURL, &canonicalID, &req.Title, &imageURL,
-			&req.Status, &tagsJSON, &folderShareKey, &req.CreatedAt, &req.UpdatedAt,
+			&req.ID, &req.SubmittedURL, &req.Title,
+			&req.Status, &tagsJSON, &folderShareKey, &folderPath, &req.CreatedAt, &req.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
 
-		req.CanonicalID = canonicalID
-		req.ImageURL = imageURL
 		req.FolderShareKey = folderShareKey
+		req.FolderPath = folderPath
 
 		if err := json.Unmarshal([]byte(tagsJSON), &req.Tags); err != nil {
 			req.Tags = []Tag{}
@@ -95,7 +115,7 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 	return result, nil
 }
 
-func (s *RequestsService) Create(title, submittedURL string, imageURL *string, tags []Tag) (*SourceRequest, error) {
+func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status *string) (*SourceRequest, error) {
 	tagsJSON, err := json.Marshal(tags)
 	if err != nil {
 		return nil, err
@@ -103,10 +123,15 @@ func (s *RequestsService) Create(title, submittedURL string, imageURL *string, t
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
+	initialStatus := "requested"
+	if status != nil {
+		initialStatus = *status
+	}
+
 	result, err := s.db.DB().Exec(`
-		INSERT INTO source_requests (submitted_url, title, image_url, tags, created_at, updated_at)
+		INSERT INTO source_requests (submitted_url, title, tags, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, submittedURL, title, imageURL, string(tagsJSON), now, now)
+	`, submittedURL, title, string(tagsJSON), initialStatus, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -120,26 +145,34 @@ func (s *RequestsService) Create(title, submittedURL string, imageURL *string, t
 		ID:           id,
 		SubmittedURL: submittedURL,
 		Title:        title,
-		ImageURL:     imageURL,
-		Status:       "requested",
+		Status:       initialStatus,
 		Tags:         tags,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}, nil
 }
 
-func (s *RequestsService) UpdateStatus(id int64, status string, folderShareKey *string) error {
+func (s *RequestsService) UpdateStatus(id int64, status string, folderShareKey NullableString) error {
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+
+	if folderShareKey.Set {
+		_, err := s.db.DB().Exec(`
+			UPDATE source_requests
+			SET status = ?, folder_share_key = ?, updated_at = ?
+			WHERE id = ?
+		`, status, folderShareKey.Value, now, id)
+		return err
+	}
 
 	_, err := s.db.DB().Exec(`
 		UPDATE source_requests
-		SET status = ?, folder_share_key = ?, updated_at = ?
+		SET status = ?, updated_at = ?
 		WHERE id = ?
-	`, status, folderShareKey, now, id)
+	`, status, now, id)
 	return err
 }
 
-func (s *RequestsService) Update(id int64, title string, imageURL *string, tags []Tag) error {
+func (s *RequestsService) Update(id int64, title string, tags []Tag) error {
 	tagsJSON, err := json.Marshal(tags)
 	if err != nil {
 		return err
@@ -149,9 +182,9 @@ func (s *RequestsService) Update(id int64, title string, imageURL *string, tags 
 
 	_, err = s.db.DB().Exec(`
 		UPDATE source_requests
-		SET title = ?, image_url = ?, tags = ?, updated_at = ?
+		SET title = ?, tags = ?, updated_at = ?
 		WHERE id = ?
-	`, title, imageURL, string(tagsJSON), now, id)
+	`, title, string(tagsJSON), now, id)
 	return err
 }
 

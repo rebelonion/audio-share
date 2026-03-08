@@ -312,7 +312,7 @@ export default function FolderView({items}: FolderViewProps) {
                 </div>
             ) : (
                 <>
-                    <div className="mb-4 pr-12">
+                    <div className="mb-4">
                         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                             <div className="flex-1">
                                 <SearchBar value={searchQuery} onChange={setSearchQuery} />
@@ -362,12 +362,9 @@ export default function FolderView({items}: FolderViewProps) {
                     </div>
 
                     {/* Desktop view */}
-                    <div className="hidden md:block relative pr-12">
-                        {showAlphaScrollbar &&
-                            <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
-
+                    <div className="hidden md:flex items-start gap-2">
                         <div
-                            className="bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
+                            className="flex-1 min-w-0 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
                             <div className="overflow-x-auto scrollbar-hide" id="table-container">
                                 <table className="w-full table-fixed divide-y divide-[var(--border)]">
                                     <thead className="bg-[var(--card-hover)] sticky top-0 z-20">
@@ -444,14 +441,16 @@ export default function FolderView({items}: FolderViewProps) {
                                 </table>
                             </div>
                         </div>
+                        {showAlphaScrollbar && (
+                            <div className="sticky top-4 self-start">
+                                <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>
+                            </div>
+                        )}
                     </div>
 
                     {/* Mobile view */}
-                    <div className="md:hidden relative flex pr-10">
-                        {showAlphaScrollbar &&
-                            <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>}
-
-                        <div className="flex-grow h-full overflow-hidden" id="mobile-content-container">
+                    <div className="md:hidden flex items-start gap-1">
+                        <div className="flex-1 min-w-0" id="mobile-content-container">
                         {sortMethod === 'alpha' ? (
                                 Object.entries(itemsByLetter)
                                     .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b))
@@ -503,6 +502,11 @@ export default function FolderView({items}: FolderViewProps) {
                                 ))
                             )}
                         </div>
+                        {showAlphaScrollbar && (
+                            <div className="sticky top-4 self-start">
+                                <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

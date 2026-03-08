@@ -12,8 +12,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
     const [searchParams] = useSearchParams();
     const [availableLetters, setAvailableLetters] = useState<string[]>([]);
     const [activeLetter, setActiveLetter] = useState<string | null>(null);
-    const desktopScrollbarRef = useRef<HTMLDivElement>(null);
-    const mobileScrollbarRef = useRef<HTMLDivElement>(null);
+    const scrollbarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const sortOrder = searchParams?.get('order') === 'desc' ? 'desc' : 'asc';
@@ -26,7 +25,6 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
         setAvailableLetters(letters);
     }, [items, searchParams]);
 
-
     const handleLetterClick = useCallback((letter: string) => {
         setActiveLetter(letter);
         onScrollToLetterAction(letter);
@@ -37,110 +35,59 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
     }, [onScrollToLetterAction]);
 
     const scrollUp = useCallback(() => {
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-        const scrollElement = isMobile ? mobileScrollbarRef.current : desktopScrollbarRef.current;
-        if (scrollElement) {
-            scrollElement.scrollBy({ top: -200, behavior: 'smooth' });
+        if (scrollbarRef.current) {
+            scrollbarRef.current.scrollBy({ top: -200, behavior: 'smooth' });
         }
     }, []);
 
     const scrollDown = useCallback(() => {
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-        const scrollElement = isMobile ? mobileScrollbarRef.current : desktopScrollbarRef.current;
-        if (scrollElement) {
-            scrollElement.scrollBy({ top: 200, behavior: 'smooth' });
+        if (scrollbarRef.current) {
+            scrollbarRef.current.scrollBy({ top: 200, behavior: 'smooth' });
         }
     }, []);
 
     if (availableLetters.length <= 1) {
-        return null; // Don't show scrollbar if there's only one or no letters
+        return null;
     }
 
     return (
-        <>
-            {/* Desktop scrollbar */}
-            <div className="hidden md:block h-full">
-                <div className="fixed right-3 top-1/2 transform -translate-y-1/2 z-30 flex flex-col items-center">
-                    <button
-                        className="w-6 h-6 flex items-center justify-center bg-[var(--card)] rounded-lg shadow-lg mb-1 opacity-80 hover:opacity-100 transition-opacity hover:bg-[var(--card-hover)]"
-                        onClick={scrollUp}
-                        aria-label="Scroll up"
-                    >
-                        <ChevronUp size={16} />
-                    </button>
+        <div className="flex flex-col items-center">
+            <button
+                className="w-5 h-5 md:w-6 md:h-6 flex items-center justify-center bg-[var(--card)] rounded-lg shadow-lg mb-1 opacity-80 hover:opacity-100 transition-opacity hover:bg-[var(--card-hover)]"
+                onClick={scrollUp}
+                aria-label="Scroll up"
+            >
+                <ChevronUp size={12} />
+            </button>
 
-                    <div
-                        ref={desktopScrollbarRef}
-                        className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-1 max-h-[60vh] overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100 transition-opacity"
-                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    >
-                        {availableLetters.map(letter => (
-                            <button
-                                key={`desktop-${letter}`}
-                                data-letter={letter}
-                                className={`w-6 h-6 text-xs flex items-center justify-center rounded-md shrink-0 ${
-                                    activeLetter === letter
-                                        ? 'bg-[var(--primary)] text-white'
-                                        : 'hover:bg-[var(--card-hover)] text-[var(--foreground)]'
-                                }`}
-                                onClick={() => handleLetterClick(letter)}
-                            >
-                                {letter}
-                            </button>
-                        ))}
-                    </div>
-
+            <div
+                ref={scrollbarRef}
+                className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 md:p-1 max-h-[60vh] overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100 transition-opacity"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+                {availableLetters.map(letter => (
                     <button
-                        className="w-6 h-6 flex items-center justify-center bg-[var(--card)] rounded-lg shadow-lg mt-1 opacity-80 hover:opacity-100 transition-opacity hover:bg-[var(--card-hover)]"
-                        onClick={scrollDown}
-                        aria-label="Scroll down"
+                        key={letter}
+                        data-letter={letter}
+                        className={`w-5 h-5 md:w-6 md:h-6 text-[0.65rem] md:text-xs flex items-center justify-center rounded-md shrink-0 ${
+                            activeLetter === letter
+                                ? 'bg-[var(--primary)] text-white'
+                                : 'hover:bg-[var(--card-hover)] text-[var(--foreground)]'
+                        }`}
+                        onClick={() => handleLetterClick(letter)}
                     >
-                        <ChevronDown size={16} />
+                        {letter}
                     </button>
-                </div>
+                ))}
             </div>
 
-            {/* Mobile scrollbar */}
-            <div className="md:hidden block">
-                <div className="fixed top-1/2 right-1 transform -translate-y-1/2 z-30 flex flex-col items-center">
-                    <button
-                        className="w-5 h-5 flex items-center justify-center bg-[var(--card)] rounded-lg shadow-lg mb-1 opacity-80 hover:opacity-100 transition-opacity hover:bg-[var(--card-hover)]"
-                        onClick={scrollUp}
-                        aria-label="Scroll up"
-                    >
-                        <ChevronUp size={12} />
-                    </button>
-
-                    <div
-                        ref={mobileScrollbarRef}
-                        className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 max-h-[60vh] overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100 transition-opacity"
-                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    >
-                        {availableLetters.map(letter => (
-                            <button
-                                key={`mobile-${letter}`}
-                                data-letter={letter}
-                                className={`w-5 h-5 text-[0.65rem] flex items-center justify-center rounded-md shrink-0 ${
-                                    activeLetter === letter
-                                        ? 'bg-[var(--primary)] text-white'
-                                        : 'hover:bg-[var(--card-hover)] text-[var(--foreground)]'
-                                }`}
-                                onClick={() => handleLetterClick(letter)}
-                            >
-                                {letter}
-                            </button>
-                        ))}
-                    </div>
-
-                    <button
-                        className="w-5 h-5 flex items-center justify-center bg-[var(--card)] rounded-lg shadow-lg mt-1 opacity-80 hover:opacity-100 transition-opacity hover:bg-[var(--card-hover)]"
-                        onClick={scrollDown}
-                        aria-label="Scroll down"
-                    >
-                        <ChevronDown size={12} />
-                    </button>
-                </div>
-            </div>
-        </>
+            <button
+                className="w-5 h-5 md:w-6 md:h-6 flex items-center justify-center bg-[var(--card)] rounded-lg shadow-lg mt-1 opacity-80 hover:opacity-100 transition-opacity hover:bg-[var(--card-hover)]"
+                onClick={scrollDown}
+                aria-label="Scroll down"
+            >
+                <ChevronDown size={12} />
+            </button>
+        </div>
     );
 }

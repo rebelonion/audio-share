@@ -121,6 +121,7 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.deleted = 0
+		AND pe.played_at >= datetime('now', '-7 days')
 		GROUP BY pe.audio_file_id
 		ORDER BY play_count DESC
 		LIMIT ?

@@ -48,12 +48,11 @@ export type RequestStatus = 'requested' | 'downloading' | 'indexing' | 'added' |
 export interface SourceRequest {
     id: number;
     submittedUrl: string;
-    canonicalId?: string;
     title: string;
-    imageUrl?: string;
     status: RequestStatus;
     tags: Tag[];
     folderShareKey?: string;
+    folderPath?: string;
     createdAt: string;
     updatedAt: string;
 }

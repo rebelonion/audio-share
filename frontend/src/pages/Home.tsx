@@ -31,14 +31,16 @@ export default function Home() {
                 <title>{DEFAULT_TITLE} - Home</title>
                 <meta name="description" content={DEFAULT_DESCRIPTION} />
             </Helmet>
-            <BrowseClient showTitle={true} />
-            {hasSections && (
-                <div className="mt-8 space-y-8 pr-10 md:pr-12">
-                    <TrackListSection title="Recently Played" tracks={recentTracks} />
-                    <TrackListSection title="Popular" tracks={popularTracks} />
-                    <TrackListSection title="Recently Added" tracks={newTracks} />
-                </div>
-            )}
+            <div className="max-w-7xl mx-auto">
+                <BrowseClient showTitle={true} />
+                {hasSections && (
+                    <div className="mt-8 space-y-8">
+                        <TrackListSection title="Recently Played" tracks={recentTracks} />
+                        <TrackListSection title="Popular" tracks={popularTracks} />
+                        <TrackListSection title="Recently Added" tracks={newTracks} />
+                    </div>
+                )}
+            </div>
         </>
     );
 }
