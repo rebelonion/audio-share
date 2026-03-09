@@ -77,7 +77,7 @@ function RequestCard({ request, accentColor }: { request: SourceRequest; accentC
                         {formatDate(request.createdAt)}
                     </span>
 
-                    {request.status === 'added' && request.folderPath && (
+                    {request.folderPath && (
                         <Link
                             to={`/browse/${request.folderPath.split('/').map(encodeURIComponent).join('/')}`}
                             className="text-xs text-[var(--primary)] hover:text-[var(--primary-hover)] flex items-center gap-1 flex-shrink-0"
