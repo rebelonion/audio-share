@@ -32,6 +32,7 @@ export default function Home() {
                 <meta name="description" content={DEFAULT_DESCRIPTION} />
             </Helmet>
             <div className="max-w-7xl mx-auto">
+                <h1 className="sr-only">{DEFAULT_TITLE}</h1>
                 <BrowseClient showTitle={true} />
                 {hasSections && (
                     <div className="mt-8 space-y-8">
