@@ -92,7 +92,7 @@ func main() {
 
 	mux.Handle("/", spaHandler)
 
-	handler := securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(mux)))
+	handler := securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, mux)))
 
 	log.Printf("Starting server on :%s", cfg.Port)
 	log.Printf("Audio directories: %v", fsService.GetSlugToDirectoryMap())
@@ -104,10 +104,15 @@ func main() {
 	}
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
+func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
+	allowed := make(map[string]bool, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = true
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if origin != "" && allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range, X-API-Key")

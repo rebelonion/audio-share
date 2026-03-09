@@ -88,6 +88,8 @@ type Config struct {
 	RequestsAPIKey    string
 	IndexWebhookURL   string
 	IndexWebhookToken string
+
+	CORSOrigins []string
 }
 
 func Load() *Config {
@@ -122,12 +124,27 @@ func Load() *Config {
 		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),
 		IndexWebhookURL:   getEnv("INDEX_WEBHOOK_URL", ""),
 		IndexWebhookToken: getEnv("INDEX_WEBHOOK_TOKEN", ""),
+
+		CORSOrigins: getEnvList("CORS_ORIGINS", []string{"http://localhost:5173"}),
 	}
 }
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvList(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		var result []string
+		for _, item := range strings.Split(value, ",") {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
+				result = append(result, trimmed)
+			}
+		}
+		return result
 	}
 	return defaultValue
 }
