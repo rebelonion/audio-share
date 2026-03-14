@@ -77,7 +77,8 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		isImage := rl.isImageRequest(path)
 		isShare := path == "/api/share" && r.Method == "POST"
 		isContact := path == "/api/contact" && r.Method == "POST"
-		isRange := r.Header.Get("Range") != ""
+		rangeHeader := r.Header.Get("Range")
+		isSeekRequest := rangeHeader != "" && !strings.HasPrefix(rangeHeader, "bytes=0-")
 
 		rl.mu.Lock()
 		data, exists := rl.limits[ip]
@@ -108,7 +109,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			data.shareCount++
 		} else if isContact {
 			data.contactCount++
-		} else if !isImage && !(isAudio && isRange) {
+		} else if !isImage && !(isAudio && isSeekRequest) {
 			if isAudio {
 				data.audioCount++
 			} else {
