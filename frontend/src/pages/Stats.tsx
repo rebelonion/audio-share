@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { AudioChart, SourcesChart } from '@/components/StatsCharts';
 import { API_BASE } from '@/lib/api';
-import { DEFAULT_TITLE } from '@/lib/config';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 
 interface DayData {
     date: string;
@@ -64,7 +64,7 @@ export default function Stats() {
         <>
             <Helmet>
                 <title>{DEFAULT_TITLE} - Stats</title>
-                <meta name="description" content="Statistics and analytics for audio archive" />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Stats`} />
             </Helmet>
             <div className="max-w-7xl mx-auto">
                 <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]">Statistics</h1>

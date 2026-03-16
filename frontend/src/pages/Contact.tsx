@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { useUmami } from '@/hooks/useUmami';
 import { API_BASE } from '@/lib/api';
-import { DEFAULT_TITLE } from '@/lib/config';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 
 export default function Contact() {
     const { track } = useUmami();
@@ -77,7 +77,7 @@ export default function Contact() {
         <>
             <Helmet>
                 <title>{DEFAULT_TITLE} - Contact</title>
-                <meta name="description" content="Contact us with questions or feedback" />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Contact`} />
             </Helmet>
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">

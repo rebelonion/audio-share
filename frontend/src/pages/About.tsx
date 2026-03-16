@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { API_BASE } from '@/lib/api';
-import { DEFAULT_TITLE } from '@/lib/config';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 
 export default function About() {
     const [markdown, setMarkdown] = useState<string>('');
@@ -48,7 +48,7 @@ export default function About() {
         <>
             <Helmet>
                 <title>{DEFAULT_TITLE} - About</title>
-                <meta name="description" content="About this audio sharing application" />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} — About`} />
             </Helmet>
             <div className="max-w-4xl mx-auto">
                 {error && (

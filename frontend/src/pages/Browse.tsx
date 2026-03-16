@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import BrowseClient from '@/components/BrowseClient';
+import { DEFAULT_DESCRIPTION } from '@/lib/config';
 
 export default function Browse() {
     const location = useLocation();
@@ -21,7 +22,7 @@ export default function Browse() {
         <>
             <Helmet>
                 <title>{folderName} - Audio Browser</title>
-                <meta name="description" content={`Browse ${folderName} audio files and folders`} />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Browse ${folderName}`} />
             </Helmet>
             <div className="max-w-7xl mx-auto">
                 <BrowseClient initialPath={pathStr} />

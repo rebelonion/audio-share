@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router';
 import { ExternalLink, Folder } from 'lucide-react';
 import { fetchRequests } from '@/lib/api';
-import { DEFAULT_TITLE } from '@/lib/config';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import type { SourceRequest, RequestsByStatus, RequestStatus } from '@/types';
 
 const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string }> = {
@@ -181,7 +181,7 @@ export default function Requests() {
         <div className="-mb-8">
             <Helmet>
                 <title>{DEFAULT_TITLE} - Requests</title>
-                <meta name="description" content="View source request status and progress" />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Requests`} />
             </Helmet>
             <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6 text-[var(--foreground)] text-center">
                 Source Requests

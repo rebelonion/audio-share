@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
+import { Helmet } from 'react-helmet-async';
 import { Home, Music, FolderOpen } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
 import { API_BASE, recordPlayEvent } from '@/lib/api';
-import { DEFAULT_TITLE } from '@/lib/config';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
 
 interface AudioMeta {
@@ -66,17 +67,22 @@ export default function Share() {
         ? meta.parentPath.split('/').pop() || meta.parentPath
         : null;
 
-    useEffect(() => {
-        const title = isLoading
-            ? `Loading... - ${DEFAULT_TITLE}`
-            : notFound
-                ? `Not Found - ${DEFAULT_TITLE}`
-                : `${displayTitle} - ${DEFAULT_TITLE}`;
-        document.title = title;
-    }, [isLoading, notFound, displayTitle]);
+    const pageTitle = isLoading
+        ? `Loading... - ${DEFAULT_TITLE}`
+        : notFound
+            ? `Not Found - ${DEFAULT_TITLE}`
+            : `${displayTitle} - ${DEFAULT_TITLE}`;
+
+    const pageDescription = meta?.description
+        ? meta.description
+        : `${DEFAULT_DESCRIPTION} — ${displayTitle}`;
 
     return (
         <>
+            <Helmet>
+                <title>{pageTitle}</title>
+                <meta name="description" content={pageDescription} />
+            </Helmet>
             {isLoading ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--primary)] mb-4"></div>

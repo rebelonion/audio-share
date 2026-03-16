@@ -13,7 +13,6 @@ export default function Layout() {
     <>
       <Helmet>
         <title>{DEFAULT_TITLE}</title>
-        <meta name="description" content={DEFAULT_DESCRIPTION} />
         <link rel="icon" href="/favicon.svg" />
         {UMAMI_URL && UMAMI_WEBSITE_ID && (
           <script

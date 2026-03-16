@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Search as SearchIcon, Folder, Music, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { searchAudio, SearchResult } from '@/lib/api';
-import { DEFAULT_TITLE } from '@/lib/config';
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
 
 const RESULTS_PER_PAGE = 50;
@@ -131,7 +131,7 @@ export default function Search() {
         <>
             <Helmet>
                 <title>Search - {DEFAULT_TITLE}</title>
-                <meta name="description" content="Search for audio files across the entire library" />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Search`} />
             </Helmet>
 
             <div className="max-w-4xl mx-auto">
