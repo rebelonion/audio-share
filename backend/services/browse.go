@@ -1,5 +1,23 @@
 package services
 
+func (s *SearchService) GetAllFolderPaths() ([]string, error) {
+	rows, err := s.db.DB().Query(`SELECT path FROM folders ORDER BY path ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
 func (s *SearchService) BrowseDirectory(path string) (*DirectoryContents, error) {
 	folders, err := s.getFoldersByParentPath(path)
 	if err != nil {

@@ -48,7 +48,7 @@ func (h *ContentHandler) AboutHandler() http.HandlerFunc {
 }
 
 func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
-	paths := []string{"/", "/about", "/contact", "/stats"}
+	staticPaths := []string{"/", "/about", "/contact", "/stats"}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		scheme := "https"
@@ -59,19 +59,43 @@ func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
 		}
 		baseURL := scheme + "://" + r.Host
 
+		folderPaths, err := h.searchService.GetAllFolderPaths()
+		if err != nil {
+			log.Printf("Error getting folder paths for sitemap: %v", err)
+			folderPaths = nil
+		}
+
 		var b strings.Builder
 		b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
 		b.WriteString("\n")
 		b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
 		b.WriteString("\n")
-		for _, p := range paths {
+		for _, p := range staticPaths {
 			fmt.Fprintf(&b, "  <url><loc>%s%s</loc></url>\n", baseURL, p)
+		}
+		for _, p := range folderPaths {
+			encoded := encodePath(p)
+			fmt.Fprintf(&b, "  <url><loc>%s/browse/%s</loc></url>\n", baseURL, encoded)
 		}
 		b.WriteString("</urlset>\n")
 
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		w.Write([]byte(b.String()))
 	}
+}
+
+func encodePath(p string) string {
+	segments := strings.Split(p, "/")
+	for i, s := range segments {
+		segments[i] = strings.NewReplacer(
+			" ", "%20",
+			"#", "%23",
+			"?", "%3F",
+			"&", "%26",
+			"+", "%2B",
+		).Replace(s)
+	}
+	return strings.Join(segments, "/")
 }
 
 func (h *ContentHandler) ManifestHandler() http.HandlerFunc {
