@@ -54,7 +54,7 @@ func main() {
 		UmamiURL:           cfg.UmamiURL,
 		UmamiWebsiteID:     cfg.UmamiWebsiteID,
 	}
-	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig)
+	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, db.DB())
 
 	rateLimiter := middleware.NewRateLimiter(cfg)
 	securityHeaders := middleware.NewSecurityHeaders(cfg.UmamiURL)
