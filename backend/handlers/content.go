@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"log"
 	"net/http"
@@ -72,17 +73,23 @@ func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
 		b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
 		b.WriteString("\n")
 		for _, p := range staticPaths {
-			fmt.Fprintf(&b, "  <url><loc>%s%s</loc></url>\n", baseURL, p)
+			fmt.Fprintf(&b, "  <url><loc>%s</loc></url>\n", xmlEscape(baseURL+p))
 		}
 		for _, p := range folderPaths {
 			encoded := encodePath(p)
-			fmt.Fprintf(&b, "  <url><loc>%s/browse/%s</loc></url>\n", baseURL, encoded)
+			fmt.Fprintf(&b, "  <url><loc>%s</loc></url>\n", xmlEscape(baseURL+"/browse/"+encoded))
 		}
 		b.WriteString("</urlset>\n")
 
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		w.Write([]byte(b.String()))
 	}
+}
+
+func xmlEscape(s string) string {
+	var b strings.Builder
+	xml.EscapeText(&b, []byte(s))
+	return b.String()
 }
 
 func encodePath(p string) string {
