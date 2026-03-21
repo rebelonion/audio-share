@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,13 +88,7 @@ func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
 func encodePath(p string) string {
 	segments := strings.Split(p, "/")
 	for i, s := range segments {
-		segments[i] = strings.NewReplacer(
-			" ", "%20",
-			"#", "%23",
-			"?", "%3F",
-			"&", "%26",
-			"+", "%2B",
-		).Replace(s)
+		segments[i] = url.PathEscape(s)
 	}
 	return strings.Join(segments, "/")
 }
