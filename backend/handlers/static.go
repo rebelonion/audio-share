@@ -87,6 +87,7 @@ type pageMeta struct {
 	h1          string
 	imageURL    string // absolute URL, empty if none
 	ogType      string // og:type value, defaults to "website"
+	notFound    bool
 }
 
 func siteOrigin(r *http.Request) string {
@@ -151,6 +152,8 @@ func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
 
 	// Static pages
 	switch urlPath {
+	case "/", "/index.html":
+		return pageMeta{title: h.config.DefaultTitle, description: h.config.DefaultDescription, h1: h.config.DefaultTitle}
 	case "/about":
 		return pageMeta{title: "About - " + h.config.DefaultTitle, description: h.config.DefaultDescription, h1: "About"}
 	case "/contact":
@@ -163,11 +166,12 @@ func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
 		return pageMeta{title: "Requests - " + h.config.DefaultTitle, description: h.config.DefaultDescription, h1: "Requests"}
 	}
 
-	// Default (home page)
+	// Unknown route — return 404
 	return pageMeta{
-		title:       h.config.DefaultTitle,
+		title:       "Not Found - " + h.config.DefaultTitle,
 		description: h.config.DefaultDescription,
-		h1:          h.config.DefaultTitle,
+		h1:          "Not Found",
+		notFound:    true,
 	}
 }
 
@@ -214,5 +218,8 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 	doc = strings.Replace(doc, `<div id="root"></div>`, srH1+`<div id="root"></div>`, 1)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if meta.notFound {
+		w.WriteHeader(http.StatusNotFound)
+	}
 	w.Write([]byte(doc))
 }
