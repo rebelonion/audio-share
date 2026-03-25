@@ -25,7 +25,7 @@ func (s *SearchService) GetAudioStats() (*AudioStats, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT DATE(downloaded_at) as date, COUNT(*) as count
 		FROM audio_files
-		WHERE downloaded_at IS NOT NULL
+		WHERE downloaded_at IS NOT NULL AND deleted = 0
 		GROUP BY date
 		ORDER BY date
 	`)
@@ -57,7 +57,7 @@ func (s *SearchService) GetSourcesStats() (*SourcesStats, error) {
 		FROM (
 			SELECT source_path, MIN(downloaded_at) as first_seen
 			FROM audio_files
-			WHERE downloaded_at IS NOT NULL AND source_path IS NOT NULL
+			WHERE downloaded_at IS NOT NULL AND source_path IS NOT NULL AND deleted = 0
 			GROUP BY source_path
 		) s
 		JOIN folders f ON f.path = s.source_path
