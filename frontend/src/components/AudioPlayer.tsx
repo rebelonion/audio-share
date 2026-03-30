@@ -16,6 +16,7 @@ import {
     Loader2
 } from 'lucide-react';
 import {useAudioPlayer} from '@/hooks/useAudioPlayer';
+import WaveformDisplay from '@/components/WaveformDisplay';
 
 interface AudioPlayerProps {
     src: string;
@@ -46,6 +47,7 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
         isLoading,
         artist,
         track,
+        waveformPeaks,
         progressRef,
         togglePlay,
         toggleMute,
@@ -176,19 +178,30 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
                     )}
 
                     <div className="mb-3">
-                        <div
-                            ref={progressRef}
-                            className="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden cursor-pointer transition-height duration-200 hover:h-3 mb-2"
-                            onClick={handleProgressClick}
-                        >
+                        {waveformPeaks ? (
+                            <WaveformDisplay
+                                peaks={waveformPeaks}
+                                progress={currentTime / (duration || (metadata?.duration || 1))}
+                                onClick={handleProgressClick}
+                                progressRef={progressRef}
+                                height={32}
+                                className="mb-2"
+                            />
+                        ) : (
                             <div
-                                className="h-full bg-[var(--primary)] rounded-full transition-all duration-100"
-                                style={{
-                                    width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
-                                    opacity: audioLoaded ? 1 : 0.7
-                                }}
-                            ></div>
-                        </div>
+                                ref={progressRef}
+                                className="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden cursor-pointer transition-height duration-200 hover:h-3 mb-2"
+                                onClick={handleProgressClick}
+                            >
+                                <div
+                                    className="h-full bg-[var(--primary)] rounded-full transition-all duration-100"
+                                    style={{
+                                        width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
+                                        opacity: audioLoaded ? 1 : 0.7
+                                    }}
+                                ></div>
+                            </div>
+                        )}
 
                         <div className="flex justify-between items-center">
                             <span className="text-xs text-[var(--muted-foreground)] tabular-nums">

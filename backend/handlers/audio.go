@@ -50,6 +50,9 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if strings.HasSuffix(path, "/meta") {
 		key = strings.TrimSuffix(path, "/meta")
 		action = "meta"
+	} else if strings.HasSuffix(path, "/waveform") {
+		key = strings.TrimSuffix(path, "/waveform")
+		action = "waveform"
 	} else {
 		key = path
 		action = "stream"
@@ -67,6 +70,8 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleThumbnail(w, r, key)
 	case "meta":
 		h.handleMeta(w, r, key)
+	case "waveform":
+		h.handleWaveform(w, r, key)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
@@ -261,6 +266,38 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
 	json.NewEncoder(w).Encode(meta)
+}
+
+func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, key string) {
+	var fileID int64
+	err := h.db.QueryRow(`
+		SELECT id FROM audio_files WHERE share_key = ? AND deleted = 0
+	`, key).Scan(&fileID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	var peaks string
+	err = h.db.QueryRow(`
+		SELECT peaks FROM waveform_cache WHERE audio_file_id = ?
+	`, fileID).Scan(&peaks)
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	json.NewEncoder(w).Encode(map[string]string{"peaks": peaks})
 }
 
 type BrowseHandler struct {

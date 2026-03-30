@@ -23,6 +23,7 @@ export function useAudioPlayer(src: string) {
     const [metadata, setMetadata] = useState<MetadataType | null>(null);
     const [audioLoaded, setAudioLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [waveformPeaks, setWaveformPeaks] = useState<Uint8Array | null>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const progressRef = useRef<HTMLDivElement>(null);
@@ -92,6 +93,16 @@ export function useAudioPlayer(src: string) {
         const apiThumbUrl = `${API_BASE}/api/audio/key/${key}/thumbnail`;
         setThumbnail(null);
         setMetadata(null);
+        setWaveformPeaks(null);
+
+        fetch(`${API_BASE}/api/audio/key/${key}/waveform`, { signal })
+            .then(r => r.status === 200 ? r.json() : null)
+            .then(data => {
+                if (data?.peaks && !signal.aborted) {
+                    setWaveformPeaks(Uint8Array.from(atob(data.peaks), c => c.charCodeAt(0)));
+                }
+            })
+            .catch(() => {});
 
         fetch(apiThumbUrl, {
             method: 'HEAD',
@@ -376,6 +387,9 @@ export function useAudioPlayer(src: string) {
         isLoading,
         artist,
         track,
+
+        // Waveform
+        waveformPeaks,
 
         // Refs
         progressRef,

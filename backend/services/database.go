@@ -93,6 +93,13 @@ func (d *Database) migrate() {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status);
+
+		CREATE TABLE IF NOT EXISTS waveform_cache (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			audio_file_id INTEGER NOT NULL UNIQUE REFERENCES audio_files(id),
+			peaks TEXT NOT NULL,
+			generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 	`
 
 	if _, err := d.db.Exec(schema); err != nil {

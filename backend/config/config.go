@@ -90,6 +90,9 @@ type Config struct {
 	IndexWebhookToken string
 
 	CORSOrigins []string
+
+	WaveformCron        string
+	WaveformMaxDuration string
 }
 
 func Load() *Config {
@@ -126,6 +129,9 @@ func Load() *Config {
 		IndexWebhookToken: getEnv("INDEX_WEBHOOK_TOKEN", ""),
 
 		CORSOrigins: getEnvList("CORS_ORIGINS", []string{"http://localhost:5173"}),
+
+		WaveformCron:        getEnv("WAVEFORM_CRON", ""),
+		WaveformMaxDuration: getEnv("WAVEFORM_MAX_DURATION", "2h"),
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/onion/audio-share-backend/config"
 	"github.com/onion/audio-share-backend/handlers"
@@ -27,11 +28,28 @@ func main() {
 		os.Exit(0)
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "waveform" {
+		db := services.NewDatabase(cfg.DBPath)
+		defer db.Close()
+		waveformService := services.NewWaveformService(db.DB(), fsService)
+		maxDuration, err := time.ParseDuration(cfg.WaveformMaxDuration)
+		if err != nil {
+			maxDuration = 2 * time.Hour
+		}
+		waveformService.RunJob(maxDuration)
+		os.Exit(0)
+	}
+
 	db := services.NewDatabase(cfg.DBPath)
 	searchService := services.NewSearchService(db, fsService, webhookService)
 
 	if cfg.IndexSchedule != "" {
 		searchService.StartScheduledReindex(cfg.IndexSchedule)
+	}
+
+	if cfg.WaveformCron != "" {
+		waveformService := services.NewWaveformService(db.DB(), fsService)
+		waveformService.StartScheduledJob(cfg.WaveformCron, cfg.WaveformMaxDuration)
 	}
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)

@@ -13,7 +13,7 @@ A modern web application for browsing, playing, and sharing audio files from you
 - Browse your audio library with folder-based navigation (including from external directories)
 - **Global search** across the entire library by name, artist, title, or description
 - Stream audio files directly in the browser
-- Fully-featured audio player with playback controls, volume adjustment, and progress bar
+- Fully-featured audio player with playback controls, volume adjustment, and waveform visualizer
 - Display metadata for audio files including title, artist, and album art
 - Share links to specific audio files
 - Responsive design that works on all devices
@@ -101,6 +101,8 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |
 | `NTFY_TOPIC` | Ntfy topic for notifications | - |
 | `NTFY_TOKEN` | Ntfy authentication token | - |
+| `WAVEFORM_CRON` | Cron expression for waveform generation (e.g., `0 3 * * *`) | - (disabled) |
+| `WAVEFORM_MAX_DURATION` | Max time to spend generating waveforms per run (e.g., `2h`, `30m`) | `2h` |
 
 ## Audio Files Organization
 
@@ -193,6 +195,38 @@ INDEX_SCHEDULE="0 0 * * *" go run .    # Reindex daily at midnight
 ```
 
 If not set, the index is only rebuilt when you manually run the `reindex` command. Concurrent reindex attempts (e.g., a manual `reindex` while the scheduler is running) are prevented via a file lock — the second caller skips gracefully.
+
+## Waveform Visualization
+
+The audio player displays a filled waveform for each track. Waveform data is generated server-side using `ffmpeg` and stored in the database as 500 normalized amplitude peaks. The player shows the waveform immediately when available and falls back to a plain progress bar otherwise.
+
+Waveform generation requires `ffmpeg` and `ffprobe` to be available on the server (included in the Docker image).
+
+### Generating Waveforms
+
+Run manually to process all files that don't have waveform data yet (most recently downloaded first):
+
+```bash
+cd backend
+go run . waveform
+```
+
+Override the time limit for a single run:
+
+```bash
+WAVEFORM_MAX_DURATION=4h go run . waveform
+```
+
+### Automatic Waveform Generation
+
+Set `WAVEFORM_CRON` to run generation on a schedule. The job processes files until `WAVEFORM_MAX_DURATION` elapses, then stops cleanly and resumes at the next scheduled run:
+
+```bash
+WAVEFORM_CRON="0 3 * * *" go run .              # Run nightly at 3am, up to 2h
+WAVEFORM_CRON="0 3 * * *" WAVEFORM_MAX_DURATION="4h" go run .
+```
+
+If `WAVEFORM_CRON` is not set, no automatic generation occurs.
 
 ### Database Location
 

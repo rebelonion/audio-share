@@ -9,6 +9,7 @@ import {
     Loader2
 } from 'lucide-react';
 import {useAudioPlayer} from '@/hooks/useAudioPlayer';
+import WaveformDisplay from '@/components/WaveformDisplay';
 
 interface SharePagePlayerProps {
     src: string;
@@ -29,6 +30,7 @@ export default function SharePagePlayer({src, onPlay}: SharePagePlayerProps) {
         isLoading,
         artist,
         track,
+        waveformPeaks,
         progressRef,
         togglePlay,
         toggleMute,
@@ -68,19 +70,30 @@ export default function SharePagePlayer({src, onPlay}: SharePagePlayerProps) {
             )}
 
             <div className="mb-4">
-                <div
-                    ref={progressRef}
-                    className="w-full h-3 bg-[var(--border)] rounded-full overflow-hidden cursor-pointer transition-all duration-200 hover:h-4 mb-3"
-                    onClick={handleProgressClick}
-                >
+                {waveformPeaks ? (
+                    <WaveformDisplay
+                        peaks={waveformPeaks}
+                        progress={currentTime / (duration || (metadata?.duration || 1))}
+                        onClick={handleProgressClick}
+                        progressRef={progressRef}
+                        height={56}
+                        className="mb-3"
+                    />
+                ) : (
                     <div
-                        className="h-full bg-[var(--primary)] rounded-full transition-all duration-100"
-                        style={{
-                            width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
-                            opacity: audioLoaded ? 1 : 0.7
-                        }}
-                    ></div>
-                </div>
+                        ref={progressRef}
+                        className="w-full h-3 bg-[var(--border)] rounded-full overflow-hidden cursor-pointer transition-all duration-200 hover:h-4 mb-3"
+                        onClick={handleProgressClick}
+                    >
+                        <div
+                            className="h-full bg-[var(--primary)] rounded-full transition-all duration-100"
+                            style={{
+                                width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
+                                opacity: audioLoaded ? 1 : 0.7
+                            }}
+                        ></div>
+                    </div>
+                )}
 
                 <div className="flex justify-between items-center text-sm text-[var(--muted-foreground)] mb-4">
                     <span className="tabular-nums">
