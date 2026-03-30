@@ -41,7 +41,7 @@ export default function MobileItemName({ item }: ItemNameProps) {
                         </div>
                     </Link>
                 ) : (
-                    <div className="font-medium truncate">{item.name}</div>
+                    <div className="font-medium truncate">{item.title || item.name}</div>
                 )}
             </div>
         </div>

@@ -136,6 +136,7 @@ func (s *SearchService) audioToFileSystemItem(a AudioFileRecord) FileSystemItem 
 		ModifiedAt: a.ModifiedAt,
 		Type:       "audio",
 		MimeType:   a.MimeType,
+		Title:      a.Title,
 		ShareKey:   a.ShareKey,
 	}
 }

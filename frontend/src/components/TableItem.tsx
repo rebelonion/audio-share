@@ -46,7 +46,7 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
                 ) : (
                     <div className="flex items-center text-[var(--foreground)]">
                         <Music className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)]"/>
-                        <span className="truncate" title={item.name}>{item.name}</span>
+                        <span className="truncate" title={item.title || item.name}>{item.title || item.name}</span>
                     </div>
                 )}
             </td>

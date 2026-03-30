@@ -6,6 +6,7 @@ export interface AudioFile {
     modifiedAt: string;
     type: 'audio';
     mimeType: string;
+    title?: string;
     shareKey?: string;
 }
 
