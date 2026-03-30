@@ -31,7 +31,7 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "waveform" {
 		db := services.NewDatabase(cfg.DBPath)
 		defer db.Close()
-		waveformService := services.NewWaveformService(db.DB(), fsService)
+		waveformService := services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers)
 		maxDuration, err := time.ParseDuration(cfg.WaveformMaxDuration)
 		if err != nil {
 			maxDuration = 2 * time.Hour
@@ -48,7 +48,7 @@ func main() {
 	}
 
 	if cfg.WaveformCron != "" {
-		waveformService := services.NewWaveformService(db.DB(), fsService)
+		waveformService := services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers)
 		waveformService.StartScheduledJob(cfg.WaveformCron, cfg.WaveformMaxDuration)
 	}
 

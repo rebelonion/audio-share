@@ -93,6 +93,7 @@ type Config struct {
 
 	WaveformCron        string
 	WaveformMaxDuration string
+	WaveformWorkers     int
 }
 
 func Load() *Config {
@@ -132,6 +133,7 @@ func Load() *Config {
 
 		WaveformCron:        getEnv("WAVEFORM_CRON", ""),
 		WaveformMaxDuration: getEnv("WAVEFORM_MAX_DURATION", "2h"),
+		WaveformWorkers:     getEnvInt("WAVEFORM_WORKERS", 1),
 	}
 }
 

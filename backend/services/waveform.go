@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -24,12 +25,16 @@ const waveformMinDB = -52.0
 type WaveformService struct {
 	db      *sql.DB
 	fs      *FileSystemService
+	workers int
 	mu      sync.Mutex
 	running bool
 }
 
-func NewWaveformService(db *sql.DB, fs *FileSystemService) *WaveformService {
-	return &WaveformService{db: db, fs: fs}
+func NewWaveformService(db *sql.DB, fs *FileSystemService, workers int) *WaveformService {
+	if workers < 1 {
+		workers = 1
+	}
+	return &WaveformService{db: db, fs: fs, workers: workers}
 }
 
 func (s *WaveformService) GetByShareKey(shareKey string) (string, error) {
@@ -108,39 +113,50 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 	}
 	rows.Close()
 
-	log.Printf("Waveform: %d files pending", len(files))
-	processed := 0
+	log.Printf("Waveform: %d files pending, workers=%d", len(files), s.workers)
+
+	var processed atomic.Int64
+	sem := make(chan struct{}, s.workers)
+	var wg sync.WaitGroup
 
 	for _, f := range files {
 		if time.Since(start) >= maxDuration {
-			log.Printf("Waveform: max duration reached after %d files", processed)
+			log.Printf("Waveform: max duration reached after dispatching %d files", processed.Load())
 			break
 		}
 
-		fullPath, valid := s.resolvePath(f.path)
-		if !valid {
-			continue
-		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(f fileRow) {
+			defer wg.Done()
+			defer func() { <-sem }()
 
-		peaks, err := generateWaveform(fullPath)
-		if err != nil {
-			log.Printf("Waveform: failed %s: %v", f.path, err)
-			continue
-		}
+			fullPath, valid := s.resolvePath(f.path)
+			if !valid {
+				return
+			}
 
-		encoded := base64.StdEncoding.EncodeToString(peaks)
-		_, err = s.db.Exec(`
-			INSERT INTO waveform_cache (audio_file_id, peaks) VALUES (?, ?)
-			ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, generated_at = CURRENT_TIMESTAMP
-		`, f.id, encoded)
-		if err != nil {
-			log.Printf("Waveform: store error %s: %v", f.path, err)
-			continue
-		}
-		processed++
+			peaks, err := generateWaveform(fullPath)
+			if err != nil {
+				log.Printf("Waveform: failed %s: %v", f.path, err)
+				return
+			}
+
+			encoded := base64.StdEncoding.EncodeToString(peaks)
+			_, err = s.db.Exec(`
+				INSERT INTO waveform_cache (audio_file_id, peaks) VALUES (?, ?)
+				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, generated_at = CURRENT_TIMESTAMP
+			`, f.id, encoded)
+			if err != nil {
+				log.Printf("Waveform: store error %s: %v", f.path, err)
+				return
+			}
+			processed.Add(1)
+		}(f)
 	}
 
-	log.Printf("Waveform: job done — processed %d files in %v", processed, time.Since(start).Round(time.Second))
+	wg.Wait()
+	log.Printf("Waveform: job done — processed %d files in %v", processed.Load(), time.Since(start).Round(time.Second))
 }
 
 func (s *WaveformService) resolvePath(virtualPath string) (string, bool) {
