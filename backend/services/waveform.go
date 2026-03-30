@@ -26,7 +26,8 @@ type WaveformService struct {
 	db      *sql.DB
 	fs      *FileSystemService
 	workers int
-	mu      sync.Mutex
+	mu      sync.Mutex // guards running flag
+	writeMu sync.Mutex // serializes DB writes across workers
 	running bool
 }
 
@@ -119,10 +120,18 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 	sem := make(chan struct{}, s.workers)
 	var wg sync.WaitGroup
 
-	for _, f := range files {
+	nextLog := start.Add(15 * time.Minute)
+
+	for i, f := range files {
 		if time.Since(start) >= maxDuration {
-			log.Printf("Waveform: max duration reached after dispatching %d files", processed.Load())
+			log.Printf("Waveform: max duration reached after dispatching %d files", i)
 			break
+		}
+
+		if now := time.Now(); now.After(nextLog) {
+			log.Printf("Waveform: progress %d/%d dispatched, %d stored, elapsed %v",
+				i, len(files), processed.Load(), now.Sub(start).Round(time.Second))
+			nextLog = now.Add(15 * time.Minute)
 		}
 
 		sem <- struct{}{}
@@ -143,10 +152,12 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 			}
 
 			encoded := base64.StdEncoding.EncodeToString(peaks)
+			s.writeMu.Lock()
 			_, err = s.db.Exec(`
 				INSERT INTO waveform_cache (audio_file_id, peaks) VALUES (?, ?)
 				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, generated_at = CURRENT_TIMESTAMP
 			`, f.id, encoded)
+			s.writeMu.Unlock()
 			if err != nil {
 				log.Printf("Waveform: store error %s: %v", f.path, err)
 				return

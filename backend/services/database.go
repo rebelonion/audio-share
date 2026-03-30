@@ -21,7 +21,7 @@ func NewDatabase(dbPath string) *Database {
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Printf("Warning: could not enable WAL mode: %v", err)
 	}
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+	if _, err := db.Exec("PRAGMA busy_timeout=30000"); err != nil {
 		log.Printf("Warning: could not set busy_timeout: %v", err)
 	}
 

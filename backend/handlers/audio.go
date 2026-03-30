@@ -287,6 +287,7 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 		SELECT peaks FROM waveform_cache WHERE audio_file_id = ?
 	`, fileID).Scan(&peaks)
 	if err == sql.ErrNoRows {
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

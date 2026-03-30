@@ -35,7 +35,7 @@ export default function WaveformDisplay({
         }
         parts.push('Z');
         return parts.join(' ');
-    }, [peaks, half]);
+    }, [peaks]);
 
     const progressX = progress * W;
 
