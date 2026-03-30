@@ -33,7 +33,7 @@ COPY backend/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /audio-share-backend
 
 # Stage 3: Final image
-FROM alpine:3.20
+FROM alpine:3.23
 
 # Install ca-certificates for HTTPS requests (ntfy) and ffmpeg for waveform generation
 RUN apk --no-cache add ca-certificates ffmpeg tzdata
