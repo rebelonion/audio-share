@@ -113,6 +113,7 @@ def migrate_table(sqlite_cur, pg_cur, table, columns, batch_size=500):
             pg_cur,
             f"INSERT INTO {table} ({col_list}) VALUES %s ON CONFLICT DO NOTHING",
             batch,
+            page_size=len(batch),
         )
         # Rows affected tells us how many were actually inserted.
         inserted += pg_cur.rowcount

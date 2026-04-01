@@ -23,11 +23,11 @@ type SourcesStats struct {
 
 func (s *SearchService) GetAudioStats() (*AudioStats, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT DATE(downloaded_at) as date, COUNT(*) as count
+		SELECT LEFT(downloaded_at, 10) as day, COUNT(*) as count
 		FROM audio_files
 		WHERE downloaded_at IS NOT NULL AND deleted = 0
-		GROUP BY date
-		ORDER BY date
+		GROUP BY 1
+		ORDER BY 1
 	`)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (s *SearchService) GetAudioStats() (*AudioStats, error) {
 
 func (s *SearchService) GetSourcesStats() (*SourcesStats, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT DATE(s.first_seen) as date, f.name as source_name
+		SELECT LEFT(s.first_seen, 10) as day, f.name as source_name
 		FROM (
 			SELECT source_path, MIN(downloaded_at) as first_seen
 			FROM audio_files
@@ -61,7 +61,7 @@ func (s *SearchService) GetSourcesStats() (*SourcesStats, error) {
 			GROUP BY source_path
 		) s
 		JOIN folders f ON f.path = s.source_path
-		ORDER BY date, source_name
+		ORDER BY 1, source_name
 	`)
 	if err != nil {
 		return nil, err
