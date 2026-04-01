@@ -48,7 +48,7 @@ func (d *Database) migrate() {
 			path TEXT NOT NULL UNIQUE,
 			parent_path TEXT,
 			filename TEXT NOT NULL,
-			size INTEGER,
+			size BIGINT,
 			mime_type TEXT,
 			modified_at TEXT,
 			title TEXT,
