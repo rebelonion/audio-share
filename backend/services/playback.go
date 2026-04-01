@@ -28,7 +28,7 @@ func NewPlaybackService(db *Database) *PlaybackService {
 func (s *PlaybackService) RecordPlayEvent(shareKey string) error {
 	var id int64
 	err := s.db.DB().QueryRow(
-		"SELECT id FROM audio_files WHERE share_key = ? AND deleted = 0",
+		"SELECT id FROM audio_files WHERE share_key = $1 AND deleted = 0",
 		shareKey,
 	).Scan(&id)
 	if err == sql.ErrNoRows {
@@ -41,7 +41,7 @@ func (s *PlaybackService) RecordPlayEvent(shareKey string) error {
 	// skip if same file was played in the last 5 minutes
 	var recent int
 	err = s.db.DB().QueryRow(
-		"SELECT COUNT(*) FROM play_events WHERE audio_file_id = ? AND played_at > datetime('now', '-5 minutes')",
+		"SELECT COUNT(*) FROM play_events WHERE audio_file_id = $1 AND played_at > NOW() - INTERVAL '5 minutes'",
 		id,
 	).Scan(&recent)
 	if err != nil {
@@ -51,7 +51,7 @@ func (s *PlaybackService) RecordPlayEvent(shareKey string) error {
 		return nil
 	}
 
-	_, err = s.db.DB().Exec("INSERT INTO play_events (audio_file_id) VALUES (?)", id)
+	_, err = s.db.DB().Exec("INSERT INTO play_events (audio_file_id) VALUES ($1)", id)
 	return err
 }
 
@@ -74,9 +74,9 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.deleted = 0
-		GROUP BY pe.audio_file_id
+		GROUP BY af.id, f.id
 		ORDER BY last_played DESC
-		LIMIT ?
+		LIMIT $1
 	`, limit)
 	if err != nil {
 		return nil, err
@@ -121,10 +121,10 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.deleted = 0
-		AND pe.played_at >= datetime('now', '-7 days')
-		GROUP BY pe.audio_file_id
+		AND pe.played_at >= NOW() - INTERVAL '7 days'
+		GROUP BY af.id, f.id
 		ORDER BY play_count DESC
-		LIMIT ?
+		LIMIT $1
 	`, limit)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) 
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0
 		ORDER BY af.downloaded_at DESC
-		LIMIT ?
+		LIMIT $1
 	`, limit)
 	if err != nil {
 		return nil, err

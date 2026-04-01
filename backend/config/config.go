@@ -76,7 +76,7 @@ type Config struct {
 	ContactRequestLimit  int
 	ContactLimitWindow   int // milliseconds
 
-	DBPath        string
+	DatabaseURL   string
 	IndexSchedule string
 
 	UmamiURL string
@@ -117,7 +117,7 @@ func Load() *Config {
 		ContactRequestLimit:  getEnvInt("CONTACT_REQUEST_LIMIT", 5),
 		ContactLimitWindow:   getEnvInt("CONTACT_LIMIT_WINDOW", 86400000),
 
-		DBPath:        getEnv("DB_PATH", "./audio-share.db"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgres://audio_share:audio_share@localhost:5432/audio_share"),
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
 		UmamiURL:           getEnv("UMAMI_URL", ""),

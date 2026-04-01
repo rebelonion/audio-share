@@ -4,37 +4,32 @@ import (
 	"database/sql"
 	"log"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Database struct {
-	db   *sql.DB
-	path string
+	db *sql.DB
 }
 
-func NewDatabase(dbPath string) *Database {
-	db, err := sql.Open("sqlite", dbPath)
+func NewDatabase(dsn string) *Database {
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
-
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		log.Printf("Warning: could not enable WAL mode: %v", err)
-	}
-	if _, err := db.Exec("PRAGMA busy_timeout=30000"); err != nil {
-		log.Printf("Warning: could not set busy_timeout: %v", err)
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	database := &Database{db: db, path: dbPath}
+	database := &Database{db: db}
 	database.migrate()
 
 	return database
 }
 
 func (d *Database) migrate() {
-	schema := `
-		CREATE TABLE IF NOT EXISTS folders (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS folders (
+			id BIGSERIAL PRIMARY KEY,
 			path TEXT NOT NULL UNIQUE,
 			parent_path TEXT,
 			folder_name TEXT NOT NULL,
@@ -45,11 +40,11 @@ func (d *Database) migrate() {
 			directory_size TEXT,
 			poster_image TEXT,
 			modified_at TEXT,
-			indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS audio_files (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			share_key TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS audio_files (
+			id BIGSERIAL PRIMARY KEY,
 			path TEXT NOT NULL UNIQUE,
 			parent_path TEXT,
 			filename TEXT NOT NULL,
@@ -61,29 +56,20 @@ func (d *Database) migrate() {
 			upload_date TEXT,
 			webpage_url TEXT,
 			description TEXT,
-			indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-
-		-- Folder indexes
-		CREATE INDEX IF NOT EXISTS idx_folders_path ON folders(path);
-		CREATE INDEX IF NOT EXISTS idx_folders_parent_path ON folders(parent_path);
-		CREATE INDEX IF NOT EXISTS idx_folders_search ON folders(name, folder_name);
-
-		-- Audio file indexes
-		CREATE INDEX IF NOT EXISTS idx_audio_files_path ON audio_files(path);
-		CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path);
-		CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist, description);
-
-		CREATE TABLE IF NOT EXISTS play_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			audio_file_id INTEGER NOT NULL REFERENCES audio_files(id),
+			indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			downloaded_at TEXT,
+			source_path TEXT,
+			thumbnail TEXT,
+			share_key TEXT,
+			deleted INTEGER DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS play_events (
+			id BIGSERIAL PRIMARY KEY,
+			audio_file_id BIGINT NOT NULL REFERENCES audio_files(id),
 			played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id);
-		CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at);
-
-		CREATE TABLE IF NOT EXISTS source_requests (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+		)`,
+		`CREATE TABLE IF NOT EXISTS source_requests (
+			id BIGSERIAL PRIMARY KEY,
 			submitted_url TEXT NOT NULL,
 			title TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'requested',
@@ -91,42 +77,33 @@ func (d *Database) migrate() {
 			folder_share_key TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status);
-
-		CREATE TABLE IF NOT EXISTS waveform_cache (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			audio_file_id INTEGER NOT NULL UNIQUE REFERENCES audio_files(id),
+		)`,
+		`CREATE TABLE IF NOT EXISTS waveform_cache (
+			id BIGSERIAL PRIMARY KEY,
+			audio_file_id BIGINT NOT NULL UNIQUE REFERENCES audio_files(id),
 			peaks TEXT NOT NULL,
 			generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-
-	if _, err := d.db.Exec(schema); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_folders_path ON folders(path)`,
+		`CREATE INDEX IF NOT EXISTS idx_folders_parent_path ON folders(parent_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_folders_search ON folders(name, folder_name)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_path ON audio_files(path)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist, description)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 	}
 
-	alterations := []string{
-		"ALTER TABLE audio_files ADD COLUMN downloaded_at TEXT",
-		"ALTER TABLE audio_files ADD COLUMN source_path TEXT",
-		"ALTER TABLE audio_files ADD COLUMN thumbnail TEXT",
-		"ALTER TABLE audio_files ADD COLUMN share_key TEXT",
-		"ALTER TABLE audio_files ADD COLUMN deleted INTEGER DEFAULT 0",
-		"ALTER TABLE folders ADD COLUMN share_key TEXT",
-	}
-	for _, stmt := range alterations {
-		d.db.Exec(stmt)
-	}
-
-	indexes := `
-		CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at);
-		CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path);
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key);
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key);
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url);
-	`
-	if _, err := d.db.Exec(indexes); err != nil {
-		log.Printf("Warning: could not create new indexes: %v", err)
+	for _, stmt := range statements {
+		if _, err := d.db.Exec(stmt); err != nil {
+			log.Fatalf("Failed migration: %v\n%s", err, stmt)
+		}
 	}
 }
 

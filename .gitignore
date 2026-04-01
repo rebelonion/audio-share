@@ -34,3 +34,7 @@ content/
 
 # testing
 /coverage
+
+# python
+__pycache__/
+*.pyc

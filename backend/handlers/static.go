@@ -109,7 +109,7 @@ func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
 			var title, artist, thumbnail sql.NullString
 			err := h.db.QueryRow(`
 				SELECT title, meta_artist, thumbnail
-				FROM audio_files WHERE share_key = ? AND deleted = 0
+				FROM audio_files WHERE share_key = $1 AND deleted = 0
 			`, key).Scan(&title, &artist, &thumbnail)
 			if err == nil {
 				t := h.config.DefaultTitle

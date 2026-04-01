@@ -88,8 +88,7 @@ func (s *SearchService) RebuildIndex() error {
 	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 
 	log.Println("Starting index rebuild...")
-	start := time.Now()
-	startSQL := start.UTC().Truncate(time.Second).Format("2006-01-02 15:04:05")
+	start := time.Now().UTC().Truncate(time.Second)
 
 	for slug, dirConfig := range s.fs.GetSlugToDirectoryMap() {
 		log.Printf("Indexing directory: %s (%s)", dirConfig.Name, slug)
@@ -113,10 +112,10 @@ func (s *SearchService) RebuildIndex() error {
 		}
 	}
 
-	if _, err := s.db.DB().Exec("DELETE FROM folders WHERE indexed_at < ?", startSQL); err != nil {
+	if _, err := s.db.DB().Exec("DELETE FROM folders WHERE indexed_at < $1", start); err != nil {
 		log.Printf("Error cleaning up stale folders: %v", err)
 	}
-	if _, err := s.db.DB().Exec("UPDATE audio_files SET deleted = 1 WHERE indexed_at < ? AND deleted = 0", startSQL); err != nil {
+	if _, err := s.db.DB().Exec("UPDATE audio_files SET deleted = 1 WHERE indexed_at < $1 AND deleted = 0", start); err != nil {
 		log.Printf("Error soft-deleting stale audio files: %v", err)
 	}
 
@@ -134,7 +133,7 @@ func (s *SearchService) RebuildIndex() error {
 	log.Printf("Index rebuild completed in %v", elapsed)
 
 	if s.webhookService != nil && s.webhookService.IsConfigured() {
-		folders, err := s.getIndexedFoldersWithURLForWebhook(startSQL)
+		folders, err := s.getIndexedFoldersWithURLForWebhook(start)
 		if err != nil {
 			log.Printf("Error fetching folders for webhook: %v", err)
 		} else if err := s.webhookService.SendIndexComplete(elapsed, folders); err != nil {
@@ -150,13 +149,13 @@ func (s *SearchService) RebuildIndex() error {
 // getIndexedFoldersWithURLForWebhook returns all folders with an original_url that were
 // present (or re-indexed) during this run. The name reflects that this includes both
 // newly added and re-indexed folders — the webhook consumer needs all of them.
-func (s *SearchService) getIndexedFoldersWithURLForWebhook(startSQL string) ([]NewFolder, error) {
+func (s *SearchService) getIndexedFoldersWithURLForWebhook(start time.Time) ([]NewFolder, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT share_key, name, original_url
 		FROM folders
 		WHERE original_url IS NOT NULL AND original_url != ''
-		AND indexed_at >= ?
-	`, startSQL)
+		AND indexed_at >= $1
+	`, start)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +338,7 @@ func (s *SearchService) insertFolder(f FolderRecord) error {
 		INSERT INTO folders
 		(path, parent_path, folder_name, name, original_url, url_broken,
 		 item_count, directory_size, poster_image, modified_at, share_key, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
 		ON CONFLICT(path) DO UPDATE SET
 			parent_path = excluded.parent_path,
 			folder_name = excluded.folder_name,
@@ -368,7 +367,7 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 		(path, parent_path, filename, size, mime_type, modified_at,
 		 title, meta_artist, upload_date, webpage_url, description,
 		 downloaded_at, source_path, thumbnail, share_key, deleted, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, CURRENT_TIMESTAMP)
 		ON CONFLICT(path) DO UPDATE SET
 			parent_path = excluded.parent_path,
 			filename = excluded.filename,

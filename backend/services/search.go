@@ -37,7 +37,7 @@ func NewSearchService(db *Database, fs *FileSystemService, webhookService *Webho
 		db:             db,
 		fs:             fs,
 		webhookService: webhookService,
-		lockPath:       db.path + ".reindex.lock",
+		lockPath:       "/tmp/audio-share.reindex.lock",
 	}
 }
 
@@ -55,10 +55,10 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 	err := s.db.DB().QueryRow(`
 		SELECT (
 			SELECT COUNT(*) FROM folders
-			WHERE name LIKE ? OR folder_name LIKE ?
+			WHERE name ILIKE $1 OR folder_name ILIKE $2
 		) + (
 			SELECT COUNT(*) FROM audio_files
-			WHERE (filename LIKE ? OR title LIKE ? OR meta_artist LIKE ? OR description LIKE ?)
+			WHERE (filename ILIKE $3 OR title ILIKE $4 OR meta_artist ILIKE $5 OR description ILIKE $6)
 			AND deleted = 0
 		)
 	`, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery).Scan(&total)
@@ -74,7 +74,7 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 			original_url, item_count, directory_size, poster_image, modified_at,
 			share_key
 		FROM folders
-		WHERE name LIKE ? OR folder_name LIKE ?
+		WHERE name ILIKE $1 OR folder_name ILIKE $2
 
 		UNION ALL
 
@@ -85,10 +85,10 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 			NULL as original_url, NULL as item_count, NULL as directory_size, NULL as poster_image, modified_at,
 			share_key
 		FROM audio_files
-		WHERE (filename LIKE ? OR title LIKE ? OR meta_artist LIKE ? OR description LIKE ?)
+		WHERE (filename ILIKE $3 OR title ILIKE $4 OR meta_artist ILIKE $5 OR description ILIKE $6)
 		AND deleted = 0
 
-		LIMIT ? OFFSET ?
+		LIMIT $7 OFFSET $8
 	`, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery, limit, offset)
 	if err != nil {
 		return nil, 0, err

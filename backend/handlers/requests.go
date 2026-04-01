@@ -163,11 +163,6 @@ func (h *RequestsHandler) handleUpdateStatus(w http.ResponseWriter, r *http.Requ
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
 			return
 		}
-		if strings.Contains(err.Error(), "SQLITE_BUSY") {
-			w.Header().Set("Retry-After", "5")
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Database busy, please retry"})
-			return
-		}
 		log.Printf("requests: failed to update status for id=%d: %v", id, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update status"})
 		return

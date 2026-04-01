@@ -19,7 +19,7 @@ func main() {
 	webhookService := services.NewWebhookService(cfg.IndexWebhookURL, cfg.IndexWebhookToken)
 
 	if len(os.Args) > 1 && os.Args[1] == "reindex" {
-		db := services.NewDatabase(cfg.DBPath)
+		db := services.NewDatabase(cfg.DatabaseURL)
 		defer db.Close()
 		searchService := services.NewSearchService(db, fsService, webhookService)
 		if err := searchService.RebuildIndex(); err != nil {
@@ -29,7 +29,7 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "waveform" {
-		db := services.NewDatabase(cfg.DBPath)
+		db := services.NewDatabase(cfg.DatabaseURL)
 		defer db.Close()
 		waveformService := services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers)
 		maxDuration, err := time.ParseDuration(cfg.WaveformMaxDuration)
@@ -40,7 +40,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	db := services.NewDatabase(cfg.DBPath)
+	db := services.NewDatabase(cfg.DatabaseURL)
 	searchService := services.NewSearchService(db, fsService, webhookService)
 
 	if cfg.IndexSchedule != "" {

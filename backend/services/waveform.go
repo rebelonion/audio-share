@@ -27,7 +27,6 @@ type WaveformService struct {
 	fs      *FileSystemService
 	workers int
 	mu      sync.Mutex // guards running flag
-	writeMu sync.Mutex // serializes DB writes across workers
 	running bool
 }
 
@@ -44,7 +43,7 @@ func (s *WaveformService) GetByShareKey(shareKey string) (string, error) {
 		SELECT wc.peaks
 		FROM waveform_cache wc
 		JOIN audio_files af ON af.id = wc.audio_file_id
-		WHERE af.share_key = ?
+		WHERE af.share_key = $1
 	`, shareKey).Scan(&peaks)
 	return peaks, err
 }
@@ -152,12 +151,10 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 			}
 
 			encoded := base64.StdEncoding.EncodeToString(peaks)
-			s.writeMu.Lock()
 			_, err = s.db.Exec(`
-				INSERT INTO waveform_cache (audio_file_id, peaks) VALUES (?, ?)
+				INSERT INTO waveform_cache (audio_file_id, peaks) VALUES ($1, $2)
 				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, generated_at = CURRENT_TIMESTAMP
 			`, f.id, encoded)
-			s.writeMu.Unlock()
 			if err != nil {
 				log.Printf("Waveform: store error %s: %v", f.path, err)
 				return

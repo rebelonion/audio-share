@@ -88,13 +88,16 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 		var req SourceRequest
 		var folderShareKey, folderPath *string
 		var tagsJSON sql.NullString
+		var createdAt, updatedAt time.Time
 
 		if err := rows.Scan(
 			&req.ID, &req.SubmittedURL, &req.Title,
-			&req.Status, &tagsJSON, &folderShareKey, &folderPath, &req.CreatedAt, &req.UpdatedAt,
+			&req.Status, &tagsJSON, &folderShareKey, &folderPath, &createdAt, &updatedAt,
 		); err != nil {
 			return nil, err
 		}
+		req.CreatedAt = createdAt.UTC().Format("2006-01-02T15:04:05Z")
+		req.UpdatedAt = updatedAt.UTC().Format("2006-01-02T15:04:05Z")
 
 		req.FolderShareKey = folderShareKey
 		req.FolderPath = folderPath
@@ -142,23 +145,16 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 		initialStatus = *status
 	}
 
-	result, err := s.db.DB().Exec(`
-		INSERT OR IGNORE INTO source_requests (submitted_url, title, tags, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, submittedURL, title, string(tagsJSON), initialStatus, now, now)
-	if err != nil {
-		return nil, err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-	if affected == 0 {
+	var id int64
+	err = s.db.DB().QueryRow(`
+		INSERT INTO source_requests (submitted_url, title, tags, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT(submitted_url) DO NOTHING
+		RETURNING id
+	`, submittedURL, title, string(tagsJSON), initialStatus, now, now).Scan(&id)
+	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-
-	id, err := result.LastInsertId()
 	if err != nil {
 		return nil, err
 	}
@@ -183,14 +179,14 @@ func (s *RequestsService) UpdateStatus(id int64, status string, folderShareKey N
 	if folderShareKey.Set {
 		result, err = s.db.DB().Exec(`
 			UPDATE source_requests
-			SET status = ?, folder_share_key = ?, updated_at = ?
-			WHERE id = ?
+			SET status = $1, folder_share_key = $2, updated_at = $3
+			WHERE id = $4
 		`, status, folderShareKey.Value, now, id)
 	} else {
 		result, err = s.db.DB().Exec(`
 			UPDATE source_requests
-			SET status = ?, updated_at = ?
-			WHERE id = ?
+			SET status = $1, updated_at = $2
+			WHERE id = $3
 		`, status, now, id)
 	}
 	if err != nil {
@@ -216,8 +212,8 @@ func (s *RequestsService) Update(id int64, title string, tags []Tag) error {
 
 	result, err := s.db.DB().Exec(`
 		UPDATE source_requests
-		SET title = ?, tags = ?, updated_at = ?
-		WHERE id = ?
+		SET title = $1, tags = $2, updated_at = $3
+		WHERE id = $4
 	`, title, string(tagsJSON), now, id)
 	if err != nil {
 		return err
@@ -233,7 +229,7 @@ func (s *RequestsService) Update(id int64, title string, tags []Tag) error {
 }
 
 func (s *RequestsService) Delete(id int64) error {
-	result, err := s.db.DB().Exec(`DELETE FROM source_requests WHERE id = ?`, id)
+	result, err := s.db.DB().Exec(`DELETE FROM source_requests WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

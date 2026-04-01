@@ -37,7 +37,7 @@ func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var folderPath, posterImage string
 	err := h.db.QueryRow(
-		"SELECT path, COALESCE(poster_image, '') FROM folders WHERE share_key = ?", key,
+		"SELECT path, COALESCE(poster_image, '') FROM folders WHERE share_key = $1", key,
 	).Scan(&folderPath, &posterImage)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)

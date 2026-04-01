@@ -95,7 +95,7 @@ func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
 	err := h.db.QueryRow(`
 		SELECT path, deleted, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, parent_path
-		FROM audio_files WHERE share_key = ?
+		FROM audio_files WHERE share_key = $1
 	`, key).Scan(
 		&row.path, &deletedInt, &row.thumbnail, &row.title, &row.artist,
 		&row.uploadDate, &row.webpageURL, &row.description, &row.parentPath,
@@ -271,7 +271,7 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, key string) {
 	var fileID int64
 	err := h.db.QueryRow(`
-		SELECT id FROM audio_files WHERE share_key = ? AND deleted = 0
+		SELECT id FROM audio_files WHERE share_key = $1 AND deleted = 0
 	`, key).Scan(&fileID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -284,7 +284,7 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 
 	var peaks string
 	err = h.db.QueryRow(`
-		SELECT peaks FROM waveform_cache WHERE audio_file_id = ?
+		SELECT peaks FROM waveform_cache WHERE audio_file_id = $1
 	`, fileID).Scan(&peaks)
 	if err == sql.ErrNoRows {
 		w.Header().Set("Cache-Control", "no-store")

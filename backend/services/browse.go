@@ -49,7 +49,7 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 		SELECT id, path, parent_path, folder_name, name, original_url, url_broken,
 		       item_count, directory_size, poster_image, modified_at, share_key
 		FROM folders
-		WHERE parent_path = ?
+		WHERE parent_path = $1
 		ORDER BY name ASC
 	`, parentPath)
 	if err != nil {
@@ -82,7 +82,7 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 		SELECT id, path, parent_path, filename, size, mime_type, modified_at,
 		       title, meta_artist, upload_date, webpage_url, description, share_key
 		FROM audio_files
-		WHERE parent_path = ? AND deleted = 0
+		WHERE parent_path = $1 AND deleted = 0
 		ORDER BY modified_at DESC
 	`, parentPath)
 	if err != nil {

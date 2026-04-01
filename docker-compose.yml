@@ -1,7 +1,25 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-audio_share}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-audio_share}
+      POSTGRES_DB: ${DB_NAME:-audio_share}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-audio_share}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     image: ghcr.io/rebelonion/audio-share:latest
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "${PORT:-8080}:8080"
     environment:
@@ -9,6 +27,7 @@ services:
       - AUDIO_DIR=/audio:Audio
       - CONTENT_DIR=/app/content
       - STATIC_DIR=/app/static
+      - DATABASE_URL=postgres://${DB_USER:-audio_share}:${DB_PASSWORD:-audio_share}@postgres:5432/${DB_NAME:-audio_share}
     env_file:
       - .env.local
     volumes:
@@ -19,3 +38,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+volumes:
+  postgres_data:
