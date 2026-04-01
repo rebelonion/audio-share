@@ -90,7 +90,7 @@ func (d *Database) migrate() {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_path ON audio_files(path)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist, description)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key)`,
