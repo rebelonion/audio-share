@@ -117,6 +117,13 @@ export async function getRecentlyAdded(): Promise<PlaybackTrack[]> {
     return data.tracks;
 }
 
+export async function getRandomAudio(): Promise<string> {
+    const response = await fetch(`${API_BASE}/api/audio/random`);
+    if (!response.ok) throw new Error(`Failed to fetch random audio: ${response.status}`);
+    const data = await response.json();
+    return data.shareKey;
+}
+
 export async function searchAudio(query: string, limit?: number, offset?: number): Promise<SearchResponse> {
     const params = new URLSearchParams({ q: query });
     if (limit) {

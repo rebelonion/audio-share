@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Search as SearchIcon, Folder, Music, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
-import { searchAudio, SearchResult } from '@/lib/api';
+import { Search as SearchIcon, Folder, Music, ArrowRight, ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
+import { searchAudio, getRandomAudio, SearchResult } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
 
@@ -18,6 +18,7 @@ export default function Search() {
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [isLucky, setIsLucky] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +93,19 @@ export default function Search() {
         inputRef.current?.focus();
     }, []);
 
+    const handleLucky = async () => {
+        setIsLucky(true);
+        try {
+            const shareKey = await getRandomAudio();
+            track('feeling-lucky');
+            navigate(`/share/${shareKey}`);
+        } catch (error) {
+            console.error('Failed to get random audio:', error);
+        } finally {
+            setIsLucky(false);
+        }
+    };
+
     const handlePageChange = (newPage: number) => {
         if (newPage < 1 || newPage > totalPages) return;
         setCurrentPage(newPage);
@@ -141,21 +155,36 @@ export default function Search() {
                         Search Audio Library
                     </h1>
 
-                    <div className="relative">
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search by name, artist, title, or description..."
-                            className="w-full px-4 py-3 pl-12 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder-[var(--muted-foreground)]"
-                        />
-                        <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--muted-foreground)]" />
-                        {isLoading && (
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[var(--primary)]"></div>
-                            </div>
-                        )}
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Search by name, artist, title, or description..."
+                                className="w-full px-4 py-3 pl-12 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder-[var(--muted-foreground)]"
+                            />
+                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--muted-foreground)]" />
+                            {isLoading && (
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[var(--primary)]"></div>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            onClick={handleLucky}
+                            disabled={isLucky}
+                            title="I'm feeling lucky"
+                            className="flex items-center gap-2 px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[var(--foreground)] whitespace-nowrap"
+                        >
+                            {isLucky ? (
+                                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[var(--primary)]" />
+                            ) : (
+                                <Shuffle className="h-5 w-5 text-[var(--primary)]" />
+                            )}
+                            <span className="hidden sm:inline">I'm feeling lucky</span>
+                        </button>
                     </div>
 
                     {query.length > 0 && query.length < 2 && (

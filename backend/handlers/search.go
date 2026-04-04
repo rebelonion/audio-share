@@ -25,6 +25,22 @@ type SearchResponse struct {
 	Limit   int                     `json:"limit"`
 }
 
+func (h *SearchHandler) RandomHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		shareKey, err := h.searchService.RandomAudio()
+		if err != nil {
+			http.Error(w, "No audio found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"shareKey": shareKey})
+	}
+}
+
 func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

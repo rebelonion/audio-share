@@ -156,3 +156,16 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 
 	return results, total, nil
 }
+
+func (s *SearchService) RandomAudio() (string, error) {
+	var shareKey string
+	err := s.db.DB().QueryRow(`
+		SELECT share_key FROM audio_files
+		WHERE deleted = 0 AND share_key IS NOT NULL
+		ORDER BY RANDOM() LIMIT 1
+	`).Scan(&shareKey)
+	if err != nil {
+		return "", err
+	}
+	return shareKey, nil
+}

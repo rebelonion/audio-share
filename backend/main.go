@@ -88,6 +88,7 @@ func main() {
 	mux.Handle("/api/browse", browseHandler)
 	mux.Handle("/api/browse/", browseHandler)
 	mux.Handle("/api/search", searchHandler)
+	mux.HandleFunc("/api/audio/random", searchHandler.RandomHandler())
 	mux.Handle("/api/share", shareHandler)
 	mux.Handle("/api/contact", contactHandler)
 	mux.HandleFunc("/api/about", contentHandler.AboutHandler())
