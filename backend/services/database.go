@@ -94,8 +94,10 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key)`,
+		`ALTER TABLE play_events ADD COLUMN IF NOT EXISTS session_id TEXT`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_play_events_session_id ON play_events(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 	}

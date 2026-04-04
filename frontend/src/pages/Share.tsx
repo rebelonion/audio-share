@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Home, Music, FolderOpen } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
-import { API_BASE, recordPlayEvent } from '@/lib/api';
+import TrackListSection from '@/components/TrackListSection';
+import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
 
@@ -24,6 +25,7 @@ export default function Share() {
     const [meta, setMeta] = useState<AudioMeta | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [recommendations, setRecommendations] = useState<PlaybackTrack[]>([]);
     const hasTracked = useRef(false);
 
     useEffect(() => {
@@ -52,6 +54,8 @@ export default function Share() {
         };
 
         fetchMeta();
+
+        getRecommendations(key).then(setRecommendations).catch(() => {});
     }, [key]);
 
     const handlePlay = useCallback(() => {
@@ -154,6 +158,10 @@ export default function Share() {
                             <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} />
                         </div>
                     </div>
+
+                    {recommendations.length > 0 && (
+                        <TrackListSection title="You Might Also Like" tracks={recommendations} />
+                    )}
                 </div>
             )}
         </>

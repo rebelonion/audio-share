@@ -72,12 +72,28 @@ export interface PlaybackTrack {
     lastPlayed: string | null;
 }
 
+function getSessionId(): string {
+    let id = localStorage.getItem('audio_session_id');
+    if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem('audio_session_id', id);
+    }
+    return id;
+}
+
 export async function recordPlayEvent(shareKey: string): Promise<void> {
     await fetch(`${API_BASE}/api/playback/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shareKey }),
+        body: JSON.stringify({ shareKey, sessionId: getSessionId() }),
     });
+}
+
+export async function getRecommendations(shareKey: string): Promise<PlaybackTrack[]> {
+    const response = await fetch(`${API_BASE}/api/playback/recommendations/${shareKey}`);
+    if (!response.ok) throw new Error(`Failed to fetch recommendations: ${response.status}`);
+    const data = await response.json();
+    return data.tracks;
 }
 
 export async function getRecentlyPlayed(): Promise<PlaybackTrack[]> {

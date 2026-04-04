@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/onion/audio-share-backend/services"
 )
@@ -16,7 +17,8 @@ func NewPlaybackHandler(playbackService *services.PlaybackService) *PlaybackHand
 }
 
 type recordRequest struct {
-	ShareKey string `json:"shareKey"`
+	ShareKey  string `json:"shareKey"`
+	SessionID string `json:"sessionId"`
 }
 
 func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
@@ -37,7 +39,7 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			return
 		}
 
-		if err := h.playbackService.RecordPlayEvent(req.ShareKey); err != nil {
+		if err := h.playbackService.RecordPlayEvent(req.ShareKey, req.SessionID); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record play event"})
 			return
 		}
@@ -90,6 +92,30 @@ func (h *PlaybackHandler) NewHandler() http.HandlerFunc {
 		tracks, err := h.playbackService.GetRecentlyAdded(10)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch new tracks"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
+	}
+}
+
+func (h *PlaybackHandler) RecommendationsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Extract key from /api/playback/recommendations/{key}
+		key := strings.TrimPrefix(r.URL.Path, "/api/playback/recommendations/")
+		if key == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "key is required"})
+			return
+		}
+
+		tracks, err := h.playbackService.GetRecommendations(key, 10)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
 			return
 		}
 

@@ -96,6 +96,7 @@ func main() {
 	mux.HandleFunc("/api/playback/recent", playbackHandler.RecentHandler())
 	mux.HandleFunc("/api/playback/popular", playbackHandler.PopularHandler())
 	mux.HandleFunc("/api/playback/new", playbackHandler.NewHandler())
+	mux.HandleFunc("/api/playback/recommendations/", playbackHandler.RecommendationsHandler())
 
 	mux.Handle("/api/requests", apiKeyAuth.Middleware(requestsHandler))
 	mux.Handle("/api/requests/", apiKeyAuth.Middleware(requestsHandler))
