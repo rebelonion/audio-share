@@ -61,7 +61,7 @@ export default function WaveformDisplay({
                         <rect x={0} y={0} width={progressX} height={H} />
                     </clipPath>
                 </defs>
-                <path d={pathD} fill='var(--border)' clipPath={`url(#${id}-u)`} />
+                <path d={pathD} fill='var(--muted)' clipPath={`url(#${id}-u)`} />
                 <path d={pathD} fill='var(--primary)' clipPath={`url(#${id}-p)`} />
             </svg>
         </div>

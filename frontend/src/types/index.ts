@@ -8,6 +8,7 @@ export interface AudioFile {
     mimeType: string;
     title?: string;
     shareKey?: string;
+    unavailableAt?: string;
 }
 
 export interface FolderMetadata {

@@ -313,7 +313,6 @@ export function useAudioPlayer(src: string) {
             if (seekTime >= 0 && seekTime <= duration) {
                 audioRef.current.currentTime = seekTime;
                 setCurrentTime(seekTime);
-                trackEvent('audio-seek');
             }
         }
     }, [duration, trackEvent]);

@@ -38,6 +38,7 @@ export interface SearchResult {
     artist?: string;
     description?: string;
     webpageUrl?: string;
+    unavailableAt?: string;
 
     // Folder fields
     originalUrl?: string;
@@ -72,10 +73,20 @@ export interface PlaybackTrack {
     lastPlayed: string | null;
 }
 
+function generateId(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
 function getSessionId(): string {
     let id = localStorage.getItem('audio_session_id');
     if (!id) {
-        id = crypto.randomUUID();
+        id = generateId();
         localStorage.setItem('audio_session_id', id);
     }
     return id;
@@ -113,6 +124,13 @@ export async function getPopularTracks(): Promise<PlaybackTrack[]> {
 export async function getRecentlyAdded(): Promise<PlaybackTrack[]> {
     const response = await fetch(`${API_BASE}/api/playback/new`);
     if (!response.ok) throw new Error(`Failed to fetch new tracks: ${response.status}`);
+    const data = await response.json();
+    return data.tracks;
+}
+
+export async function getRecentlyUnavailable(): Promise<PlaybackTrack[]> {
+    const response = await fetch(`${API_BASE}/api/playback/unavailable`);
+    if (!response.ok) throw new Error(`Failed to fetch unavailable tracks: ${response.status}`);
     const data = await response.json();
     return data.tracks;
 }

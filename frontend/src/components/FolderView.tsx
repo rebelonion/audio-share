@@ -471,9 +471,10 @@ export default function FolderView({items}: FolderViewProps) {
                                             {letterItems.map((item) => (
                                                 <div
                                                     key={`mobile-${item.path}`}
-                                                    className={`border border-[var(--border)] rounded-lg mb-3 bg-[var(--card)] overflow-hidden ${
+                                                    className={`border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
                                                         item.type === 'audio' ? 'cursor-pointer' : ''
-                                                    }`}
+                                                    } ${item.type === 'audio' && item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
+                                                    title={item.type === 'audio' && item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
                                                     onClick={() => item.type === 'audio' && handleAudioSelect(item)}
                                                 >
                                                     <MobileItemName item={item}/>
@@ -489,9 +490,9 @@ export default function FolderView({items}: FolderViewProps) {
                                 sortedItems.map((item) => (
                                     <div
                                         key={`mobile-flat-${item.path}`}
-                                        className={`border border-[var(--border)] rounded-lg mb-3 bg-[var(--card)] overflow-hidden ${
+                                        className={`border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
                                             item.type === 'audio' ? 'cursor-pointer' : ''
-                                        }`}
+                                        } ${item.type === 'audio' && item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
                                         onClick={() => item.type === 'audio' && handleAudioSelect(item)}
                                     >
                                         <MobileItemName item={item}/>

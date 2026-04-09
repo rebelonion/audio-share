@@ -5,6 +5,7 @@ import {
     VolumeX,
     AlertCircle,
     ExternalLink,
+    Unlink,
     Calendar,
     Loader2
 } from 'lucide-react';
@@ -14,9 +15,10 @@ import WaveformDisplay from '@/components/WaveformDisplay';
 interface SharePagePlayerProps {
     src: string;
     onPlay?: () => void;
+    unavailable?: boolean;
 }
 
-export default function SharePagePlayer({src, onPlay}: SharePagePlayerProps) {
+export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePlayerProps) {
     const {
         isPlaying,
         duration,
@@ -82,7 +84,7 @@ export default function SharePagePlayer({src, onPlay}: SharePagePlayerProps) {
                 ) : (
                     <div
                         ref={progressRef}
-                        className="w-full h-3 bg-[var(--border)] rounded-full overflow-hidden cursor-pointer transition-all duration-200 hover:h-4 mb-3"
+                        className="w-full h-3 bg-[var(--muted)] rounded-full overflow-hidden cursor-pointer transition-all duration-200 hover:h-4 mb-3"
                         onClick={handleProgressClick}
                     >
                         <div
@@ -152,15 +154,21 @@ export default function SharePagePlayer({src, onPlay}: SharePagePlayerProps) {
                     )}
 
                     {metadata?.webpageUrl && (
-                        <div className="text-sm text-[var(--muted-foreground)] mb-3">
+                        <div className="text-sm mb-3">
                             <a
                                 href={metadata.webpageUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center hover:text-[var(--primary)] transition-colors"
+                                className={unavailable
+                                    ? 'flex items-center text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 transition-colors'
+                                    : 'flex items-center text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors'
+                                }
                             >
-                                <ExternalLink className="h-4 w-4 mr-2"/>
-                                <span>View Original Source</span>
+                                {unavailable
+                                    ? <Unlink className="h-4 w-4 mr-2 flex-shrink-0"/>
+                                    : <ExternalLink className="h-4 w-4 mr-2 flex-shrink-0"/>
+                                }
+                                <span>{unavailable ? 'The original source of this audio is no longer available.' : 'View Original Source'}</span>
                             </a>
                         </div>
                     )}

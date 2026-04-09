@@ -15,7 +15,7 @@ func NewAPIKeyAuth(apiKey string) *APIKeyAuth {
 
 func (a *APIKeyAuth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet || r.Method == http.MethodOptions {
+		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}

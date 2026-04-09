@@ -51,10 +51,10 @@ export default function Stats() {
     if (loading) {
         return (
             <div className="max-w-7xl mx-auto">
-                <div className="h-10 bg-[var(--border)] rounded w-48 mb-8 animate-pulse"></div>
+                <div className="h-10 bg-[var(--muted)] rounded w-48 mb-8 animate-pulse"></div>
                 <div className="bg-[var(--card)] rounded-lg p-6 mb-12">
-                    <div className="h-8 bg-[var(--border)] rounded w-64 mb-4 animate-pulse"></div>
-                    <div className="h-[450px] bg-[var(--border)] rounded animate-pulse"></div>
+                    <div className="h-8 bg-[var(--muted)] rounded w-64 mb-4 animate-pulse"></div>
+                    <div className="h-[450px] bg-[var(--muted)] rounded animate-pulse"></div>
                 </div>
             </div>
         );

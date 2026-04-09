@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Search as SearchIcon, Folder, Music, ArrowRight, ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
+import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
 import { searchAudio, getRandomAudio, SearchResult } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
@@ -209,14 +209,24 @@ export default function Search() {
                             <div
                                 key={result.id}
                                 onClick={() => handleResultClick(result)}
-                                className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4 hover:bg-[var(--card-hover)] cursor-pointer transition-colors group"
+                                className={`border border-[var(--border)] rounded-lg p-4 cursor-pointer transition-colors group ${
+                                    result.type === 'audio' && result.unavailableAt
+                                        ? 'bg-amber-500/5 hover:bg-amber-500/10'
+                                        : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'
+                                }`}
+                                title={result.type === 'audio' && result.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
                             >
                                 <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0 mt-1">
                                         {result.type === 'folder' ? (
                                             <Folder className="h-5 w-5 text-[var(--primary)]" />
                                         ) : (
-                                            <Music className="h-5 w-5 text-[var(--primary)]" />
+                                            <div className="relative">
+                                                <Music className="h-5 w-5 text-[var(--primary)]" />
+                                                {result.unavailableAt && (
+                                                    <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
+                                                )}
+                                            </div>
                                         )}
                                     </div>
 
@@ -241,7 +251,7 @@ export default function Search() {
                                         )}
 
                                         <div className="flex items-center gap-2 mt-2 text-xs text-[var(--muted-foreground)]">
-                                            <span className="px-2 py-0.5 bg-[var(--border)] rounded">
+                                            <span className="px-2 py-0.5 bg-[var(--secondary)] rounded">
                                                 {result.type}
                                             </span>
                                             {result.parentPath && (

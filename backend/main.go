@@ -65,6 +65,7 @@ func main() {
 	searchHandler := handlers.NewSearchHandler(searchService)
 	playbackHandler := handlers.NewPlaybackHandler(playbackService)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
+	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
 
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
@@ -97,10 +98,11 @@ func main() {
 	mux.HandleFunc("/api/playback/recent", playbackHandler.RecentHandler())
 	mux.HandleFunc("/api/playback/popular", playbackHandler.PopularHandler())
 	mux.HandleFunc("/api/playback/new", playbackHandler.NewHandler())
+	mux.HandleFunc("/api/playback/unavailable", playbackHandler.UnavailableHandler())
 	mux.HandleFunc("/api/playback/recommendations/", playbackHandler.RecommendationsHandler())
 
-	mux.Handle("/api/requests", apiKeyAuth.Middleware(requestsHandler))
-	mux.Handle("/api/requests/", apiKeyAuth.Middleware(requestsHandler))
+	mux.Handle("/api/requests", requestsHandler)
+	mux.Handle("/api/admin/", apiKeyAuth.Middleware(adminHandler))
 
 	mux.HandleFunc("/sitemap.xml", contentHandler.SitemapHandler())
 	mux.HandleFunc("/site.webmanifest", contentHandler.ManifestHandler())

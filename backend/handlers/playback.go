@@ -99,6 +99,23 @@ func (h *PlaybackHandler) NewHandler() http.HandlerFunc {
 	}
 }
 
+func (h *PlaybackHandler) UnavailableHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tracks, err := h.playbackService.GetRecentlyUnavailable(10)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch unavailable tracks"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
+	}
+}
+
 func (h *PlaybackHandler) RecommendationsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

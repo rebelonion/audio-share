@@ -174,7 +174,7 @@ export function AudioChart({data}: AudioChartProps) {
                         <span className="text-sm text-[var(--muted-foreground)]">Cumulative</span>
                         <div
                             className={`relative w-11 h-6 rounded-full transition-colors ${
-                                showCumulative ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
+                                showCumulative ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
                             }`}
                             onClick={() => setShowCumulative(!showCumulative)}
                         >
@@ -189,7 +189,7 @@ export function AudioChart({data}: AudioChartProps) {
                         <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
                         <div
                             className={`relative w-11 h-6 rounded-full transition-colors ${
-                                hideZeroDays ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
+                                hideZeroDays ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
                             }`}
                             onClick={() => setHideZeroDays(!hideZeroDays)}
                         >
@@ -333,7 +333,7 @@ export function SourcesChart({data}: SourcesChartProps) {
                         <span className="text-sm text-[var(--muted-foreground)]">Cumulative</span>
                         <div
                             className={`relative w-11 h-6 rounded-full transition-colors ${
-                                showCumulative ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
+                                showCumulative ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
                             }`}
                             onClick={() => setShowCumulative(!showCumulative)}
                         >
@@ -348,7 +348,7 @@ export function SourcesChart({data}: SourcesChartProps) {
                         <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
                         <div
                             className={`relative w-11 h-6 rounded-full transition-colors ${
-                                hideZeroDays ? 'bg-[#8b5cf6]' : 'bg-[var(--border)]'
+                                hideZeroDays ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
                             }`}
                             onClick={() => setHideZeroDays(!hideZeroDays)}
                         >

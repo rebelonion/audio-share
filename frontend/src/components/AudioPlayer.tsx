@@ -190,7 +190,7 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
                         ) : (
                             <div
                                 ref={progressRef}
-                                className="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden cursor-pointer transition-height duration-200 hover:h-3 mb-2"
+                                className="w-full h-2 bg-[var(--muted)] rounded-full overflow-hidden cursor-pointer transition-height duration-200 hover:h-3 mb-2"
                                 onClick={handleProgressClick}
                             >
                                 <div

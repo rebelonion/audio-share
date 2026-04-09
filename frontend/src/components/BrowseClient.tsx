@@ -12,12 +12,12 @@ interface BrowseClientProps {
 function SkeletonRow() {
     return (
         <div className="flex items-center p-3 border-b border-[var(--border)]">
-            <div className="w-8 h-8 rounded bg-[var(--border)] animate-pulse mr-3" />
+            <div className="w-8 h-8 rounded bg-[var(--muted)] animate-pulse mr-3" />
             <div className="flex-1">
-                <div className="h-4 bg-[var(--border)] rounded animate-pulse w-3/4" />
+                <div className="h-4 bg-[var(--muted)] rounded animate-pulse w-3/4" />
             </div>
-            <div className="hidden md:block w-24 h-4 bg-[var(--border)] rounded animate-pulse mx-4" />
-            <div className="hidden md:block w-20 h-4 bg-[var(--border)] rounded animate-pulse" />
+            <div className="hidden md:block w-24 h-4 bg-[var(--muted)] rounded animate-pulse mx-4" />
+            <div className="hidden md:block w-20 h-4 bg-[var(--muted)] rounded animate-pulse" />
         </div>
     );
 }
@@ -26,7 +26,7 @@ function BrowseSkeleton() {
     return (
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg overflow-hidden">
             <div className="p-3 border-b border-[var(--border)]">
-                <div className="h-8 bg-[var(--border)] rounded animate-pulse w-64" />
+                <div className="h-8 bg-[var(--muted)] rounded animate-pulse w-64" />
             </div>
             {[...Array(8)].map((_, i) => (
                 <SkeletonRow key={i} />
@@ -85,10 +85,10 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
         return (
             <div>
                 {showTitle && (
-                    <div className="h-8 bg-[var(--border)] rounded animate-pulse w-48 mb-6" />
+                    <div className="h-8 bg-[var(--muted)] rounded animate-pulse w-48 mb-6" />
                 )}
                 {initialPath && (
-                    <div className="h-6 bg-[var(--border)] rounded animate-pulse w-64 mb-4" />
+                    <div className="h-6 bg-[var(--muted)] rounded animate-pulse w-64 mb-4" />
                 )}
                 <BrowseSkeleton />
             </div>

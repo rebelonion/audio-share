@@ -66,7 +66,7 @@ export default function MobileItemDetails({ item, notification, copyToClipboard 
                         rel="noopener noreferrer"
                         className={`inline-flex items-center justify-center p-1 rounded-full ${
                             item.metadata.url_broken
-                                ? 'bg-gray-400 text-white opacity-60'
+                                ? 'bg-[var(--muted)] text-white opacity-60'
                                 : 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'
                         }`}
                         onClick={(e) => {

@@ -143,15 +143,15 @@ export default function Requests() {
     if (loading) {
         return (
             <>
-                <div className="h-10 bg-[var(--border)] rounded w-48 mb-8 animate-pulse mx-auto" />
+                <div className="h-10 bg-[var(--muted)] rounded w-48 mb-8 animate-pulse mx-auto" />
                 <div className="overflow-x-auto pb-4">
                     <div className="flex gap-4 w-fit mx-auto">
                         {[...Array(5)].map((_, i) => (
                             <div key={i} className="flex-shrink-0 w-64 sm:w-72">
-                                <div className="h-6 bg-[var(--border)] rounded w-32 mb-3 animate-pulse" />
+                                <div className="h-6 bg-[var(--muted)] rounded w-32 mb-3 animate-pulse" />
                                 <div className="space-y-3">
                                     {[...Array(2)].map((_, j) => (
-                                        <div key={j} className="h-24 bg-[var(--border)] rounded animate-pulse" />
+                                        <div key={j} className="h-24 bg-[var(--muted)] rounded animate-pulse" />
                                     ))}
                                 </div>
                             </div>

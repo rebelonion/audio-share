@@ -1,5 +1,10 @@
 package services
 
+import (
+	"database/sql"
+	"time"
+)
+
 type SearchResult struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
@@ -22,7 +27,8 @@ type SearchResult struct {
 	DirectorySize string `json:"directorySize,omitempty"`
 	PosterImage   string `json:"posterImage,omitempty"`
 
-	ModifiedAt string `json:"modifiedAt,omitempty"`
+	ModifiedAt    string  `json:"modifiedAt,omitempty"`
+	UnavailableAt *string `json:"unavailableAt,omitempty"`
 }
 
 type SearchService struct {
@@ -72,7 +78,7 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 			NULL as size, NULL as mime_type, NULL as title, NULL as artist,
 			NULL as description, NULL as webpage_url,
 			original_url, item_count, directory_size, poster_image, modified_at,
-			share_key
+			share_key, NULL::timestamptz as unavailable_at
 		FROM folders
 		WHERE name ILIKE $1 OR folder_name ILIKE $2
 
@@ -83,7 +89,7 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 			size, mime_type, title, meta_artist as artist,
 			description, webpage_url,
 			NULL as original_url, NULL as item_count, NULL as directory_size, NULL as poster_image, modified_at,
-			share_key
+			share_key, unavailable_at
 		FROM audio_files
 		WHERE (filename ILIKE $3 OR title ILIKE $4 OR meta_artist ILIKE $5 OR description ILIKE $6)
 		AND deleted = 0
@@ -101,14 +107,19 @@ func (s *SearchService) Search(query string, limit int, offset int) ([]SearchRes
 		var parentPath, mimeType, title, artist, description, webpageURL *string
 		var originalURL, directorySize, posterImage, modifiedAt, shareKey *string
 		var size, itemCount *int64
+		var unavailableAt sql.NullTime
 
 		if err := rows.Scan(
 			&r.ID, &r.Name, &r.Path, &r.Type, &parentPath,
 			&size, &mimeType, &title, &artist, &description, &webpageURL,
 			&originalURL, &itemCount, &directorySize, &posterImage, &modifiedAt,
-			&shareKey,
+			&shareKey, &unavailableAt,
 		); err != nil {
 			return nil, 0, err
+		}
+		if unavailableAt.Valid {
+			s := unavailableAt.Time.UTC().Format(time.RFC3339)
+			r.UnavailableAt = &s
 		}
 
 		if parentPath != nil {

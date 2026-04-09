@@ -45,8 +45,9 @@ type AudioFileRecord struct {
 	DownloadedAt string
 	SourcePath   string
 	Thumbnail    string
-	ShareKey     string
-	Deleted      bool
+	ShareKey      string
+	Deleted       bool
+	UnavailableAt *string
 }
 
 type AudioInfoJSON struct {

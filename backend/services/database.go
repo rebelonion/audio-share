@@ -100,6 +100,7 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_play_events_session_id ON play_events(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
+		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
 	}
 
 	for _, stmt := range statements {

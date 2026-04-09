@@ -1,4 +1,4 @@
-import {Folder, Music} from "lucide-react";
+import {Folder, Music, Unlink} from "lucide-react";
 import {formatDate, formatFileSize} from "@/lib/utils";
 import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
@@ -20,7 +20,8 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
         <tr
             className={`file-row hover:bg-[var(--card-hover)] ${
                 item.type === 'audio' ? 'cursor-pointer' : ''
-            }`}
+            } ${item.type === 'audio' && item.unavailableAt ? 'bg-amber-500/5 hover:bg-amber-500/10' : ''}`}
+            title={item.type === 'audio' && item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
             onClick={() => item.type === 'audio' && handleAudioSelect(item)}
         >
             <td className="px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis"
@@ -45,7 +46,12 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
                     </Link>
                 ) : (
                     <div className="flex items-center text-[var(--foreground)]">
-                        <Music className="h-5 w-5 min-w-[20px] mr-2 text-[var(--primary)]"/>
+                        <div className="relative mr-2">
+                            <Music className="h-5 w-5 min-w-[20px] text-[var(--primary)]"/>
+                            {item.unavailableAt && (
+                                <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
+                            )}
+                        </div>
                         <span className="truncate" title={item.title || item.name}>{item.title || item.name}</span>
                     </div>
                 )}

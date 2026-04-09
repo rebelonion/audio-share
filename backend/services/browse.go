@@ -1,5 +1,10 @@
 package services
 
+import (
+	"database/sql"
+	"time"
+)
+
 func (s *SearchService) GetAllFolderPaths() ([]string, error) {
 	rows, err := s.db.DB().Query(`SELECT path FROM folders ORDER BY path ASC`)
 	if err != nil {
@@ -80,7 +85,7 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFileRecord, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT id, path, parent_path, filename, size, mime_type, modified_at,
-		       title, meta_artist, upload_date, webpage_url, description, share_key
+		       title, meta_artist, upload_date, webpage_url, description, share_key, unavailable_at
 		FROM audio_files
 		WHERE parent_path = $1 AND deleted = 0
 		ORDER BY modified_at DESC
@@ -93,10 +98,15 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 	var audioFiles []AudioFileRecord
 	for rows.Next() {
 		var a AudioFileRecord
+		var unavailableAt sql.NullTime
 		if err := rows.Scan(&a.ID, &a.Path, &a.ParentPath, &a.Filename, &a.Size,
 			&a.MimeType, &a.ModifiedAt, &a.Title, &a.MetaArtist, &a.UploadDate,
-			&a.WebpageURL, &a.Description, &a.ShareKey); err != nil {
+			&a.WebpageURL, &a.Description, &a.ShareKey, &unavailableAt); err != nil {
 			return nil, err
+		}
+		if unavailableAt.Valid {
+			s := unavailableAt.Time.UTC().Format(time.RFC3339)
+			a.UnavailableAt = &s
 		}
 		audioFiles = append(audioFiles, a)
 	}
@@ -130,13 +140,14 @@ func (s *SearchService) folderToFileSystemItem(f FolderRecord) FileSystemItem {
 
 func (s *SearchService) audioToFileSystemItem(a AudioFileRecord) FileSystemItem {
 	return FileSystemItem{
-		Name:       a.Filename,
-		Path:       a.Path,
-		Size:       a.Size,
-		ModifiedAt: a.ModifiedAt,
-		Type:       "audio",
-		MimeType:   a.MimeType,
-		Title:      a.Title,
-		ShareKey:   a.ShareKey,
+		Name:        a.Filename,
+		Path:        a.Path,
+		Size:        a.Size,
+		ModifiedAt:  a.ModifiedAt,
+		Type:        "audio",
+		MimeType:    a.MimeType,
+		Title:       a.Title,
+		ShareKey:      a.ShareKey,
+		UnavailableAt: a.UnavailableAt,
 	}
 }

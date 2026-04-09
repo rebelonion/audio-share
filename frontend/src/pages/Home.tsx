@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import BrowseClient from '@/components/BrowseClient';
 import TrackListSection from '@/components/TrackListSection';
+import UnavailableBanner from '@/components/UnavailableBanner';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
-import { PlaybackTrack, getRecentlyPlayed, getPopularTracks, getRecentlyAdded } from '@/lib/api';
+import { PlaybackTrack, getRecentlyPlayed, getPopularTracks, getRecentlyAdded, getRecentlyUnavailable } from '@/lib/api';
 
 export default function Home() {
     const [recentTracks, setRecentTracks] = useState<PlaybackTrack[]>([]);
     const [popularTracks, setPopularTracks] = useState<PlaybackTrack[]>([]);
     const [newTracks, setNewTracks] = useState<PlaybackTrack[]>([]);
+    const [unavailableTracks, setUnavailableTracks] = useState<PlaybackTrack[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -16,10 +18,12 @@ export default function Home() {
             getRecentlyPlayed().catch(() => []),
             getPopularTracks().catch(() => []),
             getRecentlyAdded().catch(() => []),
-        ]).then(([recent, popular, added]) => {
+            getRecentlyUnavailable().catch(() => []),
+        ]).then(([recent, popular, added, unavailable]) => {
             setRecentTracks(recent);
             setPopularTracks(popular);
             setNewTracks(added);
+            setUnavailableTracks(unavailable);
         }).finally(() => setLoading(false));
     }, []);
 
@@ -34,6 +38,11 @@ export default function Home() {
             <div className="max-w-7xl mx-auto">
                 <h1 className="sr-only">{DEFAULT_TITLE}</h1>
                 <BrowseClient showTitle={true} />
+                {!loading && unavailableTracks.length > 0 && (
+                    <div className="mt-8">
+                        <UnavailableBanner tracks={unavailableTracks} />
+                    </div>
+                )}
                 {hasSections && (
                     <div className="mt-8 space-y-8">
                         <TrackListSection title="Recently Played" tracks={recentTracks} />

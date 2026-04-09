@@ -73,6 +73,11 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		now := time.Now().UnixMilli()
 		path := r.URL.Path
 
+		if strings.HasPrefix(path, "/api/admin/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		isAudio := rl.isAudioRequest(path)
 		isImage := rl.isImageRequest(path)
 		isShare := path == "/api/share" && r.Method == "POST"

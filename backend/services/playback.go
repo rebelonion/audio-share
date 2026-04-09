@@ -302,3 +302,45 @@ func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) 
 	}
 	return results, nil
 }
+
+func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]PlaybackResult, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT
+			af.share_key,
+			af.path,
+			af.filename,
+			af.title,
+			af.meta_artist,
+			af.parent_path,
+			f.name,
+			f.share_key,
+			af.thumbnail,
+			f.poster_image
+		FROM audio_files af
+		LEFT JOIN folders f ON f.path = af.parent_path
+		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0
+		ORDER BY af.downloaded_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []PlaybackResult
+	for rows.Next() {
+		var r PlaybackResult
+		if err := rows.Scan(
+			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
+			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+
+	if results == nil {
+		results = []PlaybackResult{}
+	}
+	return results, nil
+}

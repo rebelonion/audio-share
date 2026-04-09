@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/onion/audio-share-backend/services"
 )
@@ -78,26 +79,27 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type audioRow struct {
-	path        string
-	deleted     bool
-	thumbnail   sql.NullString
-	title       sql.NullString
-	artist      sql.NullString
-	uploadDate  sql.NullString
-	webpageURL  sql.NullString
-	description sql.NullString
-	parentPath  sql.NullString
+	path          string
+	deleted       bool
+	unavailableAt sql.NullTime
+	thumbnail     sql.NullString
+	title         sql.NullString
+	artist        sql.NullString
+	uploadDate    sql.NullString
+	webpageURL    sql.NullString
+	description   sql.NullString
+	parentPath    sql.NullString
 }
 
 func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
 	var row audioRow
 	var deletedInt int
 	err := h.db.QueryRow(`
-		SELECT path, deleted, thumbnail, title, meta_artist, upload_date,
+		SELECT path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, parent_path
 		FROM audio_files WHERE share_key = $1
 	`, key).Scan(
-		&row.path, &deletedInt, &row.thumbnail, &row.title, &row.artist,
+		&row.path, &deletedInt, &row.unavailableAt, &row.thumbnail, &row.title, &row.artist,
 		&row.uploadDate, &row.webpageURL, &row.description, &row.parentPath,
 	)
 	if err != nil {
@@ -225,8 +227,9 @@ type AudioMeta struct {
 	WebpageURL  string `json:"webpageUrl"`
 	Description string `json:"description"`
 	ParentPath  string `json:"parentPath"`
-	Thumbnail   bool   `json:"thumbnail"`
-	Deleted     bool   `json:"deleted"`
+	Thumbnail     bool    `json:"thumbnail"`
+	Deleted       bool    `json:"deleted"`
+	UnavailableAt *string `json:"unavailableAt"`
 }
 
 func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key string) {
@@ -243,6 +246,10 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 	meta := AudioMeta{
 		Thumbnail: row.thumbnail.Valid && row.thumbnail.String != "",
 		Deleted:   row.deleted,
+	}
+	if row.unavailableAt.Valid {
+		s := row.unavailableAt.Time.UTC().Format(time.RFC3339)
+		meta.UnavailableAt = &s
 	}
 	if row.title.Valid {
 		meta.Title = row.title.String

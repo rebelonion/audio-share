@@ -1,4 +1,4 @@
-import {Folder, Music} from "lucide-react";
+import {Folder, Music, Unlink} from "lucide-react";
 import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
@@ -25,7 +25,12 @@ export default function MobileItemName({ item }: ItemNameProps) {
                         </div>
                     )
                 ) : (
-                    <Music className="h-5 w-5 text-[var(--primary)]"/>
+                    <div className="relative">
+                        <Music className="h-5 w-5 text-[var(--primary)]"/>
+                        {item.unavailableAt && (
+                            <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
+                        )}
+                    </div>
                 )}
             </div>
 

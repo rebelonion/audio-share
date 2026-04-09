@@ -33,7 +33,8 @@ type FileSystemItem struct {
 	Title       string          `json:"title,omitempty"`
 	Metadata    *FolderMetadata `json:"metadata,omitempty"`
 	PosterImage string          `json:"posterImage,omitempty"`
-	ShareKey    string          `json:"shareKey,omitempty"`
+	ShareKey      string          `json:"shareKey,omitempty"`
+	UnavailableAt *string         `json:"unavailableAt,omitempty"`
 }
 
 type DirectoryContents struct {

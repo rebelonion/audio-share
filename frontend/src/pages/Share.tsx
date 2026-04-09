@@ -6,7 +6,6 @@ import SharePagePlayer from '@/components/SharePagePlayer';
 import TrackListSection from '@/components/TrackListSection';
 import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
-import { useUmami } from '@/hooks/useUmami';
 
 interface AudioMeta {
     title: string;
@@ -17,11 +16,11 @@ interface AudioMeta {
     parentPath: string;
     thumbnail: boolean;
     deleted: boolean;
+    unavailableAt: string | null;
 }
 
 export default function Share() {
     const { key } = useParams<{ key: string }>();
-    const { track } = useUmami();
     const [meta, setMeta] = useState<AudioMeta | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -61,12 +60,13 @@ export default function Share() {
     const handlePlay = useCallback(() => {
         if (hasTracked.current || !key) return;
         hasTracked.current = true;
-        track('audio-share-play', { key, title: meta?.title || key });
         recordPlayEvent(key).catch(() => {});
-    }, [key, track]);
+    }, [key]);
 
     const displayTitle = meta?.title || key || 'Unknown';
-    const folderPath = meta?.parentPath ? `/browse/${meta.parentPath}` : '/';
+    const folderPath = meta?.parentPath
+        ? `/browse/${meta.parentPath.split('/').map(encodeURIComponent).join('/')}`
+        : '/';
     const parentName = meta?.parentPath
         ? meta.parentPath.split('/').pop() || meta.parentPath
         : null;
@@ -155,7 +155,7 @@ export default function Share() {
                         </div>
 
                         <div className="bg-[var(--card-hover)]/40 rounded-lg p-6">
-                            <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} />
+                            <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} unavailable={!!meta?.unavailableAt} />
                         </div>
                     </div>
 
