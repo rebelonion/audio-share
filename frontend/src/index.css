@@ -4,59 +4,133 @@
 
 @layer base {
     :root {
-        --background: #0f151b;
-        --foreground: #e2e8f0;
-        --card: #161f28;
-        --card-hover: #1e2a36;
-        --card-foreground: #e2e8f0;
-        --primary: #6b2ff8;
-        --primary-hover: #7c3aed;
-        --secondary: #2d3a48;
-        --secondary-hover: #1e2a36;
-        --muted: #384250;
-        --muted-foreground: #b9b1a8;
-        --border: #49443c;
+        --background: #0d0b09;
+        --foreground: #ece7de;
+        --card: #131109;
+        --card-hover: #1b1712;
+        --card-foreground: #ece7de;
+        --primary: #c4882a;
+        --primary-hover: #d49940;
+        --secondary: #251f15;
+        --secondary-hover: #1b1712;
+        --muted: #352d1e;
+        --muted-foreground: #9a8c7a;
+        --border: #2d2518;
+
+        --error-bg: rgba(100, 35, 15, 0.88);
+        --error-border: rgba(170, 70, 35, 0.55);
+        --error-text: #e08060;
+        --success-bg: rgba(65, 48, 8, 0.88);
+        --success-border: rgba(196, 136, 42, 0.55);
+        --success-text: #d4a040;
+
+        --font-display: 'Cormorant Garamond', Georgia, serif;
+        --font-sans: 'Jost', system-ui, sans-serif;
+    }
+
+    html {
+        background-color: var(--background);
+    }
+
+    h1 {
+        font-family: var(--font-display);
+        letter-spacing: -0.01em;
+    }
+
+    h2 {
+        font-family: var(--font-display);
+        letter-spacing: -0.01em;
+    }
+
+    h3 {
+        font-family: var(--font-display);
+        letter-spacing: -0.01em;
+    }
+
+    body {
+        font-family: var(--font-sans);
+        background-color: var(--background);
+        color: var(--foreground);
+        background-image:
+            radial-gradient(ellipse at 15% 40%, rgba(196, 136, 42, 0.07) 0%, transparent 55%),
+            radial-gradient(ellipse at 85% 10%, rgba(196, 136, 42, 0.05) 0%, transparent 45%),
+            radial-gradient(ellipse at 50% 90%, rgba(196, 136, 42, 0.04) 0%, transparent 50%);
+        background-attachment: fixed;
+        position: relative;
+        isolation: isolate;
+    }
+
+    body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22noise%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.85%22%20numOctaves%3D%224%22%20stitchTiles%3D%22stitch%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url(%23noise)%22%20opacity%3D%221%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: repeat;
+        background-size: 200px 200px;
+        opacity: 0.035;
+        pointer-events: none;
     }
 }
+
+/* ─── Keyframes ─────────────────────────────────────────────── */
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes scaleIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+@keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
 }
+
+
+/* ─── Components ────────────────────────────────────────────── */
 
 @layer components {
     input[type="range"] {
-        @apply appearance-none bg-[var(--secondary)] h-2 rounded-full;
+        @apply appearance-none bg-transparent h-1.5;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+        @apply bg-[var(--muted)] h-1.5 rounded-full;
     }
 
     input[type="range"]::-webkit-slider-thumb {
-        @apply appearance-none w-4 h-4 rounded-full bg-[var(--primary)] cursor-pointer;
+        @apply appearance-none w-3.5 h-3.5 rounded-full bg-[var(--primary)] cursor-pointer;
+        margin-top: -4px;
+        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary-hover);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--primary);
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary);
+    }
+
+    input[type="range"]::-moz-range-thumb:hover {
+        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary-hover);
+    }
+
+    input[type="range"]::-moz-range-track {
+        background: var(--muted);
+        height: 6px;
+        border-radius: 9999px;
+        border: none;
     }
 
     .file-row {
@@ -64,19 +138,28 @@
     }
 
     .file-row:hover {
-        @apply transform scale-[1.01] shadow-md;
+        @apply transform scale-[1.005] shadow-md;
     }
 
     .animate-fadeIn {
         animation: fadeIn 0.3s ease-in-out;
     }
 
-    .animate-fadeInUp {
-        animation: fadeInUp 0.4s ease-out;
+    .animate-slideUp {
+        animation: slideUp 0.4s ease-out both;
     }
 
-    .animate-scaleIn {
-        animation: scaleIn 0.3s ease-out;
+    .skeleton {
+        background: linear-gradient(
+            90deg,
+            var(--muted) 0%,
+            var(--muted) 35%,
+            rgba(196, 136, 42, 0.07) 50%,
+            var(--muted) 65%,
+            var(--muted) 100%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.8s ease-in-out infinite;
     }
 
     .transition-height {
@@ -85,43 +168,42 @@
         transition-duration: 150ms;
     }
 
-    .line-clamp-2 {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-
+    /* Scrollbars */
     .custom-scrollbar {
         scrollbar-width: thin;
-        scrollbar-color: var(--primary) rgba(0, 0, 0, 0.1);
+        scrollbar-color: var(--primary) rgba(0, 0, 0, 0.15);
     }
 
     .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
+        width: 4px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.1);
-        border-radius: 3px;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 2px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
         background: var(--primary);
-        border-radius: 3px;
+        border-radius: 2px;
+        opacity: 0.7;
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: var(--primary-hover);
     }
 
-    /* Hide scrollbar but keep functionality */
     .scrollbar-hide {
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
+        -ms-overflow-style: none;
+        scrollbar-width: none;
     }
 
     .scrollbar-hide::-webkit-scrollbar {
-        display: none;  /* Chrome, Safari and Opera */
+        display: none;
     }
+
+    .font-display {
+        font-family: var(--font-display);
+    }
+
 }

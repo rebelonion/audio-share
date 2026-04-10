@@ -143,15 +143,15 @@ export default function Requests() {
     if (loading) {
         return (
             <>
-                <div className="h-10 bg-[var(--muted)] rounded w-48 mb-8 animate-pulse mx-auto" />
+                <div className="h-10 skeleton rounded w-48 mb-8 mx-auto" />
                 <div className="overflow-x-auto pb-4">
                     <div className="flex gap-4 w-fit mx-auto">
                         {[...Array(5)].map((_, i) => (
                             <div key={i} className="flex-shrink-0 w-64 sm:w-72">
-                                <div className="h-6 bg-[var(--muted)] rounded w-32 mb-3 animate-pulse" />
+                                <div className="h-6 skeleton rounded w-32 mb-3" />
                                 <div className="space-y-3">
                                     {[...Array(2)].map((_, j) => (
-                                        <div key={j} className="h-24 bg-[var(--muted)] rounded animate-pulse" />
+                                        <div key={j} className="h-24 skeleton rounded" />
                                     ))}
                                 </div>
                             </div>
@@ -165,7 +165,7 @@ export default function Requests() {
     if (error) {
         return (
             <>
-                <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)] text-center">
+                <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)] text-center" style={{ fontFamily: 'var(--font-display)' }}>
                     Source Requests
                 </h1>
                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400">
@@ -178,12 +178,12 @@ export default function Requests() {
     const statuses: RequestStatus[] = ['requested', 'downloading', 'indexing', 'added', 'rejected'];
 
     return (
-        <div className="-mb-8">
+        <div className="-mb-8 animate-slideUp">
             <Helmet>
                 <title>{DEFAULT_TITLE} - Requests</title>
                 <meta name="description" content={`${DEFAULT_DESCRIPTION} — Requests`} />
             </Helmet>
-            <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6 text-[var(--foreground)] text-center">
+            <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6 text-[var(--foreground)] text-center" style={{ fontFamily: 'var(--font-display)' }}>
                 Source Requests
             </h1>
 

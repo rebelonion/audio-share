@@ -45,24 +45,26 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
         <div className="w-full">
             {thumbnail && (
                 <div className="mb-6 flex justify-center">
-                    <img
-                        src={thumbnail}
-                        alt={`${metadata?.title || track} thumbnail`}
-                        width={320}
-                        height={320}
-                        className="object-cover rounded-lg shadow-md w-full max-w-sm h-auto"
-                    />
+                    <div className="relative w-full max-w-xs rounded-xl overflow-hidden shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
+                        <img
+                            src={thumbnail}
+                            alt={`${metadata?.title || track} thumbnail`}
+                            width={320}
+                            height={320}
+                            className="object-cover w-full h-auto"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                    </div>
                 </div>
             )}
 
-            <div className="text-center mb-6">
-                <h2 className="text-xl font-bold text-[var(--foreground)] mb-2">
-                    {metadata?.title || track}
-                </h2>
-                <p className="text-base text-[var(--muted-foreground)]">
-                    {metadata?.artist || artist}
-                </p>
-            </div>
+            {(metadata?.artist || artist) && (
+                <div className="text-center mb-6">
+                    <p className="text-base text-[var(--muted-foreground)]">
+                        {metadata?.artist || artist}
+                    </p>
+                </div>
+            )}
 
             {error && (
                 <div className="mb-4 p-3 bg-red-900/20 text-red-400 rounded-lg flex items-start">

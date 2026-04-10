@@ -73,7 +73,10 @@ export default function UnavailableBanner({ tracks }: Props) {
 
     return (
         <div>
-        <h2 className="text-lg font-semibold text-[var(--foreground)] mb-3">Unavailable Sources</h2>
+        <h2 className="flex items-center gap-3 text-2xl font-bold italic tracking-tight mb-3" style={{ fontFamily: 'var(--font-display)' }}>
+            <span className="inline-block w-1 h-6 bg-[var(--primary)] rounded-sm flex-shrink-0 not-italic" style={{ opacity: 0.85 }} />
+            Unavailable Sources
+        </h2>
         <div
             className="group rounded-lg border border-[var(--border)] bg-amber-500/5 hover:bg-amber-500/10 transition-colors overflow-hidden"
             onMouseEnter={() => { paused.current = true; }}
@@ -93,7 +96,7 @@ export default function UnavailableBanner({ tracks }: Props) {
                         <Unlink className="h-3 w-3 flex-shrink-0" />
                         Original source no longer available
                     </div>
-                    <h3 className="font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors truncate leading-snug">
+                    <h3 className="font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors truncate leading-snug" style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>
                         {displayTitle}
                     </h3>
                     {track.artist && (
@@ -117,16 +120,16 @@ export default function UnavailableBanner({ tracks }: Props) {
                             />
                         ))}
                     </div>
-                    <div className="flex gap-0.5">
+                    <div className="flex gap-1">
                         <button
                             onClick={() => goTo(index - 1)}
-                            className="p-1 rounded hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
+                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200"
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </button>
                         <button
                             onClick={() => goTo(index + 1)}
-                            className="p-1 rounded hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
+                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200"
                         >
                             <ChevronRight className="h-4 w-4" />
                         </button>

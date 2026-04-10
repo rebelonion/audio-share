@@ -35,7 +35,7 @@ export default function Home() {
                 <title>{DEFAULT_TITLE} - Home</title>
                 <meta name="description" content={DEFAULT_DESCRIPTION} />
             </Helmet>
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-auto animate-slideUp">
                 <h1 className="sr-only">{DEFAULT_TITLE}</h1>
                 <BrowseClient showTitle={true} />
                 {!loading && unavailableTracks.length > 0 && (

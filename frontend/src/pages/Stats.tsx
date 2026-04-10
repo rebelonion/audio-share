@@ -51,10 +51,10 @@ export default function Stats() {
     if (loading) {
         return (
             <div className="max-w-7xl mx-auto">
-                <div className="h-10 bg-[var(--muted)] rounded w-48 mb-8 animate-pulse"></div>
+                <div className="h-10 skeleton rounded w-48 mb-8"></div>
                 <div className="bg-[var(--card)] rounded-lg p-6 mb-12">
-                    <div className="h-8 bg-[var(--muted)] rounded w-64 mb-4 animate-pulse"></div>
-                    <div className="h-[450px] bg-[var(--muted)] rounded animate-pulse"></div>
+                    <div className="h-8 skeleton rounded w-64 mb-4"></div>
+                    <div className="h-[450px] skeleton rounded"></div>
                 </div>
             </div>
         );
@@ -66,13 +66,16 @@ export default function Stats() {
                 <title>{DEFAULT_TITLE} - Stats</title>
                 <meta name="description" content={`${DEFAULT_DESCRIPTION} — Stats`} />
             </Helmet>
-            <div className="max-w-7xl mx-auto">
-                <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]">Statistics</h1>
+            <div className="max-w-7xl mx-auto animate-slideUp">
+                <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Statistics</h1>
 
                 {/* Audio by Day Section */}
                 <section className="mb-8 sm:mb-12">
                     <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
-                        <h2 className="text-xl sm:text-2xl font-bold mb-2 text-[var(--foreground)]">Audio Files by Day</h2>
+                        <h2 className="flex items-center gap-3 text-xl sm:text-2xl font-bold mb-4 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                            <span className="inline-block w-1 h-5 sm:h-6 bg-[var(--primary)] rounded-sm flex-shrink-0" style={{ opacity: 0.85 }} />
+                            Audio Files by Day
+                        </h2>
                         {audioData ? (
                             <AudioChart data={audioData} />
                         ) : (
@@ -86,7 +89,10 @@ export default function Stats() {
                 {/* Sources by Day Section */}
                 <section className="mb-8 sm:mb-12">
                     <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
-                        <h2 className="text-xl sm:text-2xl font-bold mb-2 text-[var(--foreground)]">Sources by Day</h2>
+                        <h2 className="flex items-center gap-3 text-xl sm:text-2xl font-bold mb-4 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                            <span className="inline-block w-1 h-5 sm:h-6 bg-[var(--primary)] rounded-sm flex-shrink-0" style={{ opacity: 0.85 }} />
+                            Sources by Day
+                        </h2>
                         {sourcesData ? (
                             <SourcesChart data={sourcesData} />
                         ) : (

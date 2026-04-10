@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Home, Music, FolderOpen } from 'lucide-react';
+import { Home, FolderOpen } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
 import TrackListSection from '@/components/TrackListSection';
 import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/lib/api';
@@ -18,6 +18,8 @@ interface AudioMeta {
     deleted: boolean;
     unavailableAt: string | null;
 }
+
+const WAVEFORM_BARS = [14, 22, 18, 28, 20, 32, 24, 16, 26, 20, 12, 28, 22, 18, 30, 24, 20, 26, 18, 32];
 
 export default function Share() {
     const { key } = useParams<{ key: string }>();
@@ -89,73 +91,103 @@ export default function Share() {
             </Helmet>
             {isLoading ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--primary)] mb-4"></div>
-                    <h1 className="text-xl font-semibold">Loading audio...</h1>
+                    <div className="flex items-end gap-1 mb-8" aria-hidden="true">
+                        {WAVEFORM_BARS.slice(0, 9).map((h, i) => (
+                            <div
+                                key={i}
+                                className="w-1 rounded-full"
+                                style={{
+                                    height: `${h}px`,
+                                    background: 'var(--primary)',
+                                    opacity: 0.5,
+                                    animation: `pulse 1.1s ease-in-out ${i * 0.1}s infinite alternate`,
+                                }}
+                            />
+                        ))}
+                    </div>
+                    <p className="text-xl italic text-[var(--muted-foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        Loading audio...
+                    </p>
                 </div>
             ) : notFound ? (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
-                    <div className="text-red-500 mb-4">
-                        <Music className="h-16 w-16 mx-auto" />
-                    </div>
-                    <h1 className="text-xl font-semibold mb-2">Audio not found</h1>
-                    <p className="text-[var(--muted-foreground)] mb-6 text-center">
-                        The audio file you're looking for doesn't exist.
+                <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+                    <p className="text-[0.65rem] uppercase tracking-[0.22em] text-[var(--muted-foreground)] mb-3">404</p>
+                    <h1 className="text-5xl font-bold italic mb-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
+                        Not Found
+                    </h1>
+                    <p className="text-[var(--muted-foreground)] mb-8 max-w-xs leading-relaxed">
+                        The audio file you're looking for doesn't exist or may have been removed.
                     </p>
                     <Link
                         to="/"
-                        className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm"
                     >
                         <Home className="h-4 w-4" />
                         Go to home page
                     </Link>
                 </div>
             ) : meta?.deleted ? (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
-                    <div className="text-[var(--muted-foreground)] mb-4">
-                        <Music className="h-16 w-16 mx-auto" />
-                    </div>
-                    <h1 className="text-xl font-semibold mb-2">{displayTitle}</h1>
+                <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+                    <p className="text-[0.65rem] uppercase tracking-[0.22em] text-[var(--muted-foreground)] mb-3">Unavailable</p>
+                    <h1 className="text-5xl font-bold italic mb-3 break-words max-w-2xl" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
+                        {displayTitle}
+                    </h1>
                     {meta.artist && (
-                        <p className="text-[var(--muted-foreground)] mb-2">{meta.artist}</p>
+                        <p className="text-[var(--muted-foreground)] mb-3 text-lg italic" style={{ fontFamily: 'var(--font-display)' }}>
+                            {meta.artist}
+                        </p>
                     )}
-                    <p className="text-[var(--muted-foreground)] mb-6 text-center">
+                    <p className="text-[var(--muted-foreground)] mb-8 text-sm">
                         This audio has been removed.
                     </p>
                     <Link
                         to="/"
-                        className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm"
                     >
                         <Home className="h-4 w-4" />
                         Go to home page
                     </Link>
                 </div>
             ) : (
-                <div className="container mx-auto p-4 max-w-4xl">
-                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-6 mb-8">
-                        <h1 className="text-2xl font-bold mb-6 break-words line-clamp-4">
+                <div className="container mx-auto p-4 max-w-4xl animate-slideUp">
+                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-6 mb-8 relative overflow-hidden">
+                        {meta?.thumbnail && (
+                            <div
+                                className="absolute inset-0 pointer-events-none"
+                                style={{
+                                    backgroundImage: `url(${API_BASE}/api/audio/key/${key}/thumbnail)`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    filter: 'blur(70px) brightness(0.5) saturate(1.5)',
+                                    transform: 'scale(1.4)',
+                                    opacity: 0.15,
+                                }}
+                            />
+                        )}
+                        <div className="relative">
+                        <h1 className="text-3xl sm:text-4xl font-bold mb-4 break-words line-clamp-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
                             {displayTitle}
                         </h1>
 
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                             <p className="text-[var(--muted-foreground)] mb-4 md:mb-0">
                                 {parentName && (
-                                    <>From directory: <span className="font-medium">{decodeURIComponent(parentName)}</span></>
+                                    <span className="font-medium">{decodeURIComponent(parentName)}</span>
                                 )}
                             </p>
 
                             {meta?.parentPath && (
                                 <Link
                                     to={folderPath}
-                                    className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-md flex items-center gap-2 transition-colors"
+                                    className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
                                 >
-                                    <FolderOpen className="h-5 w-5" />
-                                    <span className="font-medium">Browse Folder</span>
+                                    <FolderOpen className="h-4 w-4" />
+                                    <span>Browse folder</span>
                                 </Link>
                             )}
                         </div>
 
-                        <div className="bg-[var(--card-hover)]/40 rounded-lg p-6">
-                            <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} unavailable={!!meta?.unavailableAt} />
+                        <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} unavailable={!!meta?.unavailableAt} />
                         </div>
                     </div>
 

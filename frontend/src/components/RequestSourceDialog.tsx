@@ -112,7 +112,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                     </div>
 
                     {status.message && (
-                        <div className={`mb-4 p-3 rounded-md ${status.success ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>
+                        <div className={`mb-4 p-3 rounded-md ${status.success ? 'bg-[var(--success-bg)] border border-[var(--success-border)] text-[var(--success-text)]' : 'bg-[var(--error-bg)] border border-[var(--error-border)] text-[var(--error-text)]'}`}>
                             {status.message}
                         </div>
                     )}

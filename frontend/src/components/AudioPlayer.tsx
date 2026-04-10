@@ -5,8 +5,6 @@ import {
     Volume2,
     VolumeX,
     AlertCircle,
-    ChevronUp,
-    ChevronDown,
     ExternalLink,
     Calendar,
     ChevronsDown,
@@ -25,7 +23,6 @@ interface AudioPlayerProps {
 }
 
 export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
-    const [isExpanded, setIsExpanded] = useState(true);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const hasTracked = useRef(false);
@@ -64,18 +61,8 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
         togglePlay();
     }, [isPlaying, onPlay, togglePlay]);
 
-    const toggleExpand = () => {
-        setIsExpanded(!isExpanded);
-        if (isMinimized && !isExpanded) {
-            setIsMinimized(false);
-        }
-    };
-
     const toggleMinimize = () => {
         setIsMinimized(!isMinimized);
-        if (!isMinimized && !isExpanded) {
-            setIsExpanded(true);
-        }
     };
 
     const toggleDescriptionExpand = () => {
@@ -84,70 +71,73 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
 
     return (
         <div
-            className={`fixed bottom-4 right-4 z-50 ${isMinimized ? 'w-16' : 'w-72'} bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden transition-all duration-300`}
+            className={`fixed bottom-4 right-4 z-50 ${isMinimized ? 'w-52' : 'w-80'} rounded-lg overflow-hidden transition-all duration-300`}
+            style={{
+                background: 'rgba(19, 17, 9, 0.92)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                borderColor: isPlaying ? 'rgba(196,136,42,0.4)' : 'var(--border)',
+                boxShadow: isPlaying
+                    ? '0 20px 60px rgba(0,0,0,0.55), 0 0 40px rgba(196,136,42,0.07)'
+                    : '0 20px 50px rgba(0,0,0,0.45)',
+            }}
         >
-            <div className="flex justify-between items-center p-2.5 border-b border-[var(--border)]">
-                {!isMinimized && (
+            {isMinimized ? (
+                <div className="flex items-center gap-2 px-2 py-2">
+                    <div className="relative flex-shrink-0">
+                        {isPlaying && (
+                            <span className="absolute inset-0 rounded-full bg-[var(--primary)] animate-ping opacity-20 pointer-events-none" />
+                        )}
+                        <button
+                            onClick={handlePlay}
+                            className="relative p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 focus:outline-none"
+                            style={{
+                                boxShadow: isPlaying ? '0 0 0 3px rgba(196,136,42,0.25), 0 0 18px rgba(196,136,42,0.3)' : undefined,
+                            }}
+                            aria-label={isPlaying ? "Pause" : "Play"}
+                        >
+                            {isLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin"/>
+                            ) : isPlaying ? (
+                                <Pause className="h-4 w-4"/>
+                            ) : (
+                                <Play className="h-4 w-4"/>
+                            )}
+                        </button>
+                    </div>
+                    <div className="flex-1 min-w-0 text-xs text-[var(--foreground)] truncate leading-tight">
+                        {metadata?.title || track}
+                    </div>
                     <button
-                        onClick={toggleExpand}
-                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                        aria-label={isExpanded ? "Collapse player" : "Expand player"}
+                        onClick={toggleMinimize}
+                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex-shrink-0"
+                        aria-label="Expand player"
                     >
-                        {isExpanded ? <ChevronDown className="h-4 w-4"/> : <ChevronUp className="h-4 w-4"/>}
+                        <Expand className="h-3.5 w-3.5"/>
                     </button>
-                )}
-
-                <div className={`${isMinimized ? 'w-full text-center' : 'flex-grow text-center'} truncate px-2`}>
-                    {!isMinimized && (
+                </div>
+            ) : (
+                <>
+                <div className="flex items-center justify-between p-2.5 border-b border-[var(--border)]">
+                    <div className="flex-grow text-center truncate px-2">
                         <div className="text-sm font-medium truncate">
                             {metadata?.title || track}
                         </div>
-                    )}
-                </div>
-
-                {!isMinimized && (
+                    </div>
                     <button
                         onClick={toggleMinimize}
-                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex-shrink-0"
                         aria-label="Minimize player"
                     >
                         <MinusCircle className="h-4 w-4"/>
                     </button>
-                )}
-
-                {isMinimized && (
-                    <button
-                        onClick={toggleMinimize}
-                        className="absolute top-1 right-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                        aria-label="Expand player"
-                    >
-                        <Expand className="h-3 w-3"/>
-                    </button>
-                )}
-            </div>
-
-            {isMinimized && (
-                <div className="p-2 flex justify-center">
-                    <button
-                        onClick={handlePlay}
-                        className="p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-opacity-50"
-                        aria-label={isPlaying ? "Pause" : "Play"}
-                    >
-                        {isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin"/>
-                        ) : isPlaying ? (
-                            <Pause className="h-4 w-4"/>
-                        ) : (
-                            <Play className="h-4 w-4"/>
-                        )}
-                    </button>
                 </div>
-            )}
 
-            {!isMinimized && (
                 <div className="p-3">
                     <div className="flex flex-col mb-3">
-                        {thumbnail && isExpanded && (
+                        {thumbnail && (
                             <div className="mx-auto mb-3 transition-all duration-300 transform hover:scale-105">
                                 <img
                                     src={thumbnail}
@@ -210,15 +200,20 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
 
                             <button
                                 onClick={handlePlay}
-                                className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-opacity-50 mx-2"
+                                className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-300 mx-2 focus:outline-none"
+                                style={{
+                                    boxShadow: isPlaying
+                                        ? '0 0 0 3px rgba(196,136,42,0.25), 0 0 24px rgba(196,136,42,0.4)'
+                                        : '0 0 0 0 rgba(196,136,42,0)',
+                                }}
                                 aria-label={isPlaying ? "Pause" : "Play"}
                             >
                                 {isLoading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin"/>
+                                    <Loader2 className="h-6 w-6 animate-spin"/>
                                 ) : isPlaying ? (
-                                    <Pause className="h-5 w-5"/>
+                                    <Pause className="h-6 w-6"/>
                                 ) : (
-                                    <Play className="h-5 w-5"/>
+                                    <Play className="h-6 w-6"/>
                                 )}
                             </button>
 
@@ -228,76 +223,73 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
                         </div>
                     </div>
 
-                    {isExpanded && (
-                        <div className="flex items-center space-x-2 mb-2 transition-all duration-300 animate-fadeIn">
-                            <button
-                                onClick={toggleMute}
-                                className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus:outline-none"
-                                aria-label={isMuted ? "Unmute" : "Mute"}
-                            >
-                                {isMuted ? <VolumeX className="h-4 w-4"/> : <Volume2 className="h-4 w-4"/>}
-                            </button>
+                    <div className="flex items-center space-x-2 mb-2">
+                        <button
+                            onClick={toggleMute}
+                            className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus:outline-none"
+                            aria-label={isMuted ? "Unmute" : "Mute"}
+                        >
+                            {isMuted ? <VolumeX className="h-4 w-4"/> : <Volume2 className="h-4 w-4"/>}
+                        </button>
 
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                value={volume}
-                                onChange={handleVolumeChange}
-                                className="flex-grow accent-[var(--primary)] transition-all duration-200"
-                                aria-label="Volume"
-                            />
-                        </div>
-                    )}
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={volume}
+                            onChange={handleVolumeChange}
+                            className="flex-grow transition-all duration-200"
+                            aria-label="Volume"
+                        />
+                    </div>
 
-                    {isExpanded && (
-                        <div className="transition-all duration-300 animate-fadeIn">
-                            {metadata?.uploadDate && (
-                                <div className="text-xs text-[var(--muted-foreground)] flex items-center mt-2">
-                                    <Calendar className="h-3 w-3 mr-1"/>
-                                    <span>{`${metadata.uploadDate.substring(0, 4)}-${metadata.uploadDate.substring(4, 6)}-${metadata.uploadDate.substring(6, 8)}`}</span>
-                                </div>
-                            )}
+                    <div>
+                        {metadata?.uploadDate && (
+                            <div className="text-xs text-[var(--muted-foreground)] flex items-center mt-2">
+                                <Calendar className="h-3 w-3 mr-1"/>
+                                <span>{`${metadata.uploadDate.substring(0, 4)}-${metadata.uploadDate.substring(4, 6)}-${metadata.uploadDate.substring(6, 8)}`}</span>
+                            </div>
+                        )}
 
-                            {metadata?.webpageUrl && (
-                                <div className="text-xs text-[var(--muted-foreground)] flex items-center mt-2">
-                                    <a
-                                        href={metadata.webpageUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center hover:text-[var(--primary)] transition-colors"
+                        {metadata?.webpageUrl && (
+                            <div className="text-xs text-[var(--muted-foreground)] flex items-center mt-2">
+                                <a
+                                    href={metadata.webpageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center hover:text-[var(--primary)] transition-colors"
+                                >
+                                    <ExternalLink className="h-3 w-3 mr-1"/>
+                                    <span className="truncate">Original Source</span>
+                                </a>
+                            </div>
+                        )}
+
+                        {metadata?.description && (
+                            <div className="mt-3 text-xs text-[var(--muted-foreground)]">
+                                <div className="flex justify-between items-center mb-1">
+                                    <div className="font-medium text-xs">Description</div>
+                                    <button
+                                        onClick={toggleDescriptionExpand}
+                                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                                        aria-label={isDescriptionExpanded ? "Collapse description" : "Expand description"}
                                     >
-                                        <ExternalLink className="h-3 w-3 mr-1"/>
-                                        <span className="truncate">Original Source</span>
-                                    </a>
+                                        {isDescriptionExpanded ? <ChevronsUp className="h-3 w-3"/> :
+                                            <ChevronsDown className="h-3 w-3"/>}
+                                    </button>
                                 </div>
-                            )}
-
-                            {metadata?.description && (
-                                <div className="mt-3 text-xs text-[var(--muted-foreground)]">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <div className="font-medium text-xs">Description</div>
-                                        <button
-                                            onClick={toggleDescriptionExpand}
-                                            className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                                            aria-label={isDescriptionExpanded ? "Collapse description" : "Expand description"}
-                                        >
-                                            {isDescriptionExpanded ? <ChevronsUp className="h-3 w-3"/> :
-                                                <ChevronsDown className="h-3 w-3"/>}
-                                        </button>
-                                    </div>
-                                    <div
-                                        className={`${isDescriptionExpanded ? 'max-h-40 overflow-y-auto custom-scrollbar' : 'line-clamp-2'} whitespace-pre-line rounded bg-[var(--card-hover)]/20 p-2`}
-                                        onClick={isDescriptionExpanded ? undefined : toggleDescriptionExpand}
-                                    >
-                                        {metadata.description}
-                                    </div>
+                                <div
+                                    className={`${isDescriptionExpanded ? 'max-h-40 overflow-y-auto custom-scrollbar' : 'line-clamp-2'} whitespace-pre-line rounded bg-[var(--card-hover)]/20 p-2`}
+                                    onClick={isDescriptionExpanded ? undefined : toggleDescriptionExpand}
+                                >
+                                    {metadata.description}
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        )}
+                    </div>
                 </div>
+            </>
             )}
         </div>
     );

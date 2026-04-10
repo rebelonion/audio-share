@@ -24,7 +24,7 @@ export default function Browse() {
                 <title>{folderName} - Audio Browser</title>
                 <meta name="description" content={`${DEFAULT_DESCRIPTION} — Browse ${folderName}`} />
             </Helmet>
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-auto animate-slideUp">
                 <BrowseClient initialPath={pathStr} />
             </div>
         </>

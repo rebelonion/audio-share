@@ -1,4 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {createPortal} from 'react-dom';
 import {Calendar, Check, Music, SortAsc} from 'lucide-react';
 import {FileSystemItem, Notification} from '@/types';
 import AudioPlayer from './AudioPlayer';
@@ -286,24 +287,31 @@ export default function FolderView({items}: FolderViewProps) {
         <div className="relative">
             {/* Floating notification */}
             <div
-                className={`fixed bottom-4 right-4 ${notification.isError ? 'bg-red-600' : 'bg-green-600'} text-white px-4 py-2 rounded-md shadow-lg transform transition-transform duration-300 flex items-center gap-2 ${
+                className={`fixed bottom-4 right-4 px-4 py-2 rounded-md shadow-lg transform transition-all duration-300 flex items-center gap-2 ${
                     notification.visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
                 }`}
+                style={notification.isError ? {
+                    background: 'var(--error-bg)',
+                    border: '1px solid var(--error-border)',
+                    color: 'var(--error-text)',
+                } : {
+                    background: 'var(--primary)',
+                    color: '#fff',
+                }}
             >
-                {notification.isError ? (
-                    <span className="h-4 w-4">⚠️</span>
-                ) : (
+                {notification.isError ? null : (
                     <Check className="h-4 w-4"/>
                 )}
                 <span>{notification.message || 'Link copied to clipboard!'}</span>
             </div>
 
-            {selectedAudio && (
+            {selectedAudio && createPortal(
                 <AudioPlayer
                     src={selectedAudio}
                     name={selectedAudioName}
                     onPlay={() => recordPlayEvent(selectedAudioKey).catch(() => {})}
-                />
+                />,
+                document.body
             )}
 
             {items.length === 0 ? (
@@ -320,25 +328,25 @@ export default function FolderView({items}: FolderViewProps) {
 
                             {/* Sort Controls */}
                             <div className="flex items-center justify-end md:justify-start space-x-2 flex-shrink-0">
-                                <div className="text-sm text-[var(--muted-foreground)]">Sort by:</div>
+                                <div className="text-[0.7rem] uppercase tracking-[0.1em] text-[var(--muted-foreground)]">Sort by:</div>
                                 <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
                                     <button
                                         onClick={() => handleOrderToggle('alpha')}
-                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                         title="Sort alphabetically"
                                     >
                                         <SortAsc className="h-3.5 w-3.5 mr-1 hidden md:block"/> A-Z
                                     </button>
                                     <button
                                         onClick={() => handleOrderToggle('modified')}
-                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                         title="Sort by modified date"
                                     >
                                         <Calendar className="h-3.5 w-3.5 mr-1 hidden md:block"/> Date
                                     </button>
                                     <button
                                         onClick={() => handleOrderToggle('size')}
-                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                         title="Sort by size"
                                     >
                                         <svg className="h-3.5 w-3.5 mr-1 hidden md:block" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -351,7 +359,7 @@ export default function FolderView({items}: FolderViewProps) {
                                     </button>
                                     <button
                                         onClick={() => handleOrderToggle('type')}
-                                        className={`px-3 py-1.5 text-sm flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
                                         title="Group by type"
                                     >
                                         <Music className="h-3.5 w-3.5 mr-1 hidden md:block"/> Type
@@ -367,7 +375,7 @@ export default function FolderView({items}: FolderViewProps) {
                             className="flex-1 min-w-0 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
                             <div className="overflow-x-auto scrollbar-hide" id="table-container">
                                 <table className="w-full table-fixed divide-y divide-[var(--border)]">
-                                    <thead className="bg-[var(--card-hover)] sticky top-0 z-20">
+                                    <thead className="bg-[var(--secondary)] sticky top-0 z-20">
                                     <tr>
                                         <th scope="col"
                                             className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
@@ -413,9 +421,10 @@ export default function FolderView({items}: FolderViewProps) {
                                                     >
                                                         <td
                                                             colSpan={4}
-                                                            className="px-6 py-2 font-semibold text-[var(--primary)]"
+                                                            className="pl-4 pr-6 py-1.5 border-l-2 border-[var(--primary)]"
+                                                            style={{ fontFamily: 'var(--font-display)' }}
                                                         >
-                                                            {letter}
+                                                            <span className="text-[var(--primary)] font-semibold tracking-widest text-sm">{letter}</span>
                                                         </td>
                                                     </tr>
 
@@ -462,9 +471,10 @@ export default function FolderView({items}: FolderViewProps) {
                                                 ref={(el) => {
                                                     if (el) letterRefs.current[letter] = el;
                                                 }}
-                                                className="bg-[var(--card-hover)] rounded-lg px-4 py-2 mb-2 font-semibold text-[var(--primary)] sticky top-0 z-10 letter-section-mobile"
+                                                className="bg-[var(--card-hover)] rounded-sm px-4 py-1.5 mb-2 sticky top-0 z-10 letter-section-mobile border-l-2 border-[var(--primary)]"
+                                                style={{ fontFamily: 'var(--font-display)' }}
                                             >
-                                                {letter}
+                                                <span className="text-[var(--primary)] font-semibold tracking-widest text-sm">{letter}</span>
                                             </div>
 
                                             {/* Items starting with this letter */}

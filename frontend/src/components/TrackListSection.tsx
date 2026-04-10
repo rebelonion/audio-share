@@ -24,9 +24,27 @@ function TrackPoster({ track }: { track: PlaybackTrack }) {
     const imageUrl = imageError ? null : (thumbnailUrl || posterUrl);
 
     if (!imageUrl) {
+        const bars = [14, 22, 18, 28, 20, 32, 24, 16, 26, 20, 12, 28, 22, 18, 30];
         return (
-            <div className="w-full h-24 md:h-28 bg-[var(--card-hover)] flex items-center justify-center">
-                <Music className="h-8 w-8 text-[var(--muted-foreground)]" />
+            <div
+                className="w-full h-24 md:h-28 flex items-center justify-center relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--secondary) 100%)' }}
+            >
+                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 120 56" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                    {bars.map((h, i) => (
+                        <rect
+                            key={i}
+                            x={i * 8 + 4}
+                            y={(56 - h) / 2}
+                            width={3}
+                            height={h}
+                            rx={1.5}
+                            fill="var(--primary)"
+                            opacity={0.12}
+                        />
+                    ))}
+                </svg>
+                <Music className="h-7 w-7 relative z-10" style={{ color: 'var(--muted-foreground)', opacity: 0.45 }} />
             </div>
         );
     }
@@ -83,19 +101,22 @@ export default function TrackListSection({ title, tracks }: TrackListSectionProp
     return (
         <div>
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">{title}</h2>
+                <h2 className="flex items-center gap-3 text-2xl font-bold italic tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+                    <span className="inline-block w-1 h-6 bg-[var(--primary)] rounded-sm flex-shrink-0 not-italic" style={{ opacity: 0.85 }} />
+                    {title}
+                </h2>
                 {needsScroll && <div className="flex gap-1">
                     <button
                         onClick={() => scroll('left')}
                         disabled={!canScrollLeft}
-                        className="p-1.5 rounded-md bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--card-hover)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         <ChevronLeft className="h-4 w-4" />
                     </button>
                     <button
                         onClick={() => scroll('right')}
                         disabled={!canScrollRight}
-                        className="p-1.5 rounded-md bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--card-hover)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         <ChevronRight className="h-4 w-4" />
                     </button>
@@ -107,14 +128,15 @@ export default function TrackListSection({ title, tracks }: TrackListSectionProp
                 onScroll={updateScrollState}
                 className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory"
             >
-                {tracks.map((track) => (
+                {tracks.map((track, index) => (
                     <Link
                         key={track.shareKey || track.path}
                         to={getShareUrl(track)}
                         onClick={() => trackEvent('carousel-click', { section: title, path: track.path, title: track.title || track.filename })}
-                        className="flex-shrink-0 w-36 md:w-44 snap-start group"
+                        className="flex-shrink-0 w-36 md:w-44 snap-start group animate-fadeIn"
+                        style={{ animationDelay: `${index * 35}ms`, animationFillMode: 'both' }}
                     >
-                        <div className="rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] hover:border-[var(--primary)] transition-colors">
+                        <div className="rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-all duration-200">
                             <TrackPoster track={track} />
                             <div className="p-2.5">
                                 <div className="font-medium text-sm line-clamp-2 group-hover:text-[var(--primary)] transition-colors">

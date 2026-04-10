@@ -88,7 +88,7 @@ export default function Contact() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label htmlFor="topic" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
-                            Topic <span className="text-red-500">*</span>
+                            Topic <span className="text-[var(--primary)]">*</span>
                         </label>
                         <select
                             id="topic"
@@ -126,7 +126,7 @@ export default function Contact() {
 
                     <div>
                         <label htmlFor="message" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
-                            Message <span className="text-red-500">*</span>
+                            Message <span className="text-[var(--primary)]">*</span>
                         </label>
                         <textarea
                             id="message"
@@ -143,8 +143,8 @@ export default function Contact() {
                         <div
                             className={`p-4 rounded-lg border ${
                                 submitMessage.type === 'success'
-                                    ? 'bg-green-900/20 border-green-500/50 text-green-400'
-                                    : 'bg-red-900/20 border-red-500/50 text-red-400'
+                                    ? 'bg-[var(--success-bg)] border-[var(--success-border)] text-[var(--success-text)]'
+                                    : 'bg-[var(--error-bg)] border-[var(--error-border)] text-[var(--error-text)]'
                             }`}
                         >
                             {submitMessage.text}

@@ -60,9 +60,16 @@ export default function WaveformDisplay({
                     <clipPath id={`${id}-p`}>
                         <rect x={0} y={0} width={progressX} height={H} />
                     </clipPath>
+                    <filter id={`${id}-glow`} x='-10%' y='-20%' width='120%' height='140%'>
+                        <feGaussianBlur stdDeviation='2.5' result='blur' />
+                        <feMerge>
+                            <feMergeNode in='blur' />
+                            <feMergeNode in='SourceGraphic' />
+                        </feMerge>
+                    </filter>
                 </defs>
                 <path d={pathD} fill='var(--muted)' clipPath={`url(#${id}-u)`} />
-                <path d={pathD} fill='var(--primary)' clipPath={`url(#${id}-p)`} />
+                <path d={pathD} fill='var(--primary)' clipPath={`url(#${id}-p)`} filter={progressX > 0 ? `url(#${id}-glow)` : undefined} />
             </svg>
         </div>
     );

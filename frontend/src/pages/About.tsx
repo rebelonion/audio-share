@@ -50,7 +50,7 @@ export default function About() {
                 <title>{DEFAULT_TITLE} - About</title>
                 <meta name="description" content={`${DEFAULT_DESCRIPTION} — About`} />
             </Helmet>
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto animate-slideUp">
                 {error && (
                     <div className="mb-4 p-3 bg-yellow-900/20 text-yellow-400 rounded-lg">
                         Note: Using default content. {error}
@@ -61,13 +61,13 @@ export default function About() {
                         remarkPlugins={[remarkGfm]}
                         components={{
                             h1: (props) => (
-                                <h1 className="text-4xl font-bold mb-6 text-[var(--foreground)]" {...props} />
+                                <h1 className="text-4xl font-bold mb-6 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }} {...props} />
                             ),
                             h2: (props) => (
-                                <h2 className="text-3xl font-bold mt-8 mb-4 text-[var(--foreground)]" {...props} />
+                                <h2 className="text-3xl font-bold mt-8 mb-4 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }} {...props} />
                             ),
                             h3: (props) => (
-                                <h3 className="text-2xl font-bold mt-6 mb-3 text-[var(--foreground)]" {...props} />
+                                <h3 className="text-2xl font-bold mt-6 mb-3 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }} {...props} />
                             ),
                             p: (props) => (
                                 <p className="text-[var(--foreground)] mb-4 leading-relaxed" {...props} />

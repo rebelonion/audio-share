@@ -12,12 +12,12 @@ interface BrowseClientProps {
 function SkeletonRow() {
     return (
         <div className="flex items-center p-3 border-b border-[var(--border)]">
-            <div className="w-8 h-8 rounded bg-[var(--muted)] animate-pulse mr-3" />
+            <div className="w-8 h-8 rounded skeleton mr-3 flex-shrink-0" />
             <div className="flex-1">
-                <div className="h-4 bg-[var(--muted)] rounded animate-pulse w-3/4" />
+                <div className="h-4 skeleton rounded w-3/4" />
             </div>
-            <div className="hidden md:block w-24 h-4 bg-[var(--muted)] rounded animate-pulse mx-4" />
-            <div className="hidden md:block w-20 h-4 bg-[var(--muted)] rounded animate-pulse" />
+            <div className="hidden md:block w-24 h-4 skeleton rounded mx-4" />
+            <div className="hidden md:block w-20 h-4 skeleton rounded" />
         </div>
     );
 }
@@ -26,7 +26,7 @@ function BrowseSkeleton() {
     return (
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg overflow-hidden">
             <div className="p-3 border-b border-[var(--border)]">
-                <div className="h-8 bg-[var(--muted)] rounded animate-pulse w-64" />
+                <div className="h-8 skeleton rounded w-64" />
             </div>
             {[...Array(8)].map((_, i) => (
                 <SkeletonRow key={i} />
@@ -85,10 +85,10 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
         return (
             <div>
                 {showTitle && (
-                    <div className="h-8 bg-[var(--muted)] rounded animate-pulse w-48 mb-6" />
+                    <div className="h-8 skeleton rounded w-48 mb-6" />
                 )}
                 {initialPath && (
-                    <div className="h-6 bg-[var(--muted)] rounded animate-pulse w-64 mb-4" />
+                    <div className="h-6 skeleton rounded w-64 mb-4" />
                 )}
                 <BrowseSkeleton />
             </div>
@@ -97,8 +97,8 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
 
     if (error) {
         return (
-            <div className="text-center py-8 text-red-500">
-                <p>{error}</p>
+            <div className="bg-[var(--card)] border border-red-900/40 rounded-lg p-8 text-center">
+                <p className="text-red-400 text-sm">{error}</p>
             </div>
         );
     }
@@ -110,7 +110,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
     return (
         <div>
             {showTitle && currentPath === '' && (
-                <h2 className="text-2xl font-bold mb-6">{directoryTitle}</h2>
+                <h2 className="text-2xl font-bold mb-6" style={{ fontFamily: 'var(--font-display)' }}>{directoryTitle}</h2>
             )}
             {currentPath !== '' && <Breadcrumb path={currentPath} />}
             <FolderView items={items} />

@@ -202,10 +202,10 @@ export default function Search() {
                 <meta name="description" content={`${DEFAULT_DESCRIPTION} — Search`} />
             </Helmet>
 
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto animate-slideUp">
                 <div className="mb-8">
-                    <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                        <SearchIcon className="h-6 w-6 text-[var(--primary)]" />
+                    <h1 className="text-3xl font-bold mb-4 flex items-center gap-3" style={{ fontFamily: 'var(--font-display)' }}>
+                        <SearchIcon className="h-6 w-6 text-[var(--primary)] flex-shrink-0" />
                         Search Audio Library
                     </h1>
 
@@ -905,8 +905,8 @@ function DualRangeSlider({ minVal, maxVal, onChange }: DualRangeSliderProps) {
         '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4',
         '[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary)] [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
         '[&::-moz-range-thumb]:shadow-[0_0_0_2px_var(--card),0_0_0_3px_var(--primary)]',
-        '[&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0',
-        '[&::-moz-range-track]:bg-transparent [&::-moz-range-track]:h-0 [&::-moz-range-track]:border-0',
+        '[&::-webkit-slider-runnable-track]:!bg-transparent [&::-webkit-slider-runnable-track]:!h-0',
+        '[&::-moz-range-track]:!bg-transparent [&::-moz-range-track]:!h-0 [&::-moz-range-track]:!border-0',
     ].join(' ');
 
     return (
