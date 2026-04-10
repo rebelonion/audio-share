@@ -48,7 +48,16 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query().Get("q")
-	if len(query) < 2 {
+
+	hasFilters := r.URL.Query().Get("type") != "" ||
+		r.URL.Query().Get("unavailableOnly") == "true" ||
+		r.URL.Query().Get("sort") != "" ||
+		r.URL.Query().Get("dateFrom") != "" ||
+		r.URL.Query().Get("dateTo") != "" ||
+		r.URL.Query().Get("durationMin") != "" ||
+		r.URL.Query().Get("durationMax") != ""
+
+	if len(query) < 2 && !hasFilters {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(SearchResponse{
 			Results: []services.SearchResult{},
@@ -75,7 +84,35 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, total, err := h.searchService.Search(query, limit, offset)
+	opts := services.SearchOptions{}
+
+	if t := r.URL.Query().Get("type"); t == "audio" || t == "folder" {
+		opts.Type = t
+	}
+
+	if r.URL.Query().Get("unavailableOnly") == "true" {
+		opts.UnavailableOnly = true
+	}
+
+	if s := r.URL.Query().Get("sort"); s != "" {
+		opts.Sort = s
+	}
+
+	opts.DateFrom = r.URL.Query().Get("dateFrom")
+	opts.DateTo = r.URL.Query().Get("dateTo")
+
+	if v := r.URL.Query().Get("durationMin"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			opts.DurationMin = f
+		}
+	}
+	if v := r.URL.Query().Get("durationMax"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			opts.DurationMax = f
+		}
+	}
+
+	results, total, err := h.searchService.Search(query, limit, offset, opts)
 	if err != nil {
 		http.Error(w, "Search error", http.StatusInternalServerError)
 		return

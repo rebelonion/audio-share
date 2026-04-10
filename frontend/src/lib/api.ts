@@ -142,13 +142,32 @@ export async function getRandomAudio(): Promise<string> {
     return data.shareKey;
 }
 
-export async function searchAudio(query: string, limit?: number, offset?: number): Promise<SearchResponse> {
+export interface SearchFilters {
+    type?: 'audio' | 'folder';
+    unavailableOnly?: boolean;
+    sort?: 'name_asc' | 'name_desc' | 'date_asc' | 'date_desc';
+    dateFrom?: string;
+    dateTo?: string;
+    durationMin?: number;
+    durationMax?: number;
+}
+
+export async function searchAudio(query: string, limit?: number, offset?: number, filters?: SearchFilters): Promise<SearchResponse> {
     const params = new URLSearchParams({ q: query });
     if (limit) {
         params.set('limit', limit.toString());
     }
     if (offset) {
         params.set('offset', offset.toString());
+    }
+    if (filters) {
+        if (filters.type) params.set('type', filters.type);
+        if (filters.unavailableOnly) params.set('unavailableOnly', 'true');
+        if (filters.sort) params.set('sort', filters.sort);
+        if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+        if (filters.dateTo) params.set('dateTo', filters.dateTo);
+        if (filters.durationMin != null && filters.durationMin > 0) params.set('durationMin', filters.durationMin.toString());
+        if (filters.durationMax != null && filters.durationMax > 0) params.set('durationMax', filters.durationMax.toString());
     }
 
     const response = await fetch(`${API_BASE}/api/search?${params}`);
