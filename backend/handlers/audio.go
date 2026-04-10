@@ -290,9 +290,10 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 	}
 
 	var peaks string
+	var duration sql.NullFloat64
 	err = h.db.QueryRow(`
-		SELECT peaks FROM waveform_cache WHERE audio_file_id = $1
-	`, fileID).Scan(&peaks)
+		SELECT peaks, duration_seconds FROM waveform_cache WHERE audio_file_id = $1
+	`, fileID).Scan(&peaks, &duration)
 	if err == sql.ErrNoRows {
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusNoContent)
@@ -303,9 +304,13 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 		return
 	}
 
+	resp := map[string]any{"peaks": peaks}
+	if duration.Valid {
+		resp["duration"] = duration.Float64
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	json.NewEncoder(w).Encode(map[string]string{"peaks": peaks})
+	json.NewEncoder(w).Encode(resp)
 }
 
 type BrowseHandler struct {

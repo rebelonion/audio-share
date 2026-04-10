@@ -37,15 +37,16 @@ func NewWaveformService(db *sql.DB, fs *FileSystemService, workers int) *Wavefor
 	return &WaveformService{db: db, fs: fs, workers: workers}
 }
 
-func (s *WaveformService) GetByShareKey(shareKey string) (string, error) {
+func (s *WaveformService) GetByShareKey(shareKey string) (string, float64, error) {
 	var peaks string
+	var duration sql.NullFloat64
 	err := s.db.QueryRow(`
-		SELECT wc.peaks
+		SELECT wc.peaks, wc.duration_seconds
 		FROM waveform_cache wc
 		JOIN audio_files af ON af.id = wc.audio_file_id
 		WHERE af.share_key = $1
-	`, shareKey).Scan(&peaks)
-	return peaks, err
+	`, shareKey).Scan(&peaks, &duration)
+	return peaks, duration.Float64, err
 }
 
 func (s *WaveformService) StartScheduledJob(cronExpr, maxDurationStr string) {
@@ -144,7 +145,7 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 				return
 			}
 
-			peaks, err := generateWaveform(fullPath)
+			peaks, duration, err := generateWaveform(fullPath)
 			if err != nil {
 				log.Printf("Waveform: failed %s: %v", f.path, err)
 				return
@@ -152,9 +153,9 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 
 			encoded := base64.StdEncoding.EncodeToString(peaks)
 			_, err = s.db.Exec(`
-				INSERT INTO waveform_cache (audio_file_id, peaks) VALUES ($1, $2)
-				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, generated_at = CURRENT_TIMESTAMP
-			`, f.id, encoded)
+				INSERT INTO waveform_cache (audio_file_id, peaks, duration_seconds) VALUES ($1, $2, $3)
+				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, duration_seconds = excluded.duration_seconds, generated_at = CURRENT_TIMESTAMP
+			`, f.id, encoded, duration)
 			if err != nil {
 				log.Printf("Waveform: store error %s: %v", f.path, err)
 				return
@@ -189,13 +190,13 @@ func getAudioDuration(filePath string) (float64, error) {
 	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 }
 
-func generateWaveform(filePath string) ([]byte, error) {
+func generateWaveform(filePath string) ([]byte, float64, error) {
 	duration, err := getAudioDuration(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("ffprobe: %w", err)
+		return nil, 0, fmt.Errorf("ffprobe: %w", err)
 	}
 	if duration <= 0 {
-		return nil, fmt.Errorf("invalid duration: %f", duration)
+		return nil, 0, fmt.Errorf("invalid duration: %f", duration)
 	}
 
 	totalSamples := int(duration * waveformSampleRate)
@@ -215,10 +216,10 @@ func generateWaveform(filePath string) ([]byte, error) {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	rawPeaks := make([]float64, waveformNumPeaks)
@@ -261,12 +262,12 @@ func generateWaveform(filePath string) ([]byte, error) {
 		if readErr != nil {
 			cmd.Process.Kill()
 			cmd.Wait()
-			return nil, readErr
+			return nil, 0, readErr
 		}
 	}
 
 	if err := cmd.Wait(); err != nil && peakIdx < waveformNumPeaks/2 {
-		return nil, fmt.Errorf("ffmpeg: %w", err)
+		return nil, 0, fmt.Errorf("ffmpeg: %w", err)
 	}
 
 	if samplesInBucket > 0 && peakIdx < waveformNumPeaks {
@@ -303,7 +304,7 @@ func generateWaveform(filePath string) ([]byte, error) {
 		}
 	}
 
-	return peaks, nil
+	return peaks, duration, nil
 }
 
 func smoothPeaks(peaks []float64, radius int) []float64 {

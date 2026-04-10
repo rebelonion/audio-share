@@ -101,6 +101,7 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
+		`ALTER TABLE waveform_cache ADD COLUMN IF NOT EXISTS duration_seconds REAL`,
 	}
 
 	for _, stmt := range statements {

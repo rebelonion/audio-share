@@ -94,12 +94,17 @@ export function useAudioPlayer(src: string) {
         setThumbnail(null);
         setMetadata(null);
         setWaveformPeaks(null);
+        setDuration(0);
 
         fetch(`${API_BASE}/api/audio/key/${key}/waveform`, { signal })
             .then(r => r.status === 200 ? r.json() : null)
             .then(data => {
-                if (data?.peaks && !signal.aborted) {
+                if (signal.aborted) return;
+                if (data?.peaks) {
                     setWaveformPeaks(Uint8Array.from(atob(data.peaks), c => c.charCodeAt(0)));
+                }
+                if (data?.duration) {
+                    setDuration(data.duration);
                 }
             })
             .catch(() => {});
