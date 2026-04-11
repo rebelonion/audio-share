@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Calendar, Check, Music, SortAsc} from 'lucide-react';
+import {Calendar, Check, SortAsc} from 'lucide-react';
 import {FileSystemItem, Notification} from '@/types';
 import AudioPlayer from './AudioPlayer';
 import AlphaScrollbar from './AlphaScrollbar';
@@ -17,7 +17,7 @@ interface FolderViewProps {
     items: FileSystemItem[];
 }
 
-type SortMethod = 'alpha' | 'modified' | 'size' | 'type';
+type SortMethod = 'alpha' | 'modified' | 'size';
 
 export default function FolderView({items}: FolderViewProps) {
     const {track} = useUmami();
@@ -41,7 +41,7 @@ export default function FolderView({items}: FolderViewProps) {
     useEffect(() => {
         const urlSort = searchParams.get("sort") as SortMethod | null;
 
-        if (urlSort && ['alpha', 'modified', 'size', 'type'].includes(urlSort)) {
+        if (urlSort && ['alpha', 'modified', 'size'].includes(urlSort)) {
             setSortMethod(urlSort);
         } else {
             const folderCount = items.filter(item => item.type === 'folder').length;
@@ -143,30 +143,6 @@ export default function FolderView({items}: FolderViewProps) {
                     const aSize = 'size' in a ? a.size : 0;
                     const bSize = 'size' in b ? b.size : 0;
                     return bSize - aSize;
-                });
-                return reverseIf(presortedItems, sortOrder === 'desc');
-            }
-            case 'type': {
-                const presortedItems = [...filteredItems].sort((a, b) => {
-                    // First by type
-                    if (a.type === 'folder' && b.type !== 'folder') return -1;
-                    if (a.type !== 'folder' && b.type === 'folder') return 1;
-
-                    // Then by extension for audio files
-                    if (a.type === 'audio' && b.type === 'audio') {
-                        const aExt = a.name.split('.').pop() || '';
-                        const bExt = b.name.split('.').pop() || '';
-                        const extCompare = aExt.localeCompare(bExt);
-
-                        // If same extension, sort by name
-                        if (extCompare === 0) {
-                            return a.name.localeCompare(b.name);
-                        }
-                        return extCompare;
-                    }
-
-                    // Default to name comparison
-                    return a.name.localeCompare(b.name);
                 });
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
@@ -356,13 +332,6 @@ export default function FolderView({items}: FolderViewProps) {
                                             <rect x="16" y="4" width="4" height="16" rx="1"/>
                                         </svg>
                                         Size
-                                    </button>
-                                    <button
-                                        onClick={() => handleOrderToggle('type')}
-                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'type' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                        title="Group by type"
-                                    >
-                                        <Music className="h-3.5 w-3.5 mr-1 hidden md:block"/> Type
                                     </button>
                                 </div>
                             </div>
