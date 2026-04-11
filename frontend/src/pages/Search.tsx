@@ -348,6 +348,12 @@ export default function Search() {
                                                     </Link>
                                                 </span>
                                             )}
+                                            {result.modifiedAt && (
+                                                <span className="flex items-center gap-1 flex-shrink-0">
+                                                    <Calendar className="h-3 w-3" />
+                                                    {new Date(result.modifiedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
