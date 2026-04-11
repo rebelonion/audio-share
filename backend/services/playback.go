@@ -319,7 +319,7 @@ func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]PlaybackResult, e
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0
-		ORDER BY af.downloaded_at DESC
+		ORDER BY af.unavailable_at DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
