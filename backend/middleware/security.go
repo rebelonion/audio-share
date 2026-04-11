@@ -31,11 +31,11 @@ func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
 
 		csp := "default-src 'self'; " +
 			"script-src " + scriptSrc + "; " +
-			"style-src 'self' 'unsafe-inline'; " +
+			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 			"img-src 'self' data: blob:; " +
 			"media-src 'self' blob:; " +
 			"connect-src " + connectSrc + "; " +
-			"font-src 'self'; " +
+			"font-src 'self' https://fonts.gstatic.com; " +
 			"object-src 'none'; " +
 			"base-uri 'self'; " +
 			"form-action 'self'; " +
