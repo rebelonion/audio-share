@@ -1,4 +1,5 @@
 import {useState, useEffect} from 'react';
+import {Link} from 'react-router';
 import {LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush} from 'recharts';
 
 interface DayData {
@@ -11,10 +12,15 @@ interface AudioByDayData {
     days: DayData[];
 }
 
+interface SourceEntry {
+    name: string;
+    path: string;
+}
+
 interface SourceDayData {
     date: string;
     count: number;
-    sources: string[];
+    sources: SourceEntry[];
 }
 
 interface SourcesByDayData {
@@ -72,7 +78,7 @@ const SourcesTooltip = ({active, payload, label}: SourcesTooltipProps) => {
                 <div className="space-y-1">
                     {displaySources.map((source, idx) => (
                         <p key={idx} className="text-xs text-[var(--muted-foreground)]">
-                            • {source}
+                            • {source.name}
                         </p>
                     ))}
                     {hasMore && (
@@ -220,7 +226,7 @@ export function AudioChart({data}: AudioChartProps) {
                             tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                             width={isMobile ? 30 : 60}
                         />
-                        <Tooltip content={<CustomTooltip />} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--primary)', strokeWidth: 1, strokeOpacity: 0.4 }} />
                         <Legend
                             wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                             iconType="circle"
@@ -228,7 +234,7 @@ export function AudioChart({data}: AudioChartProps) {
                         <Line
                             type="monotone"
                             dataKey="cumulative"
-                            stroke="#8b5cf6"
+                            stroke="var(--primary)"
                             strokeWidth={isMobile ? 2 : 3}
                             name="Total Audio Files"
                             dot={false}
@@ -237,7 +243,7 @@ export function AudioChart({data}: AudioChartProps) {
                         <Brush
                             dataKey="date"
                             height={isMobile ? 40 : 30}
-                            stroke="#8b5cf6"
+                            stroke="var(--primary)"
                             fill="var(--card)"
                             startIndex={defaultStartIndex}
                             endIndex={defaultEndIndex}
@@ -260,21 +266,21 @@ export function AudioChart({data}: AudioChartProps) {
                             tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                             width={isMobile ? 30 : 60}
                         />
-                        <Tooltip content={<CustomTooltip />} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--primary)', fillOpacity: 0.1 }} />
                         <Legend
                             wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                             iconType="circle"
                         />
                         <Bar
                             dataKey="count"
-                            fill="#8b5cf6"
+                            fill="var(--primary)"
                             name="Audio Files"
                             radius={[8, 8, 0, 0]}
                         />
                         <Brush
                             dataKey="date"
                             height={isMobile ? 40 : 30}
-                            stroke="#8b5cf6"
+                            stroke="var(--primary)"
                             fill="var(--card)"
                             startIndex={defaultStartIndex}
                             endIndex={defaultEndIndex}
@@ -378,7 +384,7 @@ export function SourcesChart({data}: SourcesChartProps) {
                         tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                         width={isMobile ? 30 : 60}
                     />
-                    <Tooltip content={showCumulative ? <CustomTooltip /> : <SourcesTooltip />} />
+                    <Tooltip content={showCumulative ? <CustomTooltip /> : <SourcesTooltip />} cursor={{ stroke: 'var(--primary)', strokeWidth: 1, strokeOpacity: 0.4 }} />
                     <Legend
                         wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                         iconType="circle"
@@ -386,16 +392,16 @@ export function SourcesChart({data}: SourcesChartProps) {
                     <Line
                         type="monotone"
                         dataKey={showCumulative ? 'cumulative' : 'count'}
-                        stroke="#8b5cf6"
+                        stroke="var(--primary)"
                         strokeWidth={isMobile ? 2 : 3}
                         name={showCumulative ? 'Total Sources' : 'New Sources'}
-                        dot={showCumulative ? false : {fill: '#8b5cf6', r: isMobile ? 3 : 5}}
+                        dot={showCumulative ? false : {fill: 'var(--primary)', r: isMobile ? 3 : 5}}
                         activeDot={{r: isMobile ? 6 : 8}}
                     />
                     <Brush
                         dataKey="date"
                         height={isMobile ? 40 : 30}
-                        stroke="#8b5cf6"
+                        stroke="var(--primary)"
                         fill="var(--card)"
                         startIndex={defaultStartIndex}
                         endIndex={defaultEndIndex}
@@ -415,13 +421,14 @@ export function SourcesChart({data}: SourcesChartProps) {
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                 {day.sources.map((source, idx) => (
-                                    <div
+                                    <Link
                                         key={idx}
-                                        className="text-xs sm:text-sm text-[var(--muted-foreground)] bg-[var(--card)] px-2 sm:px-3 py-1 rounded truncate"
-                                        title={source}
+                                        to={`/browse/${source.path.split('/').map(s => encodeURIComponent(s)).join('/')}`}
+                                        className="text-xs sm:text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] bg-[var(--card)] px-2 sm:px-3 py-1 rounded truncate transition-colors"
+                                        title={source.path}
                                     >
-                                        {source}
-                                    </div>
+                                        {source.name}
+                                    </Link>
                                 ))}
                             </div>
                         </div>

@@ -158,9 +158,17 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			return
 		}
 
+		summaryStats, err := h.searchService.GetSummaryStats()
+		if err != nil {
+			log.Printf("Error getting summary stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		result := map[string]interface{}{
 			"audio":   audioStats,
 			"sources": sourcesStats,
+			"summary": summaryStats,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

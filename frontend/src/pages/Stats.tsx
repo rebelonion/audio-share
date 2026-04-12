@@ -17,7 +17,7 @@ interface AudioByDayData {
 interface SourceDayData {
     date: string;
     count: number;
-    sources: string[];
+    sources: { name: string; path: string }[];
 }
 
 interface SourcesByDayData {
@@ -25,9 +25,36 @@ interface SourcesByDayData {
     days: SourceDayData[];
 }
 
+interface SummaryStats {
+    totalFiles: number;
+    totalSources: number;
+    totalDuration: number;
+    totalStorage: number;
+}
+
+function formatDuration(seconds: number): string {
+    const h = seconds / 3600;
+    const days = h / 24;
+    const years = days / 365;
+    if (years >= 1) return `${years.toFixed(1)} yrs`;
+    if (days >= 1) return `${days.toFixed(1)} days`;
+    const hWhole = Math.floor(h);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (hWhole > 0) return `${hWhole.toLocaleString()} hrs ${m}m`;
+    return `${m}m`;
+}
+
+function formatStorage(bytes: number): string {
+    if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(1)} TB`;
+    if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+    if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
+    return `${(bytes / 1e3).toFixed(1)} KB`;
+}
+
 export default function Stats() {
     const [audioData, setAudioData] = useState<AudioByDayData | null>(null);
     const [sourcesData, setSourcesData] = useState<SourcesByDayData | null>(null);
+    const [summary, setSummary] = useState<SummaryStats | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -38,6 +65,7 @@ export default function Stats() {
                     const data = await response.json();
                     setAudioData(data.audio);
                     setSourcesData(data.sources);
+                    setSummary(data.summary);
                 }
             } catch (err) {
                 console.error('Failed to load stats:', err);
@@ -52,6 +80,14 @@ export default function Stats() {
         return (
             <div className="max-w-7xl mx-auto">
                 <div className="h-10 skeleton rounded w-48 mb-8"></div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-12">
+                    {[...Array(4)].map((_, i) => (
+                        <div key={i} className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                            <div className="h-4 skeleton rounded w-24 mb-3"></div>
+                            <div className="h-8 skeleton rounded w-32"></div>
+                        </div>
+                    ))}
+                </div>
                 <div className="bg-[var(--card)] rounded-lg p-6 mb-12">
                     <div className="h-8 skeleton rounded w-64 mb-4"></div>
                     <div className="h-[450px] skeleton rounded"></div>
@@ -68,6 +104,22 @@ export default function Stats() {
             </Helmet>
             <div className="max-w-7xl mx-auto animate-slideUp">
                 <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Statistics</h1>
+
+                {summary && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-12">
+                        {[
+                            { label: 'Total Files', value: summary.totalFiles.toLocaleString() },
+                            { label: 'Total Sources', value: summary.totalSources.toLocaleString() },
+                            { label: 'Total Duration', value: formatDuration(summary.totalDuration) },
+                            { label: 'Storage Used', value: formatStorage(summary.totalStorage) },
+                        ].map(({ label, value }) => (
+                            <div key={label} className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                                <p className="text-xs sm:text-sm text-[var(--muted-foreground)] mb-1">{label}</p>
+                                <p className="text-2xl sm:text-3xl font-bold text-[var(--primary)]" style={{ fontFamily: 'var(--font-display)' }}>{value}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Audio by Day Section */}
                 <section className="mb-8 sm:mb-12">
