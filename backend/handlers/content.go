@@ -165,10 +165,34 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			return
 		}
 
+		durationStats, err := h.searchService.GetDurationStats()
+		if err != nil {
+			log.Printf("Error getting duration stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		publicationYearStats, err := h.searchService.GetPublicationYearStats()
+		if err != nil {
+			log.Printf("Error getting publication year stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		sourceAvailabilityStats, err := h.searchService.GetSourceAvailabilityStats()
+		if err != nil {
+			log.Printf("Error getting source availability stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		result := map[string]interface{}{
-			"audio":   audioStats,
-			"sources": sourcesStats,
-			"summary": summaryStats,
+			"audio":              audioStats,
+			"sources":            sourcesStats,
+			"summary":            summaryStats,
+			"durations":          durationStats,
+			"publicationYears":   publicationYearStats,
+			"sourceAvailability": sourceAvailabilityStats,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

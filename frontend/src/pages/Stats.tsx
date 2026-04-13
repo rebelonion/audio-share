@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { AudioChart, SourcesChart } from '@/components/StatsCharts';
+import { AudioChart, SourcesChart, DurationChart, PublicationYearChart, SourceAvailabilityChart } from '@/components/StatsCharts';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 
@@ -30,6 +30,37 @@ interface SummaryStats {
     totalSources: number;
     totalDuration: number;
     totalStorage: number;
+    totalUnavailable: number;
+}
+
+interface DurationBucket {
+    label: string;
+    count: number;
+}
+
+interface DurationStatsData {
+    buckets: DurationBucket[];
+}
+
+interface YearStat {
+    year: string;
+    count: number;
+}
+
+interface PublicationYearData {
+    years: YearStat[];
+}
+
+interface SourceAvailabilityPoint {
+    name: string;
+    path: string;
+    total: number;
+    unavailable: number;
+    ratio: number;
+}
+
+interface SourceAvailabilityData {
+    sources: SourceAvailabilityPoint[];
 }
 
 function formatDuration(seconds: number): string {
@@ -55,6 +86,9 @@ export default function Stats() {
     const [audioData, setAudioData] = useState<AudioByDayData | null>(null);
     const [sourcesData, setSourcesData] = useState<SourcesByDayData | null>(null);
     const [summary, setSummary] = useState<SummaryStats | null>(null);
+    const [durationData, setDurationData] = useState<DurationStatsData | null>(null);
+    const [publicationYearData, setPublicationYearData] = useState<PublicationYearData | null>(null);
+    const [sourceAvailabilityData, setSourceAvailabilityData] = useState<SourceAvailabilityData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -66,6 +100,9 @@ export default function Stats() {
                     setAudioData(data.audio);
                     setSourcesData(data.sources);
                     setSummary(data.summary);
+                    setDurationData(data.durations);
+                    setPublicationYearData(data.publicationYears);
+                    setSourceAvailabilityData(data.sourceAvailability);
                 }
             } catch (err) {
                 console.error('Failed to load stats:', err);
@@ -106,12 +143,13 @@ export default function Stats() {
                 <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Statistics</h1>
 
                 {summary && (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-12">
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8 sm:mb-12">
                         {[
                             { label: 'Total Files', value: summary.totalFiles.toLocaleString() },
                             { label: 'Total Sources', value: summary.totalSources.toLocaleString() },
                             { label: 'Total Duration', value: formatDuration(summary.totalDuration) },
                             { label: 'Storage Used', value: formatStorage(summary.totalStorage) },
+                            { label: 'Unavailable', value: summary.totalUnavailable.toLocaleString() },
                         ].map(({ label, value }) => (
                             <div key={label} className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
                                 <p className="text-xs sm:text-sm text-[var(--muted-foreground)] mb-1">{label}</p>
@@ -138,6 +176,45 @@ export default function Stats() {
                     </div>
                 </section>
 
+                {/* Duration Distribution */}
+                {durationData && durationData.buckets.length > 0 && (
+                    <section className="mb-8 sm:mb-12">
+                        <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                            <h2 className="flex items-center gap-3 text-xl sm:text-2xl font-bold mb-4 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                                <span className="inline-block w-1 h-5 sm:h-6 bg-[var(--primary)] rounded-sm flex-shrink-0" style={{ opacity: 0.85 }} />
+                                Track Length Distribution
+                            </h2>
+                            <DurationChart data={durationData} />
+                        </div>
+                    </section>
+                )}
+
+                {/* Publication Year */}
+                {publicationYearData && publicationYearData.years.length > 0 && (
+                    <section className="mb-8 sm:mb-12">
+                        <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                            <h2 className="flex items-center gap-3 text-xl sm:text-2xl font-bold mb-4 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                                <span className="inline-block w-1 h-5 sm:h-6 bg-[var(--primary)] rounded-sm flex-shrink-0" style={{ opacity: 0.85 }} />
+                                Files by Publication Year
+                            </h2>
+                            <PublicationYearChart data={publicationYearData} />
+                        </div>
+                    </section>
+                )}
+
+                {/* Source Availability */}
+                {sourceAvailabilityData && sourceAvailabilityData.sources.length > 0 && (
+                    <section className="mb-8 sm:mb-12">
+                        <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                            <h2 className="flex items-center gap-3 text-xl sm:text-2xl font-bold mb-4 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                                <span className="inline-block w-1 h-5 sm:h-6 bg-[var(--primary)] rounded-sm flex-shrink-0" style={{ opacity: 0.85 }} />
+                                Source Availability
+                            </h2>
+                            <SourceAvailabilityChart data={sourceAvailabilityData} />
+                        </div>
+                    </section>
+                )}
+
                 {/* Sources by Day Section */}
                 <section className="mb-8 sm:mb-12">
                     <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
@@ -148,9 +225,7 @@ export default function Stats() {
                         {sourcesData ? (
                             <SourcesChart data={sourcesData} />
                         ) : (
-                            <p className="text-[var(--muted-foreground)]">
-                                No data available. Please create <code className="bg-[var(--background)] px-2 py-1 rounded text-[var(--primary)]">content/sources_by_day.json</code>
-                            </p>
+                            <p className="text-[var(--muted-foreground)]">No data available.</p>
                         )}
                     </div>
                 </section>

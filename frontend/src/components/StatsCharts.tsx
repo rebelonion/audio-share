@@ -1,6 +1,6 @@
 import {useState, useEffect} from 'react';
 import {Link} from 'react-router';
-import {LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush} from 'recharts';
+import {LineChart, Line, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush} from 'recharts';
 
 interface DayData {
     date: string;
@@ -446,6 +446,229 @@ export function SourcesChart({data}: SourcesChartProps) {
                     ))}
                 </div>
             </div>
+        </>
+    );
+}
+
+// --- Duration Distribution ---
+
+interface DurationBucket {
+    label: string;
+    count: number;
+}
+
+interface DurationStatsData {
+    buckets: DurationBucket[];
+}
+
+export function DurationChart({data}: {data: DurationStatsData}) {
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
+    const chartHeight = isMobile ? 260 : 380;
+    const chartMargin = isMobile
+        ? {top: 5, right: 5, left: -10, bottom: 5}
+        : {top: 5, right: 30, left: 20, bottom: 5};
+
+    return (
+        <ResponsiveContainer width="100%" height={chartHeight}>
+            <BarChart data={data.buckets} margin={chartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                    dataKey="label"
+                    stroke="var(--muted-foreground)"
+                    tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 11 : 13}}
+                />
+                <YAxis
+                    stroke="var(--muted-foreground)"
+                    tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                    width={isMobile ? 30 : 60}
+                />
+                <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={BAR_CURSOR}
+                />
+                <Bar dataKey="count" fill="var(--primary)" name="Files" radius={[8, 8, 0, 0]} />
+            </BarChart>
+        </ResponsiveContainer>
+    );
+}
+
+// --- Publication Year ---
+
+interface YearStat {
+    year: string;
+    count: number;
+}
+
+interface PublicationYearData {
+    years: YearStat[];
+}
+
+export function PublicationYearChart({data}: {data: PublicationYearData}) {
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
+    const chartHeight = isMobile ? 260 : 380;
+    const chartMargin = isMobile
+        ? {top: 5, right: 5, left: -10, bottom: 5}
+        : {top: 5, right: 30, left: 20, bottom: 5};
+
+    return (
+        <ResponsiveContainer width="100%" height={chartHeight}>
+            <BarChart data={data.years} margin={chartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                    dataKey="year"
+                    stroke="var(--muted-foreground)"
+                    tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                    interval={isMobile ? 'preserveStartEnd' : 0}
+                    angle={isMobile ? -45 : 0}
+                    textAnchor={isMobile ? 'end' : 'middle'}
+                    height={isMobile ? 50 : 30}
+                />
+                <YAxis
+                    stroke="var(--muted-foreground)"
+                    tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                    width={isMobile ? 30 : 60}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={BAR_CURSOR} />
+                <Bar dataKey="count" fill="var(--primary)" name="Files" radius={[8, 8, 0, 0]} />
+            </BarChart>
+        </ResponsiveContainer>
+    );
+}
+
+// --- Source Availability Scatter ---
+
+interface SourceAvailabilityPoint {
+    name: string;
+    path: string;
+    total: number;
+    unavailable: number;
+    ratio: number;
+}
+
+interface SourceAvailabilityData {
+    sources: SourceAvailabilityPoint[];
+}
+
+interface ScatterTooltipProps {
+    active?: boolean;
+    payload?: {value: number; payload: SourceAvailabilityPoint}[];
+}
+
+const ScatterTooltip = ({active, payload}: ScatterTooltipProps) => {
+    if (active && payload && payload.length) {
+        const d = payload[0].payload;
+        const pct = (d.ratio * 100).toFixed(1);
+        return (
+            <div className="bg-[var(--card)] border border-[var(--border)] p-3 rounded-lg shadow-lg max-w-xs">
+                <p className="text-[var(--foreground)] font-semibold mb-1 truncate">{d.name}</p>
+                <p className="text-sm text-[var(--muted-foreground)]">{d.total.toLocaleString()} total files</p>
+                <p className="text-sm text-[var(--muted-foreground)]">{d.unavailable.toLocaleString()} unavailable</p>
+                <p className="text-sm font-bold mt-1" style={{color: d.ratio > 0.5 ? 'var(--destructive, #ef4444)' : d.ratio > 0.1 ? '#f59e0b' : 'var(--primary)'}}>
+                    {pct}% unavailable
+                </p>
+            </div>
+        );
+    }
+    return null;
+};
+
+export function SourceAvailabilityChart({data}: {data: SourceAvailabilityData}) {
+    const [isMobile, setIsMobile] = useState(false);
+    const [showRatio, setShowRatio] = useState(false);
+    const [hideAvailable, setHideAvailable] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
+    const anyUnavailable = data.sources.some(s => s.unavailable > 0);
+    const visibleSources = hideAvailable ? data.sources.filter(s => s.unavailable > 0) : data.sources;
+
+    const chartHeight = isMobile ? 280 : 400;
+    const chartMargin = isMobile
+        ? {top: 5, right: 5, left: -10, bottom: 30}
+        : {top: 5, right: 30, left: 20, bottom: 30};
+
+    const yKey = showRatio ? 'ratio' : 'unavailable';
+    const yLabel = showRatio ? '% unavailable' : 'Unavailable';
+    const yDomain: [number, number] | undefined = showRatio ? [0, 1] : undefined;
+    const yTickFormatter = showRatio ? (v: number) => `${Math.round(v * 100)}%` : undefined;
+
+    return (
+        <>
+            <div className="flex flex-wrap items-center justify-end gap-4 sm:gap-6 mb-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                    <span className="text-sm text-[var(--muted-foreground)]">Hide fully available</span>
+                    <div
+                        className={`relative w-11 h-6 rounded-full transition-colors ${hideAvailable ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}
+                        onClick={() => setHideAvailable(!hideAvailable)}
+                    >
+                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${hideAvailable ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                    <span className="text-sm text-[var(--muted-foreground)]">Show ratio</span>
+                    <div
+                        className={`relative w-11 h-6 rounded-full transition-colors ${showRatio ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}
+                        onClick={() => setShowRatio(!showRatio)}
+                    >
+                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${showRatio ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </div>
+                </label>
+            </div>
+            {!anyUnavailable && (
+                <p className="text-[var(--muted-foreground)] text-sm mb-4">All sources fully available.</p>
+            )}
+            <ResponsiveContainer width="100%" height={chartHeight}>
+                <ScatterChart margin={chartMargin}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                        dataKey="total"
+                        name="Total files"
+                        type="number"
+                        stroke="var(--muted-foreground)"
+                        tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                        label={{value: 'Total files', position: 'insideBottom', offset: -15, fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                    />
+                    <YAxis
+                        dataKey={yKey}
+                        name={yLabel}
+                        type="number"
+                        domain={yDomain}
+                        tickFormatter={yTickFormatter}
+                        stroke="var(--muted-foreground)"
+                        tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                        width={isMobile ? 40 : 65}
+                        label={{value: yLabel, angle: -90, position: 'insideLeft', fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                    />
+                    <Tooltip content={<ScatterTooltip />} cursor={{strokeDasharray: '3 3'}} />
+                    <Scatter
+                        data={visibleSources}
+                        fill="var(--primary)"
+                        fillOpacity={0.7}
+                    />
+                </ScatterChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-[var(--muted-foreground)] mt-2 text-center">Each dot is a source. Sources with 3+ files shown.</p>
         </>
     );
 }
