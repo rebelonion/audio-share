@@ -40,6 +40,11 @@ interface CustomTooltipProps {
     label?: string;
 }
 
+const LINE_CURSOR = { stroke: 'var(--primary)', strokeWidth: 1, strokeOpacity: 0.4 };
+const BAR_CURSOR = { fill: 'var(--primary)', fillOpacity: 0.1 };
+const DOT_DESKTOP = { fill: 'var(--primary)', r: 5 };
+const DOT_MOBILE = { fill: 'var(--primary)', r: 3 };
+
 const CustomTooltip = ({active, payload, label}: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         return (
@@ -100,6 +105,9 @@ function backfillDays(days: DayData[]): DayData[] {
     const firstDate = new Date(sortedDays[0].date);
     const lastDate = new Date(sortedDays[sortedDays.length - 1].date);
 
+    const dayDiff = (lastDate.getTime() - firstDate.getTime()) / 86400000;
+    if (!isFinite(dayDiff) || dayDiff > 36500) return sortedDays;
+
     const dayMap = new Map(sortedDays.map(day => [day.date, day]));
     const result: DayData[] = [];
 
@@ -119,6 +127,9 @@ function backfillSourceDays(days: SourceDayData[]): SourceDayData[] {
     const sortedDays = [...days].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const firstDate = new Date(sortedDays[0].date);
     const lastDate = new Date(sortedDays[sortedDays.length - 1].date);
+
+    const dayDiff = (lastDate.getTime() - firstDate.getTime()) / 86400000;
+    if (!isFinite(dayDiff) || dayDiff > 36500) return sortedDays;
 
     const dayMap = new Map(sortedDays.map(day => [day.date, day]));
     const result: SourceDayData[] = [];
@@ -226,7 +237,7 @@ export function AudioChart({data}: AudioChartProps) {
                             tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                             width={isMobile ? 30 : 60}
                         />
-                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--primary)', strokeWidth: 1, strokeOpacity: 0.4 }} />
+                        <Tooltip content={<CustomTooltip />} cursor={LINE_CURSOR} />
                         <Legend
                             wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                             iconType="circle"
@@ -266,7 +277,7 @@ export function AudioChart({data}: AudioChartProps) {
                             tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                             width={isMobile ? 30 : 60}
                         />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--primary)', fillOpacity: 0.1 }} />
+                        <Tooltip content={<CustomTooltip />} cursor={BAR_CURSOR} />
                         <Legend
                             wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                             iconType="circle"
@@ -384,7 +395,7 @@ export function SourcesChart({data}: SourcesChartProps) {
                         tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                         width={isMobile ? 30 : 60}
                     />
-                    <Tooltip content={showCumulative ? <CustomTooltip /> : <SourcesTooltip />} cursor={{ stroke: 'var(--primary)', strokeWidth: 1, strokeOpacity: 0.4 }} />
+                    <Tooltip content={showCumulative ? <CustomTooltip /> : <SourcesTooltip />} cursor={LINE_CURSOR} />
                     <Legend
                         wrapperStyle={{color: 'var(--foreground)', fontSize: isMobile ? '12px' : '14px'}}
                         iconType="circle"
@@ -395,7 +406,7 @@ export function SourcesChart({data}: SourcesChartProps) {
                         stroke="var(--primary)"
                         strokeWidth={isMobile ? 2 : 3}
                         name={showCumulative ? 'Total Sources' : 'New Sources'}
-                        dot={showCumulative ? false : {fill: 'var(--primary)', r: isMobile ? 3 : 5}}
+                        dot={showCumulative ? false : isMobile ? DOT_MOBILE : DOT_DESKTOP}
                         activeDot={{r: isMobile ? 6 : 8}}
                     />
                     <Brush

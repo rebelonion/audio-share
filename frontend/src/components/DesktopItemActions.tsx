@@ -33,7 +33,7 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                     </button>
                     <a
                         href={item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}` : '#'}
-                        download
+                        download={item.name}
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {
                             e.stopPropagation();
