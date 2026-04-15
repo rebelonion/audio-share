@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/onion/audio-share-backend/services"
 )
@@ -55,7 +56,8 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("dateFrom") != "" ||
 		r.URL.Query().Get("dateTo") != "" ||
 		r.URL.Query().Get("durationMin") != "" ||
-		r.URL.Query().Get("durationMax") != ""
+		r.URL.Query().Get("durationMax") != "" ||
+		r.URL.Query().Get("fields") != ""
 
 	if len(query) < 2 && !hasFilters {
 		w.Header().Set("Content-Type", "application/json")
@@ -109,6 +111,16 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("durationMax"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
 			opts.DurationMax = f
+		}
+	}
+
+	if v := r.URL.Query().Get("fields"); v != "" {
+		validFields := map[string]bool{"filename": true, "title": true, "artist": true, "description": true}
+		for _, f := range strings.Split(v, ",") {
+			f = strings.TrimSpace(f)
+			if validFields[f] {
+				opts.Fields = append(opts.Fields, f)
+			}
 		}
 	}
 

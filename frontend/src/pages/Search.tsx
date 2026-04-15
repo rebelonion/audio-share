@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X } from 'lucide-react';
-import { searchAudio, getRandomAudio, SearchResult, SearchFilters } from '@/lib/api';
+import { searchAudio, getRandomAudio, SearchResult, SearchFilters, SearchField } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
 
@@ -16,6 +16,8 @@ const SORT_OPTIONS = [
     { value: 'date_desc', label: 'Newest first' },
     { value: 'date_asc', label: 'Oldest first' },
 ] as const;
+
+const VALID_FIELDS: SearchField[] = ['filename', 'title', 'artist', 'description'];
 
 function filtersFromParams(params: URLSearchParams): SearchFilters {
     const filters: SearchFilters = {};
@@ -32,6 +34,11 @@ function filtersFromParams(params: URLSearchParams): SearchFilters {
     if (durationMin) filters.durationMin = parseFloat(durationMin);
     const durationMax = params.get('durationMax');
     if (durationMax) filters.durationMax = parseFloat(durationMax);
+    const fieldsParam = params.get('fields');
+    if (fieldsParam) {
+        const parsed = fieldsParam.split(',').filter((f): f is SearchField => VALID_FIELDS.includes(f as SearchField));
+        if (parsed.length > 0) filters.fields = parsed;
+    }
     return filters;
 }
 
@@ -44,6 +51,7 @@ function filtersToParams(filters: SearchFilters): Record<string, string> {
     if (filters.dateTo) p.dateTo = filters.dateTo;
     if (filters.durationMin && filters.durationMin > 0) p.durationMin = filters.durationMin.toString();
     if (filters.durationMax && filters.durationMax > 0) p.durationMax = filters.durationMax.toString();
+    if (filters.fields && filters.fields.length > 0) p.fields = filters.fields.join(',');
     return p;
 }
 
@@ -51,7 +59,8 @@ function hasActiveFilters(filters: SearchFilters): boolean {
     return !!(filters.type || filters.unavailableOnly || filters.sort ||
         filters.dateFrom || filters.dateTo ||
         (filters.durationMin && filters.durationMin > 0) ||
-        (filters.durationMax && filters.durationMax > 0));
+        (filters.durationMax && filters.durationMax > 0) ||
+        (filters.fields && filters.fields.length > 0));
 }
 
 export default function Search() {
@@ -484,6 +493,43 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                         onChange={(v) => update({ sort: v as SearchFilters['sort'] || undefined })}
                         options={SORT_OPTIONS as unknown as { value: string; label: string }[]}
                     />
+                </div>
+            </div>
+
+            <div className="border-t border-[var(--border)]/50" />
+
+            <div>
+                <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
+                    Search in
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                    {VALID_FIELDS.map((f) => {
+                        const active = !filters.fields || filters.fields.length === 0
+                            ? true
+                            : filters.fields.includes(f);
+                        const label = f === 'filename' ? 'Filename' : f === 'title' ? 'Title' : f === 'artist' ? 'Artist' : 'Description';
+                        const toggle = () => {
+                            const current = filters.fields && filters.fields.length > 0 ? filters.fields : [...VALID_FIELDS];
+                            const next = current.includes(f)
+                                ? current.filter(x => x !== f)
+                                : [...current, f];
+                            // If all fields selected, treat as "all" (no filter)
+                            update({ fields: next.length === VALID_FIELDS.length ? undefined : next.length === 0 ? undefined : next });
+                        };
+                        return (
+                            <button
+                                key={f}
+                                onClick={toggle}
+                                className={`px-3 py-1.5 text-sm rounded border transition-all duration-150 ${
+                                    active
+                                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/50 hover:text-[var(--foreground)]'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 

@@ -142,6 +142,8 @@ export async function getRandomAudio(): Promise<string> {
     return data.shareKey;
 }
 
+export type SearchField = 'filename' | 'title' | 'artist' | 'description';
+
 export interface SearchFilters {
     type?: 'audio' | 'folder';
     unavailableOnly?: boolean;
@@ -150,6 +152,8 @@ export interface SearchFilters {
     dateTo?: string;
     durationMin?: number;
     durationMax?: number;
+    /** Which audio fields to search in. Empty/undefined = all fields. */
+    fields?: SearchField[];
 }
 
 export async function searchAudio(query: string, limit?: number, offset?: number, filters?: SearchFilters): Promise<SearchResponse> {
@@ -168,6 +172,7 @@ export async function searchAudio(query: string, limit?: number, offset?: number
         if (filters.dateTo) params.set('dateTo', filters.dateTo);
         if (filters.durationMin != null && filters.durationMin > 0) params.set('durationMin', filters.durationMin.toString());
         if (filters.durationMax != null && filters.durationMax > 0) params.set('durationMax', filters.durationMax.toString());
+        if (filters.fields && filters.fields.length > 0) params.set('fields', filters.fields.join(','));
     }
 
     const response = await fetch(`${API_BASE}/api/search?${params}`);

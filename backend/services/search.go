@@ -46,6 +46,9 @@ type SearchOptions struct {
 	// Seconds; 0 means no bound
 	DurationMin float64
 	DurationMax float64
+	// Which audio fields to search in: "filename", "title", "artist", "description"
+	// Empty means search all fields.
+	Fields []string
 }
 
 type SearchService struct {
@@ -82,9 +85,35 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 
 	if query != "" {
 		likeQuery := "%" + query + "%"
-		audioArgs = append(audioArgs, likeQuery, likeQuery, likeQuery, likeQuery)
-		audioWhere = `(filename ILIKE $1 OR title ILIKE $2 OR meta_artist ILIKE $3 OR description ILIKE $4)
-		AND deleted = 0`
+		fieldMap := map[string]string{
+			"filename":    "filename",
+			"title":       "title",
+			"artist":      "meta_artist",
+			"description": "description",
+		}
+		activeFields := opts.Fields
+		if len(activeFields) == 0 {
+			activeFields = []string{"filename", "title", "artist", "description"}
+		}
+		var fieldClauses []string
+		for _, f := range activeFields {
+			col, ok := fieldMap[f]
+			if !ok {
+				continue
+			}
+			audioArgs = append(audioArgs, likeQuery)
+			fieldClauses = append(fieldClauses, fmt.Sprintf("%s ILIKE $%d", col, len(audioArgs)))
+		}
+		if len(fieldClauses) == 0 {
+			audioArgs = append(audioArgs, likeQuery, likeQuery, likeQuery, likeQuery)
+			fieldClauses = []string{
+				fmt.Sprintf("filename ILIKE $%d", len(audioArgs)-3),
+				fmt.Sprintf("title ILIKE $%d", len(audioArgs)-2),
+				fmt.Sprintf("meta_artist ILIKE $%d", len(audioArgs)-1),
+				fmt.Sprintf("description ILIKE $%d", len(audioArgs)),
+			}
+		}
+		audioWhere = fmt.Sprintf("(%s) AND deleted = 0", strings.Join(fieldClauses, " OR "))
 	}
 
 	argIdx := len(audioArgs) + 1
