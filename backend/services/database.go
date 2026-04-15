@@ -28,6 +28,7 @@ func NewDatabase(dsn string) *Database {
 
 func (d *Database) migrate() {
 	statements := []string{
+		`CREATE EXTENSION IF NOT EXISTS pg_trgm`,
 		`CREATE TABLE IF NOT EXISTS folders (
 			id BIGSERIAL PRIMARY KEY,
 			path TEXT NOT NULL UNIQUE,
@@ -102,6 +103,12 @@ func (d *Database) migrate() {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
 		`ALTER TABLE waveform_cache ADD COLUMN IF NOT EXISTS duration_seconds REAL`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_filename ON audio_files USING gin (filename gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_title ON audio_files USING gin (title gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_artist ON audio_files USING gin (meta_artist gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_description ON audio_files USING gin (description gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_folders_trgm_name ON folders USING gin (name gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_folders_trgm_folder_name ON folders USING gin (folder_name gin_trgm_ops)`,
 	}
 
 	for _, stmt := range statements {

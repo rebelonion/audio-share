@@ -173,46 +173,12 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	}
 	_ = folderArgIdx
 
-	// --- Count query ---
-	var total int
-	var countParts []string
-	if includeAudio {
-		audioCountSQL := fmt.Sprintf(`SELECT COUNT(*) FROM audio_files %s WHERE %s`, audioJoin, audioWhere)
-		countParts = append(countParts, "("+audioCountSQL+")")
-	}
-	if includeFolders {
-		folderCountSQL := fmt.Sprintf(`SELECT COUNT(*) FROM folders WHERE %s`, folderWhere)
-		countParts = append(countParts, "("+folderCountSQL+")")
-	}
-
-	if len(countParts) == 0 {
+	if !includeAudio && !includeFolders {
 		return []SearchResult{}, 0, nil
-	}
-
-	// For the UNION count, we need combined args. Since we can't share placeholder indices
-	// across subqueries in a single statement easily, run separate counts.
-	total = 0
-	if includeAudio {
-		var audioCount int
-		audioCountSQL := fmt.Sprintf(`SELECT COUNT(*) FROM audio_files %s WHERE %s`, audioJoin, audioWhere)
-		if err := s.db.DB().QueryRow(audioCountSQL, audioArgs...).Scan(&audioCount); err != nil {
-			return nil, 0, err
-		}
-		total += audioCount
-	}
-	if includeFolders {
-		var folderCount int
-		folderCountSQL := fmt.Sprintf(`SELECT COUNT(*) FROM folders WHERE %s`, folderWhere)
-		if err := s.db.DB().QueryRow(folderCountSQL, folderArgs...).Scan(&folderCount); err != nil {
-			return nil, 0, err
-		}
-		total += folderCount
 	}
 
 	// --- Build result query ---
 	// We UNION the arms together, then sort and paginate the combined result.
-	// Since PostgreSQL doesn't allow different placeholder indices across UNION arms,
-	// we'll shift folder placeholders to start after audio placeholders.
 
 	orderClause := "name ASC"
 	switch opts.Sort {
@@ -228,7 +194,6 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	var allArgs []any
 
 	if includeAudio {
-		// Re-number placeholders for audio (starting at $1)
 		audioSelect := fmt.Sprintf(`
 			SELECT
 				audio_files.id, COALESCE(NULLIF(audio_files.title, ''), audio_files.filename) as name, audio_files.path, 'audio' as type, audio_files.parent_path,
@@ -243,7 +208,6 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	}
 
 	if includeFolders {
-		// Re-number folder placeholders to start after audio args
 		folderOffset := len(allArgs) + 1
 		folderSelect := fmt.Sprintf(`
 			SELECT
@@ -258,7 +222,6 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		allArgs = append(allArgs, folderArgs...)
 	}
 
-	// Add LIMIT/OFFSET placeholders
 	limitIdx := len(allArgs) + 1
 	offsetIdx := len(allArgs) + 2
 	allArgs = append(allArgs, limit, offset)
@@ -268,7 +231,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		SELECT id, name, path, type, parent_path,
 			size, mime_type, title, artist, description, webpage_url,
 			original_url, item_count, directory_size, poster_image, modified_at,
-			share_key, unavailable_at
+			share_key, unavailable_at, COUNT(*) OVER() as total_count
 		FROM (%s) sub
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
@@ -280,6 +243,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	}
 	defer rows.Close()
 
+	var total int
 	var results []SearchResult
 	for rows.Next() {
 		var r SearchResult
@@ -292,7 +256,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 			&r.ID, &r.Name, &r.Path, &r.Type, &parentPath,
 			&size, &mimeType, &title, &artist, &description, &webpageURL,
 			&originalURL, &itemCount, &directorySize, &posterImage, &modifiedAt,
-			&shareKey, &unavailableAt,
+			&shareKey, &unavailableAt, &total,
 		); err != nil {
 			return nil, 0, err
 		}
