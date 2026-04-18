@@ -51,8 +51,9 @@ func (s *SearchService) BrowseDirectory(path string) (*DirectoryContents, error)
 
 func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecord, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT id, path, parent_path, folder_name, name, original_url, url_broken,
-		       item_count, directory_size, poster_image, modified_at, share_key
+		SELECT id, path, parent_path, folder_name, name, original_url,
+		       url_broken, item_count, directory_size_bytes, poster_image,
+		       upload_date, share_key
 		FROM folders
 		WHERE parent_path = $1
 		ORDER BY name ASC
@@ -69,7 +70,7 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 		var shareKey *string
 		if err := rows.Scan(&f.ID, &f.Path, &f.ParentPath, &f.FolderName, &f.Name,
 			&f.OriginalURL, &urlBroken, &f.ItemCount, &f.DirectorySize,
-			&f.PosterImage, &f.ModifiedAt, &shareKey); err != nil {
+			&f.PosterImage, &f.UploadDate, &shareKey); err != nil {
 			return nil, err
 		}
 		f.URLBroken = urlBroken == 1
@@ -84,11 +85,11 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 
 func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFileRecord, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT id, path, parent_path, filename, size, mime_type, modified_at,
+		SELECT id, path, parent_path, filename, size, mime_type,
 		       title, meta_artist, upload_date, webpage_url, description, share_key, unavailable_at
 		FROM audio_files
 		WHERE parent_path = $1 AND deleted = 0
-		ORDER BY modified_at DESC
+		ORDER BY upload_date DESC
 	`, parentPath)
 	if err != nil {
 		return nil, err
@@ -100,7 +101,7 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 		var a AudioFileRecord
 		var unavailableAt sql.NullTime
 		if err := rows.Scan(&a.ID, &a.Path, &a.ParentPath, &a.Filename, &a.Size,
-			&a.MimeType, &a.ModifiedAt, &a.Title, &a.MetaArtist, &a.UploadDate,
+			&a.MimeType, &a.Title, &a.MetaArtist, &a.UploadDate,
 			&a.WebpageURL, &a.Description, &a.ShareKey, &unavailableAt); err != nil {
 			return nil, err
 		}
@@ -115,23 +116,27 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 }
 
 func (s *SearchService) folderToFileSystemItem(f FolderRecord) FileSystemItem {
+	modifiedAt := ""
+	if len(f.UploadDate) == 8 {
+		modifiedAt = f.UploadDate[:4] + "-" + f.UploadDate[4:6] + "-" + f.UploadDate[6:8]
+	}
 	item := FileSystemItem{
 		Name:        f.Name,
 		Path:        f.Path,
-		ModifiedAt:  f.ModifiedAt,
+		Size:        f.DirectorySize,
+		ModifiedAt:  modifiedAt,
 		Type:        "folder",
 		PosterImage: f.PosterImage,
 		ShareKey:    f.ShareKey,
 	}
 
-	if f.OriginalURL != "" || f.URLBroken || f.ItemCount > 0 || f.DirectorySize != "" {
+	if f.OriginalURL != "" || f.URLBroken || f.ItemCount > 0 {
 		item.Metadata = &FolderMetadata{
-			FolderName:    f.FolderName,
-			Name:          f.Name,
-			OriginalURL:   f.OriginalURL,
-			URLBroken:     f.URLBroken,
-			Items:         f.ItemCount,
-			DirectorySize: f.DirectorySize,
+			FolderName:  f.FolderName,
+			Name:        f.Name,
+			OriginalURL: f.OriginalURL,
+			URLBroken:   f.URLBroken,
+			Items:       f.ItemCount,
 		}
 	}
 
@@ -139,14 +144,18 @@ func (s *SearchService) folderToFileSystemItem(f FolderRecord) FileSystemItem {
 }
 
 func (s *SearchService) audioToFileSystemItem(a AudioFileRecord) FileSystemItem {
+	modifiedAt := ""
+	if len(a.UploadDate) == 8 {
+		modifiedAt = a.UploadDate[:4] + "-" + a.UploadDate[4:6] + "-" + a.UploadDate[6:8]
+	}
 	return FileSystemItem{
-		Name:        a.Filename,
-		Path:        a.Path,
-		Size:        a.Size,
-		ModifiedAt:  a.ModifiedAt,
-		Type:        "audio",
-		MimeType:    a.MimeType,
-		Title:       a.Title,
+		Name:          a.Filename,
+		Path:          a.Path,
+		Size:          a.Size,
+		ModifiedAt:    modifiedAt,
+		Type:          "audio",
+		MimeType:      a.MimeType,
+		Title:         a.Title,
 		ShareKey:      a.ShareKey,
 		UnavailableAt: a.UnavailableAt,
 	}

@@ -21,11 +21,11 @@ type FolderRecord struct {
 	FolderName    string
 	Name          string
 	OriginalURL   string
-	URLBroken     bool
+	URLBroken     bool  // computed from child file availability, not stored
 	ItemCount     int
-	DirectorySize string
+	DirectorySize int64 // computed as sum of child audio file sizes (bytes), not stored
 	PosterImage   string
-	ModifiedAt    string
+	UploadDate    string // computed from MAX(child upload_dates); seeded from filesystem mtime as fallback
 	ShareKey      string
 }
 
@@ -36,7 +36,6 @@ type AudioFileRecord struct {
 	Filename     string
 	Size         int64
 	MimeType     string
-	ModifiedAt   string
 	Title        string
 	MetaArtist   string
 	UploadDate   string
@@ -94,16 +93,16 @@ func (s *SearchService) RebuildIndex() error {
 	for slug, dirConfig := range s.fs.GetSlugToDirectoryMap() {
 		log.Printf("Indexing directory: %s (%s)", dirConfig.Name, slug)
 
-		modifiedAt := time.Now().Format("2006-01-02T15:04:05.000Z")
+		uploadDate := time.Now().Format("20060102")
 		if info, err := os.Stat(dirConfig.Path); err == nil {
-			modifiedAt = info.ModTime().Format("2006-01-02T15:04:05.000Z")
+			uploadDate = info.ModTime().Format("20060102")
 		}
 		if err := s.insertFolder(FolderRecord{
 			Path:       slug,
 			ParentPath: "",
 			FolderName: slug,
 			Name:       dirConfig.Name,
-			ModifiedAt: modifiedAt,
+			UploadDate: uploadDate,
 		}); err != nil {
 			log.Printf("Error indexing root folder %s: %v", slug, err)
 		}
@@ -122,12 +121,46 @@ func (s *SearchService) RebuildIndex() error {
 
 	if _, err := s.db.DB().Exec(`
 		UPDATE folders SET item_count = (
-			SELECT COUNT(*) FROM folders f2 WHERE f2.parent_path = folders.path
+			SELECT COUNT(*) FROM folders f2
+			WHERE f2.path LIKE folders.path || '/%'
 		) + (
-			SELECT COUNT(*) FROM audio_files WHERE parent_path = folders.path AND deleted = 0
+			SELECT COUNT(*) FROM audio_files
+			WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+			AND deleted = 0
 		)
 	`); err != nil {
 		log.Printf("Error updating folder item counts: %v", err)
+	}
+
+	if _, err := s.db.DB().Exec(`
+		UPDATE folders SET
+			directory_size_bytes = COALESCE(
+				(SELECT SUM(size) FROM audio_files
+				 WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+				 AND deleted = 0),
+				0
+			),
+			url_broken = CASE
+				WHEN EXISTS (
+					SELECT 1 FROM audio_files
+					WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+					AND deleted = 0
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM audio_files
+					WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+					AND deleted = 0 AND unavailable_at IS NULL
+				)
+				THEN 1 ELSE 0
+			END,
+			upload_date = COALESCE(
+				(SELECT MAX(upload_date) FROM audio_files
+				 WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+				 AND deleted = 0 AND upload_date IS NOT NULL AND upload_date != ''),
+				folders.upload_date
+			)
+	`); err != nil {
+		log.Printf("Error updating folder computed fields: %v", err)
 	}
 
 	elapsed := time.Since(start)
@@ -225,22 +258,18 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 		}
 
 		parentPath := s.getParentPath(virtualPath)
-		modifiedAt := info.ModTime().Format("2006-01-02T15:04:05.000Z")
-
 		if entry.IsDir() {
 			record := FolderRecord{
 				Path:       virtualPath,
 				ParentPath: parentPath,
 				FolderName: name,
 				Name:       name,
-				ModifiedAt: modifiedAt,
+				UploadDate: info.ModTime().Format("20060102"),
 			}
 
 			if m, ok := metadataMap[name]; ok {
 				record.Name = m.Name
 				record.OriginalURL = m.OriginalURL
-				record.URLBroken = m.URLBroken
-				record.DirectorySize = m.DirectorySize
 			}
 
 			entryPath := filepath.Join(fullPath, name)
@@ -277,7 +306,6 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 					Filename:   name,
 					Size:       info.Size(),
 					MimeType:   mimeType,
-					ModifiedAt: modifiedAt,
 					SourcePath: sourcePath,
 				}
 
@@ -305,6 +333,9 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 						}
 					}
 				}
+				if record.UploadDate == "" {
+					record.UploadDate = info.ModTime().Format("20060102")
+				}
 
 				if err := s.insertAudioFile(record); err != nil {
 					log.Printf("Error indexing audio %s: %v", virtualPath, err)
@@ -325,11 +356,6 @@ func (s *SearchService) getParentPath(path string) string {
 }
 
 func (s *SearchService) insertFolder(f FolderRecord) error {
-	urlBroken := 0
-	if f.URLBroken {
-		urlBroken = 1
-	}
-
 	shareKey, err := generateShareKey()
 	if err != nil {
 		return err
@@ -337,23 +363,20 @@ func (s *SearchService) insertFolder(f FolderRecord) error {
 
 	_, err = s.db.DB().Exec(`
 		INSERT INTO folders
-		(path, parent_path, folder_name, name, original_url, url_broken,
-		 item_count, directory_size, poster_image, modified_at, share_key, indexed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
+		(path, parent_path, folder_name, name, original_url,
+		 poster_image, upload_date, share_key, indexed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
 		ON CONFLICT(path) DO UPDATE SET
 			parent_path = excluded.parent_path,
 			folder_name = excluded.folder_name,
 			name = excluded.name,
 			original_url = excluded.original_url,
-			url_broken = excluded.url_broken,
-			item_count = excluded.item_count,
-			directory_size = excluded.directory_size,
 			poster_image = excluded.poster_image,
-			modified_at = excluded.modified_at,
+			upload_date = COALESCE(folders.upload_date, excluded.upload_date),
 			share_key = COALESCE(folders.share_key, excluded.share_key),
 			indexed_at = CURRENT_TIMESTAMP
-	`, f.Path, f.ParentPath, f.FolderName, f.Name, f.OriginalURL, urlBroken,
-		f.ItemCount, f.DirectorySize, f.PosterImage, f.ModifiedAt, shareKey)
+	`, f.Path, f.ParentPath, f.FolderName, f.Name, f.OriginalURL,
+		f.PosterImage, f.UploadDate, shareKey)
 	return err
 }
 
@@ -365,16 +388,15 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 
 	_, err = s.db.DB().Exec(`
 		INSERT INTO audio_files
-		(path, parent_path, filename, size, mime_type, modified_at,
+		(path, parent_path, filename, size, mime_type,
 		 title, meta_artist, upload_date, webpage_url, description,
 		 downloaded_at, source_path, thumbnail, share_key, deleted, indexed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, CURRENT_TIMESTAMP)
 		ON CONFLICT(path) DO UPDATE SET
 			parent_path = excluded.parent_path,
 			filename = excluded.filename,
 			size = excluded.size,
 			mime_type = excluded.mime_type,
-			modified_at = excluded.modified_at,
 			title = excluded.title,
 			meta_artist = excluded.meta_artist,
 			upload_date = excluded.upload_date,
@@ -386,7 +408,7 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 			share_key = COALESCE(audio_files.share_key, excluded.share_key),
 			deleted = 0,
 			indexed_at = CURRENT_TIMESTAMP
-	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType, a.ModifiedAt,
+	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType,
 		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
 		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), shareKey)
 	return err

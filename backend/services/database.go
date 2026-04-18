@@ -85,13 +85,9 @@ func (d *Database) migrate() {
 			peaks TEXT NOT NULL,
 			generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_folders_path ON folders(path)`,
 		`CREATE INDEX IF NOT EXISTS idx_folders_parent_path ON folders(parent_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_folders_search ON folders(name, folder_name)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key)`,
-		`CREATE INDEX IF NOT EXISTS idx_audio_files_path ON audio_files(path)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_audio_files_search ON audio_files(filename, title, meta_artist)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_downloaded_at ON audio_files(downloaded_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key)`,
@@ -109,6 +105,16 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_description ON audio_files USING gin (description gin_trgm_ops)`,
 		`CREATE INDEX IF NOT EXISTS idx_folders_trgm_name ON folders USING gin (name gin_trgm_ops)`,
 		`CREATE INDEX IF NOT EXISTS idx_folders_trgm_folder_name ON folders USING gin (folder_name gin_trgm_ops)`,
+		`ALTER TABLE audio_files DROP COLUMN IF EXISTS modified_at`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_upload_date ON audio_files(upload_date)`,
+		`ALTER TABLE folders ADD COLUMN IF NOT EXISTS directory_size_bytes BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE folders ADD COLUMN IF NOT EXISTS upload_date TEXT`,
+		`ALTER TABLE folders DROP COLUMN IF EXISTS modified_at`,
+		`ALTER TABLE folders DROP COLUMN IF EXISTS directory_size`,
+		`DROP INDEX IF EXISTS idx_folders_path`,
+		`DROP INDEX IF EXISTS idx_audio_files_path`,
+		`DROP INDEX IF EXISTS idx_folders_search`,
+		`DROP INDEX IF EXISTS idx_audio_files_search`,
 	}
 
 	for _, stmt := range statements {

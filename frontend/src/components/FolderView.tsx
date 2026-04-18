@@ -8,7 +8,7 @@ import MobileItemName from "@/components/MobileItemName";
 import MobileItemDetails from "@/components/MobileItemDetails";
 import TableItem from "@/components/TableItem";
 import SearchBar from "@/components/SearchBar";
-import {reverseIf, sizeFromString} from "@/lib/utils";
+import {reverseIf} from "@/lib/utils";
 import {useSearchParams} from "react-router";
 import {useUmami} from "@/hooks/useUmami";
 import {recordPlayEvent} from "@/lib/api";
@@ -124,26 +124,7 @@ export default function FolderView({items}: FolderViewProps) {
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
             case 'size': {
-                const presortedItems = [...filteredItems].sort((a, b) => {
-                    if (a.type === 'folder' && b.type !== 'folder') {
-                        const aSize = 'metadata' in a ? sizeFromString(a.metadata?.directory_size || '0') : 0;
-                        const bSize = 'size' in b ? b.size : 0;
-                        return bSize - aSize;
-                    }
-                    if (a.type !== 'folder' && b.type === 'folder') {
-                        const aSize = 'size' in a ? a.size : 0;
-                        const bSize = 'metadata' in b ? sizeFromString(b.metadata?.directory_size || '0') : 0;
-                        return bSize - aSize;
-                    }
-                    if (a.type === 'folder' && b.type === 'folder') {
-                        const aSize = 'metadata' in a ? sizeFromString(a.metadata?.directory_size || '0') : 0;
-                        const bSize = 'metadata' in b ? sizeFromString(b.metadata?.directory_size || '0') : 0;
-                        return bSize - aSize;
-                    }
-                    const aSize = 'size' in a ? a.size : 0;
-                    const bSize = 'size' in b ? b.size : 0;
-                    return bSize - aSize;
-                });
+                const presortedItems = [...filteredItems].sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
             default:

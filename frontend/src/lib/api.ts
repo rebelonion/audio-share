@@ -43,7 +43,7 @@ export interface SearchResult {
     // Folder fields
     originalUrl?: string;
     itemCount?: number;
-    directorySize?: string;
+    directorySize?: number;
     posterImage?: string;
 
     modifiedAt?: string;

@@ -19,9 +19,9 @@ export default function MobileItemDetails({ item, notification, copyToClipboard 
                 {item.type === 'audio' && (
                     <span className="mr-3">{formatFileSize(item.size)}</span>
                 )}
-                {item.type === 'folder' && item.metadata?.directory_size && (
-                    <span className="mr-3">{item.metadata.directory_size}</span>
-                )}
+                {item.type === 'folder' && item.size ? (
+                    <span className="mr-3">{formatFileSize(item.size)}</span>
+                ) : null}
                 {item.type === 'folder' && item.metadata?.items && (
                     <span className="mr-3">{item.metadata.items} items</span>
                 )}

@@ -59,10 +59,10 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
             <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center"
                 style={{width: '20%'}}>
                 {item.type === 'audio' ? formatFileSize(item.size) :
-                    (item.type === 'folder' && item.metadata?.directory_size) ?
-                        `${item.metadata.directory_size}${item.metadata.items ? ` | ${item.metadata.items} items` : ''}` :
-                        (item.type === 'folder' && item.metadata?.items) ?
-                            `${item.metadata.items} items` : '-'}
+                    (item.type === 'folder' && (item.size || item.metadata?.items)) ?
+                        [item.size ? formatFileSize(item.size) : null, item.metadata?.items ? `${item.metadata.items} items` : null]
+                            .filter(Boolean).join(' | ')
+                        : '-'}
             </td>
             <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center"
                 style={{width: '15%'}}>

@@ -14,13 +14,12 @@ type AudioDirConfig struct {
 }
 
 type FolderMetadata struct {
-	FolderName    string `json:"folder_name"`
-	Name          string `json:"name"`
-	OriginalURL   string `json:"original_url,omitempty"`
-	URLBroken     bool   `json:"url_broken,omitempty"`
-	Items         int    `json:"items,omitempty"`
-	DirectorySize string `json:"directory_size,omitempty"`
-	Description   string `json:"description,omitempty"`
+	FolderName  string `json:"folder_name"`
+	Name        string `json:"name"`
+	OriginalURL string `json:"original_url,omitempty"`
+	URLBroken   bool   `json:"url_broken,omitempty"`
+	Items       int    `json:"items,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 type FileSystemItem struct {

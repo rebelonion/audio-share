@@ -26,7 +26,7 @@ type SearchResult struct {
 	// Folder fields
 	OriginalURL   string `json:"originalUrl,omitempty"`
 	ItemCount     int    `json:"itemCount,omitempty"`
-	DirectorySize string `json:"directorySize,omitempty"`
+	DirectorySize int64  `json:"directorySize,omitempty"`
 	PosterImage   string `json:"posterImage,omitempty"`
 
 	ModifiedAt    string  `json:"modifiedAt,omitempty"`
@@ -40,7 +40,7 @@ type SearchOptions struct {
 	UnavailableOnly bool
 	// "name_asc", "name_desc", "date_asc", "date_desc"
 	Sort string
-	// ISO date strings "YYYY-MM-DD", filter by modified_at
+	// ISO date strings "YYYY-MM-DD", filter by upload_date (stored as YYYYMMDD)
 	DateFrom string
 	DateTo   string
 	// Seconds; 0 means no bound
@@ -122,13 +122,13 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		audioWhere += " AND unavailable_at IS NOT NULL"
 	}
 	if opts.DateFrom != "" {
-		audioWhere += fmt.Sprintf(" AND modified_at >= $%d", argIdx)
-		audioArgs = append(audioArgs, opts.DateFrom)
+		audioWhere += fmt.Sprintf(" AND upload_date >= $%d", argIdx)
+		audioArgs = append(audioArgs, strings.ReplaceAll(opts.DateFrom, "-", ""))
 		argIdx++
 	}
 	if opts.DateTo != "" {
-		audioWhere += fmt.Sprintf(" AND modified_at <= $%d", argIdx)
-		audioArgs = append(audioArgs, opts.DateTo+"T23:59:59.999Z")
+		audioWhere += fmt.Sprintf(" AND upload_date <= $%d", argIdx)
+		audioArgs = append(audioArgs, strings.ReplaceAll(opts.DateTo, "-", ""))
 		argIdx++
 	}
 
@@ -162,13 +162,13 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	}
 
 	if opts.DateFrom != "" {
-		folderWhere += fmt.Sprintf(" AND modified_at >= $%d", folderArgIdx)
-		folderArgs = append(folderArgs, opts.DateFrom)
+		folderWhere += fmt.Sprintf(" AND upload_date >= $%d", folderArgIdx)
+		folderArgs = append(folderArgs, strings.ReplaceAll(opts.DateFrom, "-", ""))
 		folderArgIdx++
 	}
 	if opts.DateTo != "" {
-		folderWhere += fmt.Sprintf(" AND modified_at <= $%d", folderArgIdx)
-		folderArgs = append(folderArgs, opts.DateTo+"T23:59:59.999Z")
+		folderWhere += fmt.Sprintf(" AND upload_date <= $%d", folderArgIdx)
+		folderArgs = append(folderArgs, strings.ReplaceAll(opts.DateTo, "-", ""))
 		folderArgIdx++
 	}
 	_ = folderArgIdx
@@ -179,6 +179,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 
 	// --- Build result query ---
 	// We UNION the arms together, then sort and paginate the combined result.
+	// COUNT(*) OVER() gives us the total without a separate count query.
 
 	orderClause := "name ASC"
 	switch opts.Sort {
@@ -199,7 +200,8 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				audio_files.id, COALESCE(NULLIF(audio_files.title, ''), audio_files.filename) as name, audio_files.path, 'audio' as type, audio_files.parent_path,
 				audio_files.size, audio_files.mime_type, audio_files.title, audio_files.meta_artist as artist,
 				audio_files.description, audio_files.webpage_url,
-				NULL as original_url, NULL::bigint as item_count, NULL as directory_size, NULL as poster_image, audio_files.modified_at,
+				NULL as original_url, NULL::bigint as item_count, NULL as directory_size, NULL as poster_image,
+				SUBSTR(audio_files.upload_date,1,4) || '-' || SUBSTR(audio_files.upload_date,5,2) || '-' || SUBSTR(audio_files.upload_date,7,2) as modified_at,
 				audio_files.share_key, audio_files.unavailable_at
 			FROM audio_files %s
 			WHERE %s`, audioJoin, reindex(audioWhere, 1))
@@ -212,9 +214,11 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		folderSelect := fmt.Sprintf(`
 			SELECT
 				id, name, path, 'folder' as type, parent_path,
-				NULL::bigint as size, NULL as mime_type, NULL as title, NULL as artist,
+				directory_size_bytes as size, NULL as mime_type, NULL as title, NULL as artist,
 				NULL as description, NULL as webpage_url,
-				original_url, item_count, directory_size, poster_image, modified_at,
+				original_url, item_count, directory_size_bytes as directory_size,
+				poster_image,
+				SUBSTR(upload_date,1,4)||'-'||SUBSTR(upload_date,5,2)||'-'||SUBSTR(upload_date,7,2) as modified_at,
 				share_key, NULL::timestamptz as unavailable_at
 			FROM folders
 			WHERE %s`, reindex(folderWhere, folderOffset))
@@ -248,7 +252,8 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	for rows.Next() {
 		var r SearchResult
 		var parentPath, mimeType, title, artist, description, webpageURL *string
-		var originalURL, directorySize, posterImage, modifiedAt, shareKey *string
+		var originalURL, posterImage, modifiedAt, shareKey *string
+		var directorySize sql.NullInt64
 		var size, itemCount *int64
 		var unavailableAt sql.NullTime
 
@@ -292,8 +297,8 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		if itemCount != nil {
 			r.ItemCount = int(*itemCount)
 		}
-		if directorySize != nil {
-			r.DirectorySize = *directorySize
+		if directorySize.Valid {
+			r.DirectorySize = directorySize.Int64
 		}
 		if modifiedAt != nil {
 			r.ModifiedAt = *modifiedAt

@@ -17,13 +17,13 @@ export interface FolderMetadata {
     original_url?: string;
     url_broken?: boolean;
     items?: number;
-    directory_size?: string;
     description?: string;
 }
 
 export interface Folder {
     name: string;
     path: string;
+    size?: number;        // sum of child audio file sizes in bytes
     modifiedAt: string;
     type: 'folder';
     metadata?: FolderMetadata;

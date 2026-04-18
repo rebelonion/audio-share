@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X } from 'lucide-react';
 import { searchAudio, getRandomAudio, SearchResult, SearchFilters, SearchField } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
 
@@ -360,7 +361,7 @@ export default function Search() {
                                             {result.modifiedAt && (
                                                 <span className="flex items-center gap-1 flex-shrink-0">
                                                     <Calendar className="h-3 w-3" />
-                                                    {new Date(result.modifiedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                    {formatDate(result.modifiedAt)}
                                                 </span>
                                             )}
                                         </div>
