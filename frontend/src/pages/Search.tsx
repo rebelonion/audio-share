@@ -2,11 +2,12 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X } from 'lucide-react';
+import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
 import { searchAudio, getRandomAudio, SearchResult, SearchFilters, SearchField } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useUmami } from '@/hooks/useUmami';
+import RequestSourceDialog from '@/components/RequestSourceDialog';
 
 const RESULTS_PER_PAGE = 50;
 
@@ -76,6 +77,7 @@ export default function Search() {
     const [hasSearched, setHasSearched] = useState(false);
     const [isLucky, setIsLucky] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
+    const [showRequestDialog, setShowRequestDialog] = useState(false);
     const [filters, setFilters] = useState<SearchFilters>(() => filtersFromParams(searchParams));
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -426,12 +428,22 @@ export default function Search() {
                     <div className="text-center py-12">
                         <Music className="h-12 w-12 mx-auto text-[var(--muted-foreground)] mb-4" />
                         <h2 className="text-lg font-medium mb-2">No results found</h2>
-                        <p className="text-[var(--muted-foreground)]">
+                        <p className="text-[var(--muted-foreground)] mb-6">
                             Try searching with different keywords
                             {hasActiveFilters(filters) && (
                                 <> or <button onClick={clearFilters} className="text-[var(--primary)] hover:underline">clear filters</button></>
                             )}
                         </p>
+                        <button
+                            onClick={() => {
+                                setShowRequestDialog(true);
+                                track('artist-request-dialog-open', { from: 'search-no-results', query });
+                            }}
+                            className="flex items-center gap-2 mx-auto px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm font-medium"
+                        >
+                            <ListPlus className="h-4 w-4" />
+                            Request a source
+                        </button>
                     </div>
                 )}
 
@@ -445,6 +457,7 @@ export default function Search() {
                     </div>
                 )}
             </div>
+            <RequestSourceDialog isOpen={showRequestDialog} onCloseAction={() => setShowRequestDialog(false)} />
         </>
     );
 }
