@@ -17,6 +17,16 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
             style={{width: '10%'}}>
             {item.type === 'audio' && (
                 <div className="flex gap-2 justify-end">
+                    <a
+                        href={item.type === 'audio' && item.shareKey ? `/share/${item.shareKey}` : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Open share page"
+                    >
+                        <ExternalLink className="h-4 w-4"/>
+                    </a>
                     <button
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {
@@ -24,7 +34,7 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                             copyToClipboard(key, e);
                             track('audio-share', { path: item.path, name: item.name });
                         }}
-                        title="Share"
+                        title="Copy share link"
                     >
                         {notification.visible && notification.path === (item.type === 'audio' ? item.shareKey : '') && !notification.isError ?
                             <Check className="h-4 w-4"/> :

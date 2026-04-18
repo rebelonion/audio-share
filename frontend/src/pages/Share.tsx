@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Home, FolderOpen } from 'lucide-react';
+import { Home, FolderOpen, Download } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
 import TrackListSection from '@/components/TrackListSection';
 import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/lib/api';
@@ -176,15 +176,25 @@ export default function Share() {
                                 )}
                             </p>
 
-                            {meta?.parentPath && (
-                                <Link
-                                    to={folderPath}
+                            <div className="flex items-center gap-3">
+                                <a
+                                    href={`${API_BASE}/api/audio/key/${key}`}
+                                    download={meta?.title || key}
                                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
                                 >
-                                    <FolderOpen className="h-4 w-4" />
-                                    <span>Browse folder</span>
-                                </Link>
-                            )}
+                                    <Download className="h-4 w-4" />
+                                    <span>Download</span>
+                                </a>
+                                {meta?.parentPath && (
+                                    <Link
+                                        to={folderPath}
+                                        className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                                    >
+                                        <FolderOpen className="h-4 w-4" />
+                                        <span>Browse folder</span>
+                                    </Link>
+                                )}
+                            </div>
                         </div>
 
                         <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} unavailable={!!meta?.unavailableAt} />
