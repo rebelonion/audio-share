@@ -70,13 +70,13 @@ func main() {
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
 		DefaultDescription: cfg.DefaultDescription,
-		UmamiURL:           cfg.UmamiURL,
-		UmamiWebsiteID:     cfg.UmamiWebsiteID,
+		RybbitURL:          cfg.RybbitURL,
+		RybbitSiteID:       cfg.RybbitSiteID,
 	}
 	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, db.DB())
 
 	rateLimiter := middleware.NewRateLimiter(cfg)
-	securityHeaders := middleware.NewSecurityHeaders(cfg.UmamiURL)
+	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL)
 	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)
 	if cfg.RequestsAPIKey == "" {
 		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are disabled")

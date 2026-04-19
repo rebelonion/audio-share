@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { Music, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PlaybackTrack, API_BASE } from '@/lib/api';
 import { useState } from 'react';
-import { useUmami } from '@/hooks/useUmami';
+import { useRybbit } from '@/hooks/useRybbit';
 
 interface TrackListSectionProps {
     title: string;
@@ -65,7 +65,7 @@ function getShareUrl(track: PlaybackTrack): string {
 }
 
 export default function TrackListSection({ title, tracks }: TrackListSectionProps) {
-    const { track: trackEvent } = useUmami();
+    const { track: trackEvent } = useRybbit();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);

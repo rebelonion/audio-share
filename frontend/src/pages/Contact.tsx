@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { useUmami } from '@/hooks/useUmami';
+import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 
 export default function Contact() {
-    const { track } = useUmami();
+    const { track } = useRybbit();
     const [topic, setTopic] = useState('');
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');

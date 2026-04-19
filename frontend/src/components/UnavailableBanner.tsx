@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { Unlink, Music, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PlaybackTrack, API_BASE } from '@/lib/api';
-import { useUmami } from '@/hooks/useUmami';
+import { useRybbit } from '@/hooks/useRybbit';
 
 interface Props {
     tracks: PlaybackTrack[];
@@ -41,7 +41,7 @@ function TrackImage({ track }: { track: PlaybackTrack }) {
 }
 
 export default function UnavailableBanner({ tracks }: Props) {
-    const { track: trackEvent } = useUmami();
+    const { track: trackEvent } = useRybbit();
     const [index, setIndex] = useState(0);
     const [fading, setFading] = useState(false);
     const paused = useRef(false);

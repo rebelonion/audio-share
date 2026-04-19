@@ -6,17 +6,17 @@ import (
 )
 
 type SecurityHeaders struct {
-	umamiDomain string
+	rybbitDomain string
 }
 
-func NewSecurityHeaders(umamiURL string) *SecurityHeaders {
-	var umamiDomain string
-	if umamiURL != "" {
-		if parsed, err := url.Parse(umamiURL); err == nil {
-			umamiDomain = parsed.Scheme + "://" + parsed.Host
+func NewSecurityHeaders(rybbitURL string) *SecurityHeaders {
+	var rybbitDomain string
+	if rybbitURL != "" {
+		if parsed, err := url.Parse(rybbitURL); err == nil {
+			rybbitDomain = parsed.Scheme + "://" + parsed.Host
 		}
 	}
-	return &SecurityHeaders{umamiDomain: umamiDomain}
+	return &SecurityHeaders{rybbitDomain: rybbitDomain}
 }
 
 func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
@@ -24,9 +24,9 @@ func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
 		// Build CSP
 		scriptSrc := "'self' 'unsafe-inline' 'unsafe-eval'"
 		connectSrc := "'self'"
-		if s.umamiDomain != "" {
-			scriptSrc += " " + s.umamiDomain
-			connectSrc += " " + s.umamiDomain
+		if s.rybbitDomain != "" {
+			scriptSrc += " " + s.rybbitDomain
+			connectSrc += " " + s.rybbitDomain
 		}
 
 		csp := "default-src 'self'; " +

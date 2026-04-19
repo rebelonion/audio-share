@@ -1,5 +1,5 @@
 import {useState, useRef, useEffect, useCallback} from 'react';
-import {useUmami} from './useUmami';
+import {useRybbit} from './useRybbit';
 import {API_BASE} from '@/lib/api';
 
 interface MetadataType {
@@ -12,7 +12,7 @@ interface MetadataType {
 }
 
 export function useAudioPlayer(src: string) {
-    const {track: trackEvent} = useUmami();
+    const {track: trackEvent} = useRybbit();
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);

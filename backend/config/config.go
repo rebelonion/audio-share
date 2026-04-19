@@ -79,11 +79,11 @@ type Config struct {
 	DatabaseURL   string
 	IndexSchedule string
 
-	UmamiURL string
+	RybbitURL    string
+	RybbitSiteID string
 
 	DefaultTitle       string
 	DefaultDescription string
-	UmamiWebsiteID     string
 
 	RequestsAPIKey    string
 	IndexWebhookURL   string
@@ -120,9 +120,9 @@ func Load() *Config {
 		DatabaseURL:   getEnv("DATABASE_URL", "postgres://audio_share:audio_share@localhost:5432/audio_share"),
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
-		UmamiURL:           getEnv("UMAMI_URL", ""),
-		UmamiWebsiteID:     getEnv("UMAMI_WEBSITE_ID", ""),
-		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
+		RybbitURL:    getEnv("RYBBIT_URL", ""),
+		RybbitSiteID: getEnv("RYBBIT_SITE_ID", ""),
+		DefaultTitle: getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
 
 		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),

@@ -83,7 +83,7 @@ function generateId(): string {
     });
 }
 
-function getSessionId(): string {
+export function getSessionId(): string {
     let id = localStorage.getItem('audio_session_id');
     if (!id) {
         id = generateId();

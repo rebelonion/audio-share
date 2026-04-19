@@ -6,7 +6,7 @@ import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, C
 import { searchAudio, getRandomAudio, SearchResult, SearchFilters, SearchField } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
-import { useUmami } from '@/hooks/useUmami';
+import { useRybbit } from '@/hooks/useRybbit';
 import RequestSourceDialog from '@/components/RequestSourceDialog';
 
 const RESULTS_PER_PAGE = 50;
@@ -66,7 +66,7 @@ function hasActiveFilters(filters: SearchFilters): boolean {
 }
 
 export default function Search() {
-    const { track } = useUmami();
+    const { track } = useRybbit();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams({});
     const [query, setQuery] = useState(searchParams.get('q') || '');

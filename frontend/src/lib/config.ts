@@ -2,8 +2,8 @@
 interface RuntimeConfig {
     defaultTitle?: string;
     defaultDescription?: string;
-    umamiUrl?: string;
-    umamiWebsiteId?: string;
+    rybbitUrl?: string;
+    rybbitSiteId?: string;
 }
 
 declare global {
@@ -16,5 +16,5 @@ const config = window.__CONFIG__ || {};
 
 export const DEFAULT_TITLE = config.defaultTitle || 'Audio Archive';
 export const DEFAULT_DESCRIPTION = config.defaultDescription || 'Browse and listen to audio files';
-export const UMAMI_URL = config.umamiUrl || '';
-export const UMAMI_WEBSITE_ID = config.umamiWebsiteId || '';
+export const RYBBIT_URL = config.rybbitUrl || '';
+export const RYBBIT_SITE_ID = config.rybbitSiteId || '';

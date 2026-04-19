@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet-async'
 import { Music, Menu, X } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
-import { DEFAULT_TITLE, DEFAULT_DESCRIPTION, UMAMI_URL, UMAMI_WEBSITE_ID } from '@/lib/config'
+import { DEFAULT_TITLE, DEFAULT_DESCRIPTION, RYBBIT_URL, RYBBIT_SITE_ID } from '@/lib/config'
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -15,12 +15,11 @@ export default function Layout() {
       <Helmet>
         <title>{DEFAULT_TITLE}</title>
         <link rel="icon" href="/favicon.svg" />
-        {UMAMI_URL && UMAMI_WEBSITE_ID && (
+        {RYBBIT_URL && RYBBIT_SITE_ID && (
           <script
             defer
-            src={UMAMI_URL}
-            data-website-id={UMAMI_WEBSITE_ID}
-            data-exclude-search="true"
+            src={`${RYBBIT_URL}/api/script.js`}
+            data-site-id={RYBBIT_SITE_ID}
           />
         )}
       </Helmet>

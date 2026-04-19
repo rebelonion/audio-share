@@ -10,7 +10,7 @@ import TableItem from "@/components/TableItem";
 import SearchBar from "@/components/SearchBar";
 import {reverseIf} from "@/lib/utils";
 import {useSearchParams} from "react-router";
-import {useUmami} from "@/hooks/useUmami";
+import {useRybbit} from "@/hooks/useRybbit";
 import {recordPlayEvent} from "@/lib/api";
 
 interface FolderViewProps {
@@ -20,7 +20,7 @@ interface FolderViewProps {
 type SortMethod = 'alpha' | 'modified' | 'size';
 
 export default function FolderView({items}: FolderViewProps) {
-    const {track} = useUmami();
+    const {track} = useRybbit();
     const [searchParams] = useSearchParams();
     const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
     const [selectedAudioKey, setSelectedAudioKey] = useState<string>('');

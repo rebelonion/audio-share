@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { useUmami } from '@/hooks/useUmami';
+import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
 
 interface RequestSourceDialogProps {
@@ -9,7 +9,7 @@ interface RequestSourceDialogProps {
 }
 
 export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSourceDialogProps) {
-    const { track } = useUmami();
+    const { track } = useRybbit();
     const [requestUrl, setRequestUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<{

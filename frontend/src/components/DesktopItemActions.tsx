@@ -1,7 +1,7 @@
 import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
-import {useUmami} from "@/hooks/useUmami";
+import {useRybbit} from "@/hooks/useRybbit";
 import {API_BASE} from "@/lib/api";
 
 interface DesktopItemActionsProps {
@@ -11,7 +11,7 @@ interface DesktopItemActionsProps {
 }
 
 export default function DesktopItemActions({ item, notification, copyToClipboard }: DesktopItemActionsProps) {
-    const {track} = useUmami();
+    const {track} = useRybbit();
     return(
         <td className="px-6 py-4 whitespace-nowrap text-sm text-right"
             style={{width: '10%'}}>

@@ -13,8 +13,8 @@ import (
 type FrontendConfig struct {
 	DefaultTitle       string `json:"defaultTitle,omitempty"`
 	DefaultDescription string `json:"defaultDescription,omitempty"`
-	UmamiURL           string `json:"umamiUrl,omitempty"`
-	UmamiWebsiteID     string `json:"umamiWebsiteId,omitempty"`
+	RybbitURL    string `json:"rybbitUrl,omitempty"`
+	RybbitSiteID string `json:"rybbitSiteId,omitempty"`
 }
 
 type SPAHandler struct {

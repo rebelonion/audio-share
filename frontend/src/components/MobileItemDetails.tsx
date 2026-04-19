@@ -2,7 +2,7 @@ import {FileSystemItem, Notification} from "@/types";
 import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {formatDate, formatFileSize} from "@/lib/utils";
-import {useUmami} from "@/hooks/useUmami";
+import {useRybbit} from "@/hooks/useRybbit";
 import {API_BASE} from "@/lib/api";
 
 interface MobileItemDetailsProps {
@@ -12,7 +12,7 @@ interface MobileItemDetailsProps {
 }
 
 export default function MobileItemDetails({ item, notification, copyToClipboard }: MobileItemDetailsProps) {
-    const {track} = useUmami();
+    const {track} = useRybbit();
     return (
         <div className="px-3 pb-3 flex justify-between">
             <div className="text-xs text-[var(--muted-foreground)]">

@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router'
+import { getSessionId } from '@/lib/api'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import About from './pages/About'
@@ -11,6 +13,11 @@ import Requests from './pages/Requests'
 import NotFound from './pages/NotFound'
 
 export default function App() {
+  useEffect(() => {
+    const id = getSessionId();
+    window.rybbit?.identify(id);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

@@ -2,10 +2,10 @@ import {useState} from 'react';
 import {useLocation} from 'react-router';
 import {ListPlus} from 'lucide-react';
 import RequestSourceDialog from './RequestSourceDialog';
-import {useUmami} from '@/hooks/useUmami';
+import {useRybbit} from '@/hooks/useRybbit';
 
 export default function FloatingActionButton() {
-    const {track} = useUmami();
+    const {track} = useRybbit();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const location = useLocation();
     const isRequestsPage = location.pathname === '/requests';
