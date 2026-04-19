@@ -70,10 +70,8 @@ func main() {
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
 		DefaultDescription: cfg.DefaultDescription,
-		RybbitURL:          cfg.RybbitURL,
-		RybbitSiteID:       cfg.RybbitSiteID,
 	}
-	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, db.DB())
+	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, cfg.RybbitURL, cfg.RybbitSiteID, db.DB())
 
 	rateLimiter := middleware.NewRateLimiter(cfg)
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL)

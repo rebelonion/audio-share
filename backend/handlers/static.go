@@ -13,8 +13,6 @@ import (
 type FrontendConfig struct {
 	DefaultTitle       string `json:"defaultTitle,omitempty"`
 	DefaultDescription string `json:"defaultDescription,omitempty"`
-	RybbitURL    string `json:"rybbitUrl,omitempty"`
-	RybbitSiteID string `json:"rybbitSiteId,omitempty"`
 }
 
 type SPAHandler struct {
@@ -24,7 +22,7 @@ type SPAHandler struct {
 	config       FrontendConfig
 }
 
-func NewSPAHandler(staticDir string, config FrontendConfig, db *sql.DB) *SPAHandler {
+func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSiteID string, db *sql.DB) *SPAHandler {
 	cleanDir := filepath.Clean(staticDir)
 	indexPath := filepath.Join(cleanDir, "index.html")
 
@@ -41,9 +39,14 @@ func NewSPAHandler(staticDir string, config FrontendConfig, db *sql.DB) *SPAHand
 		})
 		ldScript := `<script type="application/ld+json">` + string(ldJSON) + `</script>`
 
-		// Store template with config/ld+json injected but without title or meta tags;
+		injection := configScript + ldScript
+		if rybbitURL != "" && rybbitSiteID != "" {
+			injection += `<script defer src="` + html.EscapeString(rybbitURL) + `/api/script.js" data-site-id="` + html.EscapeString(rybbitSiteID) + `"></script>`
+		}
+
+		// Store template with config/ld+json/analytics injected but without title or meta tags;
 		// those are injected per-request in serveRoute.
-		htmlTemplate = strings.Replace(string(data), "</head>", configScript+ldScript+"</head>", 1)
+		htmlTemplate = strings.Replace(string(data), "</head>", injection+"</head>", 1)
 	}
 
 	return &SPAHandler{
