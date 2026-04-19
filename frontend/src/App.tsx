@@ -14,8 +14,9 @@ import NotFound from './pages/NotFound'
 
 export default function App() {
   useEffect(() => {
-    const id = getSessionId();
-    window.rybbit?.identify(id);
+    if (window.rybbit && !window.rybbit.getUserId()) {
+      window.rybbit.identify(getSessionId());
+    }
   }, []);
 
   return (
