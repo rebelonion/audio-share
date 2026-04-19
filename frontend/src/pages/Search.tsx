@@ -518,17 +518,14 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                     {VALID_FIELDS.map((f) => {
-                        const active = !filters.fields || filters.fields.length === 0
-                            ? true
-                            : filters.fields.includes(f);
+                        const active = filters.fields ? filters.fields.includes(f) : false;
                         const label = f === 'filename' ? 'Filename' : f === 'title' ? 'Title' : f === 'artist' ? 'Artist' : 'Description';
                         const toggle = () => {
-                            const current = filters.fields && filters.fields.length > 0 ? filters.fields : [...VALID_FIELDS];
+                            const current = filters.fields && filters.fields.length > 0 ? filters.fields : [];
                             const next = current.includes(f)
                                 ? current.filter(x => x !== f)
                                 : [...current, f];
-                            // If all fields selected, treat as "all" (no filter)
-                            update({ fields: next.length === VALID_FIELDS.length ? undefined : next.length === 0 ? undefined : next });
+                            update({ fields: next.length === 0 || next.length === VALID_FIELDS.length ? undefined : next });
                         };
                         return (
                             <button
