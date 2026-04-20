@@ -64,30 +64,38 @@ func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID string) error {
 }
 
 func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]PlaybackResult, error) {
-	// Co-occurrence: other tracks played in sessions where this track was played
+	// Co-occurrence normalized by candidate's total session count (TF-IDF style):
+	// score = co_sessions / total_candidate_sessions
+	// This penalizes globally popular tracks that co-occur with everything.
 	rows, err := s.db.DB().Query(`
+		WITH candidate_totals AS (
+			SELECT audio_file_id, COUNT(DISTINCT session_id) AS total_sessions
+			FROM play_events
+			WHERE session_id IS NOT NULL
+			GROUP BY audio_file_id
+		),
+		co_occurrences AS (
+			SELECT pe2.audio_file_id, COUNT(DISTINCT pe2.session_id) AS co_count
+			FROM play_events pe1
+			JOIN audio_files target ON target.share_key = $1
+			JOIN play_events pe2 ON pe2.session_id = pe1.session_id
+				AND pe2.audio_file_id != target.id
+				AND pe2.session_id IS NOT NULL
+			WHERE pe1.audio_file_id = target.id
+				AND pe1.session_id IS NOT NULL
+			GROUP BY pe2.audio_file_id
+		)
 		SELECT
-			af.share_key,
-			af.path,
-			af.filename,
-			af.title,
-			af.meta_artist,
-			af.parent_path,
-			f.name,
-			f.share_key,
-			af.thumbnail,
-			f.poster_image
-		FROM play_events pe1
-		JOIN audio_files target ON target.share_key = $1
-		JOIN play_events pe2 ON pe2.session_id = pe1.session_id
-			AND pe2.audio_file_id != target.id
-			AND pe2.session_id IS NOT NULL
-		JOIN audio_files af ON af.id = pe2.audio_file_id AND af.deleted = 0
+			af.share_key, af.path, af.filename, af.title, af.meta_artist,
+			af.parent_path, f.name, f.share_key, af.thumbnail, f.poster_image
+		FROM co_occurrences co
+		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE pe1.audio_file_id = target.id
-			AND pe1.session_id IS NOT NULL
-		GROUP BY af.id, f.id
-		ORDER BY RANDOM() ^ (1.0 / COUNT(DISTINCT pe2.session_id)) DESC
+		JOIN candidate_totals ct ON ct.audio_file_id = co.audio_file_id
+		ORDER BY RANDOM() ^ (1.0 / GREATEST(
+			co.co_count::float / ct.total_sessions,
+			0.001
+		)) DESC
 		LIMIT $2
 	`, shareKey, limit)
 	if err != nil {
@@ -214,7 +222,22 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 }
 
 func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) {
+	// Trending score: recent play rate vs historical baseline.
+	// score = (plays_last_7d + 1) / (avg_plays_per_7d_over_prior_84d + 1)
+	// Consistently popular items score ~1.0; items spiking above their norm score high.
 	rows, err := s.db.DB().Query(`
+		WITH play_windows AS (
+			SELECT
+				audio_file_id,
+				COUNT(*) FILTER (WHERE played_at >= NOW() - INTERVAL '7 days') AS recent_7d,
+				COUNT(*) FILTER (
+					WHERE played_at < NOW() - INTERVAL '7 days'
+					  AND played_at >= NOW() - INTERVAL '91 days'
+				) AS older_84d
+			FROM play_events
+			GROUP BY audio_file_id
+			HAVING COUNT(*) FILTER (WHERE played_at >= NOW() - INTERVAL '7 days') > 0
+		)
 		SELECT
 			af.share_key,
 			af.path,
@@ -226,15 +249,14 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 			f.share_key,
 			af.thumbnail,
 			f.poster_image,
-			COUNT(*) as play_count,
-			MAX(pe.played_at) as last_played
-		FROM play_events pe
-		JOIN audio_files af ON af.id = pe.audio_file_id
+			pw.recent_7d AS play_count,
+			MAX(pe.played_at) AS last_played
+		FROM play_windows pw
+		JOIN audio_files af ON af.id = pw.audio_file_id AND af.deleted = 0
+		JOIN play_events pe ON pe.audio_file_id = af.id
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.deleted = 0
-		AND pe.played_at >= NOW() - INTERVAL '7 days'
-		GROUP BY af.id, f.id
-		ORDER BY play_count DESC
+		GROUP BY af.id, f.id, pw.recent_7d, pw.older_84d
+		ORDER BY (pw.recent_7d + 1.0) / (pw.older_84d::float / 12.0 + 1.0) DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
