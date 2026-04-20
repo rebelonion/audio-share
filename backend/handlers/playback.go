@@ -55,7 +55,7 @@ func (h *PlaybackHandler) RecentHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecentlyPlayed(10)
+		tracks, err := h.playbackService.GetRecentlyPlayed(30)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recent tracks"})
 			return
@@ -72,7 +72,7 @@ func (h *PlaybackHandler) PopularHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetPopularTracks(10)
+		tracks, err := h.playbackService.GetPopularTracks(30)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch popular tracks"})
 			return
@@ -89,7 +89,7 @@ func (h *PlaybackHandler) NewHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecentlyAdded(10)
+		tracks, err := h.playbackService.GetRecentlyAdded(30)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch new tracks"})
 			return
@@ -130,7 +130,7 @@ func (h *PlaybackHandler) RecommendationsHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecommendations(key, 10)
+		tracks, err := h.playbackService.GetRecommendations(key, 30)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
 			return
