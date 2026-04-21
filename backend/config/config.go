@@ -85,6 +85,8 @@ type Config struct {
 	DefaultTitle       string
 	DefaultDescription string
 
+	SessionSecret string
+
 	RequestsAPIKey    string
 	IndexWebhookURL   string
 	IndexWebhookToken string
@@ -124,6 +126,8 @@ func Load() *Config {
 		RybbitSiteID: getEnv("RYBBIT_SITE_ID", ""),
 		DefaultTitle: getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
+
+		SessionSecret: getEnv("SESSION_SECRET", ""),
 
 		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),
 		IndexWebhookURL:   getEnv("INDEX_WEBHOOK_URL", ""),

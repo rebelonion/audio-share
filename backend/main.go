@@ -52,6 +52,10 @@ func main() {
 		waveformService.StartScheduledJob(cfg.WaveformCron, cfg.WaveformMaxDuration)
 	}
 
+	if cfg.SessionSecret == "" {
+		log.Fatal("SESSION_SECRET is required but not set")
+	}
+
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
 	playbackService := services.NewPlaybackService(db)
 	requestsService := services.NewRequestsService(db)
@@ -63,7 +67,7 @@ func main() {
 	contactHandler := handlers.NewContactHandler(ntfyService)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
-	playbackHandler := handlers.NewPlaybackHandler(playbackService)
+	playbackHandler := handlers.NewPlaybackHandler(playbackService, cfg.SessionSecret)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
 	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
 

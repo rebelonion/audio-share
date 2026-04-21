@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -10,15 +14,71 @@ import (
 
 type PlaybackHandler struct {
 	playbackService *services.PlaybackService
+	sessionSecret   []byte
 }
 
-func NewPlaybackHandler(playbackService *services.PlaybackService) *PlaybackHandler {
-	return &PlaybackHandler{playbackService: playbackService}
+func NewPlaybackHandler(playbackService *services.PlaybackService, sessionSecret string) *PlaybackHandler {
+	return &PlaybackHandler{
+		playbackService: playbackService,
+		sessionSecret:   []byte(sessionSecret),
+	}
 }
 
 type recordRequest struct {
-	ShareKey  string `json:"shareKey"`
-	SessionID string `json:"sessionId"`
+	ShareKey string `json:"shareKey"`
+}
+
+const sessionCookieName = "audio_session_id"
+const sessionCookieMaxAge = 365 * 24 * 60 * 60
+
+func generateSessionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "fallback"
+	}
+	return hex.EncodeToString(b)
+}
+
+func (h *PlaybackHandler) signSessionID(id string) string {
+	mac := hmac.New(sha256.New, h.sessionSecret)
+	mac.Write([]byte(id))
+	return id + "." + hex.EncodeToString(mac.Sum(nil))
+}
+
+func (h *PlaybackHandler) verifySessionCookie(signed string) (string, bool) {
+	dot := strings.LastIndex(signed, ".")
+	if dot < 0 {
+		return "", false
+	}
+	id, sig := signed[:dot], signed[dot+1:]
+	mac := hmac.New(sha256.New, h.sessionSecret)
+	mac.Write([]byte(id))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(sig), []byte(expected)) {
+		return "", false
+	}
+	return id, true
+}
+
+// resolveSessionID returns (sessionID, ok).
+// ok is false only when a cookie is present but the signature is invalid.
+func (h *PlaybackHandler) resolveSessionID(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return generateSessionID(), true
+	}
+	id, ok := h.verifySessionCookie(cookie.Value)
+	return id, ok
+}
+
+func (h *PlaybackHandler) setSessionCookie(w http.ResponseWriter, sessionID string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    h.signSessionID(sessionID),
+		MaxAge:   sessionCookieMaxAge,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
@@ -39,12 +99,19 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			return
 		}
 
-		if err := h.playbackService.RecordPlayEvent(req.ShareKey, req.SessionID); err != nil {
+		sessionID, ok := h.resolveSessionID(r)
+		if !ok {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "Invalid session"})
+			return
+		}
+		h.setSessionCookie(w, sessionID)
+
+		if err := h.playbackService.RecordPlayEvent(req.ShareKey, sessionID); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record play event"})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "sessionId": sessionID})
 	}
 }
 

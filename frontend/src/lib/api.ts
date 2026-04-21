@@ -73,31 +73,17 @@ export interface PlaybackTrack {
     lastPlayed: string | null;
 }
 
-function generateId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = Math.random() * 16 | 0;
-        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-}
-
-export function getSessionId(): string {
-    let id = localStorage.getItem('audio_session_id');
-    if (!id) {
-        id = generateId();
-        localStorage.setItem('audio_session_id', id);
-    }
-    return id;
-}
-
 export async function recordPlayEvent(shareKey: string): Promise<void> {
-    await fetch(`${API_BASE}/api/playback/record`, {
+    const response = await fetch(`${API_BASE}/api/playback/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shareKey, sessionId: getSessionId() }),
+        credentials: 'include',
+        body: JSON.stringify({ shareKey }),
     });
+    const data = await response.json();
+    if (window.rybbit && !window.rybbit.getUserId()) {
+        window.rybbit.identify(data.sessionId);
+    }
 }
 
 export async function getRecommendations(shareKey: string): Promise<PlaybackTrack[]> {
