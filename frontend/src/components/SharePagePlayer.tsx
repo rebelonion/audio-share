@@ -9,6 +9,7 @@ import {
     Calendar,
     Loader2
 } from 'lucide-react';
+import {useRef, useEffect} from 'react';
 import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 import WaveformDisplay from '@/components/WaveformDisplay';
 
@@ -40,6 +41,9 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
         handleProgressClick,
         formatTime
     } = useAudioPlayer(src);
+
+    const hasTracked = useRef(false);
+    useEffect(() => { hasTracked.current = false; }, [src]);
 
     return (
         <div className="w-full">
@@ -110,7 +114,7 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
 
                 <div className="flex justify-center mb-4">
                     <button
-                        onClick={() => { if (!isPlaying && onPlay) onPlay(); togglePlay(); }}
+                        onClick={() => { if (!isPlaying && onPlay && !hasTracked.current) { hasTracked.current = true; onPlay(); } togglePlay(); }}
                         className="p-4 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
                         aria-label={isPlaying ? "Pause" : "Play"}
                     >
