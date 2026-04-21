@@ -81,7 +81,7 @@ export async function recordPlayEvent(shareKey: string): Promise<void> {
         body: JSON.stringify({ shareKey }),
     });
     const data = await response.json();
-    if (window.rybbit && !window.rybbit.getUserId()) {
+    if (window.rybbit && window.rybbit.getUserId() !== data.sessionId) {
         window.rybbit.identify(data.sessionId);
     }
 }
