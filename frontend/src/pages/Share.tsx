@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Home, FolderOpen, Download } from 'lucide-react';
@@ -27,7 +27,6 @@ export default function Share() {
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [recommendations, setRecommendations] = useState<PlaybackTrack[]>([]);
-    const hasTracked = useRef(false);
 
     useEffect(() => {
         if (!key) {
@@ -60,8 +59,7 @@ export default function Share() {
     }, [key]);
 
     const handlePlay = useCallback(() => {
-        if (hasTracked.current || !key) return;
-        hasTracked.current = true;
+        if (!key) return;
         recordPlayEvent(key).catch(() => {});
     }, [key]);
 

@@ -42,11 +42,11 @@ func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID string) error {
 		return err
 	}
 
-	// skip if same file was played in the last 5 minutes
+	// skip if this session played the same file in the last 5 minutes
 	var recent int
 	err = s.db.DB().QueryRow(
-		"SELECT COUNT(*) FROM play_events WHERE audio_file_id = $1 AND played_at > NOW() - INTERVAL '5 minutes'",
-		id,
+		"SELECT COUNT(*) FROM play_events WHERE audio_file_id = $1 AND session_id = $2 AND played_at > NOW() - INTERVAL '5 minutes'",
+		id, sessionID,
 	).Scan(&recent)
 	if err != nil {
 		return err
