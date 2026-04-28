@@ -115,6 +115,8 @@ func (d *Database) migrate() {
 		`DROP INDEX IF EXISTS idx_audio_files_path`,
 		`DROP INDEX IF EXISTS idx_folders_search`,
 		`DROP INDEX IF EXISTS idx_audio_files_search`,
+		`ALTER TABLE folders ALTER COLUMN item_count SET DEFAULT 0`,
+		`UPDATE folders SET item_count = 0 WHERE item_count IS NULL`,
 	}
 
 	for _, stmt := range statements {

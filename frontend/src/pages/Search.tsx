@@ -476,7 +476,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
 
     return (
         <div className="mt-3 p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
                         Type
