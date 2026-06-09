@@ -140,6 +140,7 @@ export interface SearchFilters {
     durationMax?: number;
     /** Which audio fields to search in. Empty/undefined = all fields. */
     fields?: SearchField[];
+    root?: string;
 }
 
 export async function searchAudio(query: string, limit?: number, offset?: number, filters?: SearchFilters): Promise<SearchResponse> {
@@ -159,6 +160,7 @@ export async function searchAudio(query: string, limit?: number, offset?: number
         if (filters.durationMin != null && filters.durationMin > 0) params.set('durationMin', filters.durationMin.toString());
         if (filters.durationMax != null && filters.durationMax > 0) params.set('durationMax', filters.durationMax.toString());
         if (filters.fields && filters.fields.length > 0) params.set('fields', filters.fields.join(','));
+        if (filters.root) params.set('root', filters.root);
     }
 
     const response = await fetch(`${API_BASE}/api/search?${params}`);

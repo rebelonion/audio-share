@@ -49,6 +49,8 @@ type SearchOptions struct {
 	// Which audio fields to search in: "filename", "title", "artist", "description"
 	// Empty means search all fields.
 	Fields []string
+	// Root path slug to limit results to a configured root directory.
+	Root string
 }
 
 type SearchService struct {
@@ -131,6 +133,11 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		audioArgs = append(audioArgs, strings.ReplaceAll(opts.DateTo, "-", ""))
 		argIdx++
 	}
+	if opts.Root != "" {
+		audioWhere += fmt.Sprintf(" AND (path = $%d OR path LIKE $%d)", argIdx, argIdx+1)
+		audioArgs = append(audioArgs, opts.Root, opts.Root+"/%")
+		argIdx += 2
+	}
 
 	hasDurationFilter := opts.DurationMin > 0 || opts.DurationMax > 0
 	audioJoin := ""
@@ -170,6 +177,11 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		folderWhere += fmt.Sprintf(" AND upload_date <= $%d", folderArgIdx)
 		folderArgs = append(folderArgs, strings.ReplaceAll(opts.DateTo, "-", ""))
 		folderArgIdx++
+	}
+	if opts.Root != "" {
+		folderWhere += fmt.Sprintf(" AND (path = $%d OR path LIKE $%d)", folderArgIdx, folderArgIdx+1)
+		folderArgs = append(folderArgs, opts.Root, opts.Root+"/%")
+		folderArgIdx += 2
 	}
 	_ = folderArgIdx
 

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
-import { searchAudio, getRandomAudio, SearchResult, SearchFilters, SearchField } from '@/lib/api';
+import { searchAudio, getRandomAudio, fetchDirectoryContents, SearchResult, SearchFilters, SearchField } from '@/lib/api';
+import type { Folder as RootFolder } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useRybbit } from '@/hooks/useRybbit';
@@ -41,6 +42,8 @@ function filtersFromParams(params: URLSearchParams): SearchFilters {
         const parsed = fieldsParam.split(',').filter((f): f is SearchField => VALID_FIELDS.includes(f as SearchField));
         if (parsed.length > 0) filters.fields = parsed;
     }
+    const root = params.get('root');
+    if (root) filters.root = root;
     return filters;
 }
 
@@ -54,6 +57,7 @@ function filtersToParams(filters: SearchFilters): Record<string, string> {
     if (filters.durationMin && filters.durationMin > 0) p.durationMin = filters.durationMin.toString();
     if (filters.durationMax && filters.durationMax > 0) p.durationMax = filters.durationMax.toString();
     if (filters.fields && filters.fields.length > 0) p.fields = filters.fields.join(',');
+    if (filters.root) p.root = filters.root;
     return p;
 }
 
@@ -62,7 +66,8 @@ function hasActiveFilters(filters: SearchFilters): boolean {
         filters.dateFrom || filters.dateTo ||
         (filters.durationMin && filters.durationMin > 0) ||
         (filters.durationMax && filters.durationMax > 0) ||
-        (filters.fields && filters.fields.length > 0));
+        (filters.fields && filters.fields.length > 0) ||
+        filters.root);
 }
 
 export default function Search() {
@@ -473,6 +478,25 @@ interface FilterPanelProps {
 function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
     const update = (patch: Partial<SearchFilters>) => onChange({ ...filters, ...patch });
     const isActive = hasActiveFilters(filters);
+    const [roots, setRoots] = useState<RootFolder[]>([]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetchDirectoryContents()
+            .then((contents) => {
+                if (!cancelled) {
+                    setRoots(contents.items.filter((item): item is RootFolder => item.type === 'folder'));
+                }
+            })
+            .catch((error) => {
+                console.error('Failed to load root directories:', error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     return (
         <div className="mt-3 p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg space-y-4">
@@ -509,6 +533,26 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                     />
                 </div>
             </div>
+
+            {roots.length > 0 && (
+                <>
+                    <div className="border-t border-[var(--border)]/50" />
+
+                    <div>
+                        <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
+                            Root directory
+                        </label>
+                        <CustomSelect
+                            value={filters.root ?? ''}
+                            onChange={(v) => update({ root: v || undefined })}
+                            options={[
+                                { value: '', label: 'All roots' },
+                                ...roots.map((root) => ({ value: root.path, label: root.name })),
+                            ]}
+                        />
+                    </div>
+                </>
+            )}
 
             <div className="border-t border-[var(--border)]/50" />
 

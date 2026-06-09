@@ -17,6 +17,19 @@ func NewSearchHandler(searchService *services.SearchService) *SearchHandler {
 	return &SearchHandler{searchService: searchService}
 }
 
+func isRootSlug(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 type SearchResponse struct {
 	Results []services.SearchResult `json:"results"`
 	Query   string                  `json:"query"`
@@ -49,6 +62,8 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query().Get("q")
+	root := strings.Trim(strings.TrimSpace(r.URL.Query().Get("root")), "/")
+	hasRootFilter := isRootSlug(root)
 
 	hasFilters := r.URL.Query().Get("type") != "" ||
 		r.URL.Query().Get("unavailableOnly") == "true" ||
@@ -57,7 +72,8 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("dateTo") != "" ||
 		r.URL.Query().Get("durationMin") != "" ||
 		r.URL.Query().Get("durationMax") != "" ||
-		r.URL.Query().Get("fields") != ""
+		r.URL.Query().Get("fields") != "" ||
+		hasRootFilter
 
 	if len(query) < 2 && !hasFilters {
 		w.Header().Set("Content-Type", "application/json")
@@ -122,6 +138,10 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				opts.Fields = append(opts.Fields, f)
 			}
 		}
+	}
+
+	if hasRootFilter {
+		opts.Root = root
 	}
 
 	results, total, err := h.searchService.Search(query, limit, offset, opts)
