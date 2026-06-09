@@ -176,7 +176,7 @@ export default function Share() {
 
                             <div className="flex items-center gap-3">
                                 <a
-                                    href={`${API_BASE}/api/audio/key/${key}`}
+                                    href={`${API_BASE}/api/audio/key/${key}/download`}
                                     download={meta?.title || key}
                                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
                                 >

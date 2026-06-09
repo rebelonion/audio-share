@@ -186,6 +186,13 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			return
 		}
 
+		egressStats, err := h.searchService.GetEgressStats()
+		if err != nil {
+			log.Printf("Error getting egress stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		result := map[string]interface{}{
 			"audio":              audioStats,
 			"sources":            sourcesStats,
@@ -193,6 +200,7 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			"durations":          durationStats,
 			"publicationYears":   publicationYearStats,
 			"sourceAvailability": sourceAvailabilityStats,
+			"egress":             egressStats,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

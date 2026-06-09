@@ -3,6 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,15 +15,19 @@ import (
 )
 
 type AudioHandler struct {
-	fs        *services.FileSystemService
-	db        *sql.DB
-	mimeTypes map[string]string
+	fs                     *services.FileSystemService
+	db                     *sql.DB
+	streamBytesPerSecond   int64
+	downloadBytesPerSecond int64
+	mimeTypes              map[string]string
 }
 
-func NewAudioHandler(fs *services.FileSystemService, db *sql.DB) *AudioHandler {
+func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, streamBytesPerSecond, downloadBytesPerSecond int64) *AudioHandler {
 	return &AudioHandler{
-		fs: fs,
-		db: db,
+		fs:                     fs,
+		db:                     db,
+		streamBytesPerSecond:   streamBytesPerSecond,
+		downloadBytesPerSecond: downloadBytesPerSecond,
 		mimeTypes: map[string]string{
 			".mp3":  "audio/mpeg",
 			".wav":  "audio/wav",
@@ -40,7 +46,7 @@ func NewAudioHandler(fs *services.FileSystemService, db *sql.DB) *AudioHandler {
 }
 
 func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Path format: /api/audio/key/{key}[/thumbnail|/meta]
+	// Path format: /api/audio/key/{key}[/thumbnail|/meta|/waveform|/download]
 	path := strings.TrimPrefix(r.URL.Path, "/api/audio/key/")
 	path = strings.Trim(path, "/")
 
@@ -54,6 +60,9 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if strings.HasSuffix(path, "/waveform") {
 		key = strings.TrimSuffix(path, "/waveform")
 		action = "waveform"
+	} else if strings.HasSuffix(path, "/download") {
+		key = strings.TrimSuffix(path, "/download")
+		action = "download"
 	} else {
 		key = path
 		action = "stream"
@@ -66,7 +75,9 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "stream":
-		h.handleStream(w, r, key)
+		h.handleStream(w, r, key, false)
+	case "download":
+		h.handleStream(w, r, key, true)
 	case "thumbnail":
 		h.handleThumbnail(w, r, key)
 	case "meta":
@@ -79,6 +90,7 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type audioRow struct {
+	id            int64
 	path          string
 	deleted       bool
 	unavailableAt sql.NullTime
@@ -95,11 +107,11 @@ func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
 	var row audioRow
 	var deletedInt int
 	err := h.db.QueryRow(`
-		SELECT path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
+		SELECT id, path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, parent_path
 		FROM audio_files WHERE share_key = $1
 	`, key).Scan(
-		&row.path, &deletedInt, &row.unavailableAt, &row.thumbnail, &row.title, &row.artist,
+		&row.id, &row.path, &deletedInt, &row.unavailableAt, &row.thumbnail, &row.title, &row.artist,
 		&row.uploadDate, &row.webpageURL, &row.description, &row.parentPath,
 	)
 	if err != nil {
@@ -117,7 +129,7 @@ func (h *AudioHandler) resolveFullPath(virtualPath string) (string, bool) {
 	return h.fs.ValidatePath(parts[0], parts[1])
 }
 
-func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key string) {
+func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key string, download bool) {
 	row, err := h.lookupByKey(key)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -160,8 +172,54 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Header().Set("Accept-Ranges", "bytes")
+	if download {
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
+			"filename": info.Name(),
+		}))
+		if r.Method == http.MethodGet {
+			h.recordDownload(row.id)
+		}
+	}
 
-	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+	reader := newCountingReadSeeker(newThrottledReadSeeker(file, h.bytesPerSecond(download)))
+	http.ServeContent(w, r, info.Name(), info.ModTime(), reader)
+	if r.Method == http.MethodGet && reader.BytesRead() > 0 {
+		h.recordEgress(h.egressEventType(download), reader.BytesRead())
+	}
+}
+
+func (h *AudioHandler) bytesPerSecond(download bool) int64 {
+	if download {
+		return h.downloadBytesPerSecond
+	}
+	return h.streamBytesPerSecond
+}
+
+func (h *AudioHandler) egressEventType(download bool) string {
+	if download {
+		return "download"
+	}
+	return "stream"
+}
+
+func (h *AudioHandler) recordDownload(audioFileID int64) {
+	if _, err := h.db.Exec("INSERT INTO download_events (audio_file_id) VALUES ($1)", audioFileID); err != nil {
+		log.Printf("Error recording download event for audio_file_id=%d: %v", audioFileID, err)
+	}
+}
+
+func (h *AudioHandler) recordEgress(eventType string, bytesSent int64) {
+	_, err := h.db.Exec(`
+		INSERT INTO egress_daily (day, event_type, bytes_sent, request_count)
+		VALUES (CURRENT_DATE, $1, $2, 1)
+		ON CONFLICT (day, event_type)
+		DO UPDATE SET
+			bytes_sent = egress_daily.bytes_sent + EXCLUDED.bytes_sent,
+			request_count = egress_daily.request_count + EXCLUDED.request_count
+	`, eventType, bytesSent)
+	if err != nil {
+		log.Printf("Error recording %s egress (%d bytes): %v", eventType, bytesSent, err)
+	}
 }
 
 func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, key string) {
@@ -221,12 +279,12 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 }
 
 type AudioMeta struct {
-	Title       string `json:"title"`
-	Artist      string `json:"artist"`
-	UploadDate  string `json:"uploadDate"`
-	WebpageURL  string `json:"webpageUrl"`
-	Description string `json:"description"`
-	ParentPath  string `json:"parentPath"`
+	Title         string  `json:"title"`
+	Artist        string  `json:"artist"`
+	UploadDate    string  `json:"uploadDate"`
+	WebpageURL    string  `json:"webpageUrl"`
+	Description   string  `json:"description"`
+	ParentPath    string  `json:"parentPath"`
 	Thumbnail     bool    `json:"thumbnail"`
 	Deleted       bool    `json:"deleted"`
 	UnavailableAt *string `json:"unavailableAt"`

@@ -96,6 +96,26 @@ type SourceAvailabilityStats struct {
 	Sources []SourceAvailability `json:"sources"`
 }
 
+type EgressDayStat struct {
+	Date             string `json:"date"`
+	StreamBytes      int64  `json:"streamBytes"`
+	DownloadBytes    int64  `json:"downloadBytes"`
+	StreamRequests   int64  `json:"streamRequests"`
+	DownloadRequests int64  `json:"downloadRequests"`
+	TotalBytes       int64  `json:"totalBytes"`
+	TotalRequests    int64  `json:"totalRequests"`
+}
+
+type EgressStats struct {
+	TotalBytes       int64           `json:"totalBytes"`
+	TotalRequests    int64           `json:"totalRequests"`
+	StreamBytes      int64           `json:"streamBytes"`
+	DownloadBytes    int64           `json:"downloadBytes"`
+	StreamRequests   int64           `json:"streamRequests"`
+	DownloadRequests int64           `json:"downloadRequests"`
+	Days             []EgressDayStat `json:"days"`
+}
+
 func (s *SearchService) GetAudioStats() (*AudioStats, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT LEFT(downloaded_at, 10) as day, COUNT(*) as count
@@ -275,4 +295,42 @@ func (s *SearchService) GetSourceAvailabilityStats() (*SourceAvailabilityStats, 
 		stats.Sources = append(stats.Sources, sa)
 	}
 	return stats, nil
+}
+
+func (s *SearchService) GetEgressStats() (*EgressStats, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT
+			day::text,
+			COALESCE(SUM(CASE WHEN event_type = 'stream' THEN bytes_sent ELSE 0 END), 0) AS stream_bytes,
+			COALESCE(SUM(CASE WHEN event_type = 'download' THEN bytes_sent ELSE 0 END), 0) AS download_bytes,
+			COALESCE(SUM(CASE WHEN event_type = 'stream' THEN request_count ELSE 0 END), 0) AS stream_requests,
+			COALESCE(SUM(CASE WHEN event_type = 'download' THEN request_count ELSE 0 END), 0) AS download_requests
+		FROM egress_daily
+		GROUP BY day
+		ORDER BY day
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := &EgressStats{Days: []EgressDayStat{}}
+	for rows.Next() {
+		var day EgressDayStat
+		if err := rows.Scan(&day.Date, &day.StreamBytes, &day.DownloadBytes, &day.StreamRequests, &day.DownloadRequests); err != nil {
+			return nil, err
+		}
+		day.TotalBytes = day.StreamBytes + day.DownloadBytes
+		day.TotalRequests = day.StreamRequests + day.DownloadRequests
+
+		stats.TotalBytes += day.TotalBytes
+		stats.TotalRequests += day.TotalRequests
+		stats.StreamBytes += day.StreamBytes
+		stats.DownloadBytes += day.DownloadBytes
+		stats.StreamRequests += day.StreamRequests
+		stats.DownloadRequests += day.DownloadRequests
+		stats.Days = append(stats.Days, day)
+	}
+
+	return stats, rows.Err()
 }

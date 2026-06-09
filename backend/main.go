@@ -60,7 +60,7 @@ func main() {
 	playbackService := services.NewPlaybackService(db)
 	requestsService := services.NewRequestsService(db)
 
-	audioHandler := handlers.NewAudioHandler(fsService, db.DB())
+	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), cfg.StreamBytesPerSecond, cfg.DownloadBytesPerSecond)
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)

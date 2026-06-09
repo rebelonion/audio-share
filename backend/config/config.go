@@ -58,6 +58,9 @@ type Config struct {
 
 	AudioDir string
 
+	StreamBytesPerSecond   int64
+	DownloadBytesPerSecond int64
+
 	ContentDir string
 
 	StaticDir string
@@ -100,10 +103,12 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:       getEnv("PORT", "8080"),
-		AudioDir:   getEnv("AUDIO_DIR", ""),
-		ContentDir: getEnv("CONTENT_DIR", "./content"),
-		StaticDir:  getEnv("STATIC_DIR", "./static"),
+		Port:                   getEnv("PORT", "8080"),
+		AudioDir:               getEnv("AUDIO_DIR", ""),
+		StreamBytesPerSecond:   getEnvInt64("STREAM_BYTES_PER_SECOND", 0),
+		DownloadBytesPerSecond: getEnvInt64("DOWNLOAD_BYTES_PER_SECOND", 0),
+		ContentDir:             getEnv("CONTENT_DIR", "./content"),
+		StaticDir:              getEnv("STATIC_DIR", "./static"),
 
 		NtfyURL:       getEnv("NTFY_URL", "https://ntfy.sh"),
 		NtfyTopic:     getEnv("NTFY_TOPIC", ""),
@@ -122,9 +127,9 @@ func Load() *Config {
 		DatabaseURL:   getEnv("DATABASE_URL", "postgres://audio_share:audio_share@localhost:5432/audio_share"),
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
-		RybbitURL:    getEnv("RYBBIT_URL", ""),
-		RybbitSiteID: getEnv("RYBBIT_SITE_ID", ""),
-		DefaultTitle: getEnv("DEFAULT_TITLE", "Audio Archive"),
+		RybbitURL:          getEnv("RYBBIT_URL", ""),
+		RybbitSiteID:       getEnv("RYBBIT_SITE_ID", ""),
+		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
 
 		SessionSecret: getEnv("SESSION_SECRET", ""),
@@ -170,3 +175,11 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
+func getEnvInt64(key string, defaultValue int64) int64 {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}

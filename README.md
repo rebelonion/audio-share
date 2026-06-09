@@ -90,6 +90,8 @@ All configuration is done via environment variables on the Go server. Frontend c
 |----------|-------------|---------|
 | `PORT` | Server port | `8080` |
 | `AUDIO_DIR` | Audio directories (format: `/path:Name,/path2:Name2`) | - |
+| `STREAM_BYTES_PER_SECOND` | Per-request audio streaming speed limit in bytes per second (`0` disables) | `0` |
+| `DOWNLOAD_BYTES_PER_SECOND` | Per-request download speed limit in bytes per second (`0` disables) | `0` |
 | `CONTENT_DIR` | Directory for about.md and stats JSON | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
 | `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
