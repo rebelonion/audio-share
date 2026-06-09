@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"io"
-	"net/http"
 	"time"
 )
 
@@ -38,41 +37,4 @@ func (t *throttledReadSeeker) Read(p []byte) (int, error) {
 
 func (t *throttledReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	return t.reader.Seek(offset, whence)
-}
-
-type countingResponseWriter struct {
-	http.ResponseWriter
-	statusCode   int
-	bytesWritten int64
-}
-
-func newCountingResponseWriter(w http.ResponseWriter) *countingResponseWriter {
-	return &countingResponseWriter{ResponseWriter: w}
-}
-
-func (c *countingResponseWriter) WriteHeader(statusCode int) {
-	if c.statusCode == 0 {
-		c.statusCode = statusCode
-		c.ResponseWriter.WriteHeader(statusCode)
-	}
-}
-
-func (c *countingResponseWriter) Write(p []byte) (int, error) {
-	if c.statusCode == 0 {
-		c.statusCode = http.StatusOK
-	}
-	n, err := c.ResponseWriter.Write(p)
-	c.bytesWritten += int64(n)
-	return n, err
-}
-
-func (c *countingResponseWriter) BytesWritten() int64 {
-	return c.bytesWritten
-}
-
-func (c *countingResponseWriter) StatusCode() int {
-	if c.statusCode == 0 {
-		return http.StatusOK
-	}
-	return c.statusCode
 }

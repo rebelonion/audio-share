@@ -182,11 +182,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	}
 
 	reader := newThrottledReadSeeker(file, h.bytesPerSecond(download))
-	counter := newCountingResponseWriter(w)
-	http.ServeContent(counter, r, info.Name(), info.ModTime(), reader)
-	if r.Method == http.MethodGet && counter.BytesWritten() > 0 && counter.StatusCode() < http.StatusBadRequest {
-		h.recordEgress(h.egressEventType(download), counter.BytesWritten())
-	}
+	http.ServeContent(w, r, info.Name(), info.ModTime(), reader)
 }
 
 func (h *AudioHandler) bytesPerSecond(download bool) int64 {
@@ -196,30 +192,9 @@ func (h *AudioHandler) bytesPerSecond(download bool) int64 {
 	return h.streamBytesPerSecond
 }
 
-func (h *AudioHandler) egressEventType(download bool) string {
-	if download {
-		return "download"
-	}
-	return "stream"
-}
-
 func (h *AudioHandler) recordDownload(audioFileID int64) {
 	if _, err := h.db.Exec("INSERT INTO download_events (audio_file_id) VALUES ($1)", audioFileID); err != nil {
 		log.Printf("Error recording download event for audio_file_id=%d: %v", audioFileID, err)
-	}
-}
-
-func (h *AudioHandler) recordEgress(eventType string, bytesSent int64) {
-	_, err := h.db.Exec(`
-		INSERT INTO egress_daily (day, event_type, bytes_sent, request_count)
-		VALUES (CURRENT_DATE, $1, $2, 1)
-		ON CONFLICT (day, event_type)
-		DO UPDATE SET
-			bytes_sent = egress_daily.bytes_sent + EXCLUDED.bytes_sent,
-			request_count = egress_daily.request_count + EXCLUDED.request_count
-	`, eventType, bytesSent)
-	if err != nil {
-		log.Printf("Error recording %s egress (%d bytes): %v", eventType, bytesSent, err)
 	}
 }
 

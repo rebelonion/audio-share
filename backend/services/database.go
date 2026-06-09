@@ -74,13 +74,6 @@ func (d *Database) migrate() {
 			audio_file_id BIGINT NOT NULL REFERENCES audio_files(id),
 			downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE TABLE IF NOT EXISTS egress_daily (
-			day DATE NOT NULL,
-			event_type TEXT NOT NULL,
-			bytes_sent BIGINT NOT NULL DEFAULT 0,
-			request_count BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (day, event_type)
-		)`,
 		`CREATE TABLE IF NOT EXISTS source_requests (
 			id BIGSERIAL PRIMARY KEY,
 			submitted_url TEXT NOT NULL,
@@ -109,7 +102,6 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_play_events_session_id ON play_events(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_download_events_audio_file_id ON download_events(audio_file_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_download_events_downloaded_at ON download_events(downloaded_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_egress_daily_event_type ON egress_daily(event_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
