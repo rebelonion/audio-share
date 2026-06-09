@@ -181,10 +181,11 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		}
 	}
 
-	reader := newCountingReadSeeker(newThrottledReadSeeker(file, h.bytesPerSecond(download)))
-	http.ServeContent(w, r, info.Name(), info.ModTime(), reader)
-	if r.Method == http.MethodGet && reader.BytesRead() > 0 {
-		h.recordEgress(h.egressEventType(download), reader.BytesRead())
+	reader := newThrottledReadSeeker(file, h.bytesPerSecond(download))
+	counter := newCountingResponseWriter(w)
+	http.ServeContent(counter, r, info.Name(), info.ModTime(), reader)
+	if r.Method == http.MethodGet && counter.BytesWritten() > 0 && counter.StatusCode() < http.StatusBadRequest {
+		h.recordEgress(h.egressEventType(download), counter.BytesWritten())
 	}
 }
 

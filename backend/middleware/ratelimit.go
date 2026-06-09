@@ -59,7 +59,9 @@ func (rl *RateLimiter) isAudioRequest(path string) bool {
 	if !strings.HasPrefix(path, "/api/audio/key/") {
 		return false
 	}
-	return !strings.HasSuffix(path, "/thumbnail") && !strings.HasSuffix(path, "/meta")
+	return !strings.HasSuffix(path, "/thumbnail") &&
+		!strings.HasSuffix(path, "/meta") &&
+		!strings.HasSuffix(path, "/waveform")
 }
 
 func (rl *RateLimiter) isImageRequest(path string) bool {
