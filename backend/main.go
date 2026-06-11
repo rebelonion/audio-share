@@ -74,6 +74,10 @@ func main() {
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
 		DefaultDescription: cfg.DefaultDescription,
+		BannerMessage:      cfg.BannerMessage,
+		BannerVariant:      cfg.BannerVariant,
+		BannerLinkText:     cfg.BannerLinkText,
+		BannerLinkURL:      cfg.BannerLinkURL,
 	}
 	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, cfg.RybbitURL, cfg.RybbitSiteID, db.DB())
 

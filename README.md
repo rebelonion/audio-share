@@ -98,6 +98,10 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
 | `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen...` |
+| `BANNER_MESSAGE` | Optional global info banner message (injected into frontend) | - |
+| `BANNER_VARIANT` | Banner style: `info`, `warning`, or `success` | `info` |
+| `BANNER_LINK_TEXT` | Optional banner link text | - |
+| `BANNER_LINK_URL` | Optional banner link URL, internal path or absolute URL | - |
 | `UMAMI_URL` | Umami analytics script URL | - |
 | `UMAMI_WEBSITE_ID` | Umami website ID | - |
 | `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |

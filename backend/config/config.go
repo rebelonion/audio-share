@@ -87,6 +87,10 @@ type Config struct {
 
 	DefaultTitle       string
 	DefaultDescription string
+	BannerMessage      string
+	BannerVariant      string
+	BannerLinkText     string
+	BannerLinkURL      string
 
 	SessionSecret string
 
@@ -131,6 +135,10 @@ func Load() *Config {
 		RybbitSiteID:       getEnv("RYBBIT_SITE_ID", ""),
 		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),
+		BannerMessage:      getEnv("BANNER_MESSAGE", ""),
+		BannerVariant:      getEnv("BANNER_VARIANT", "info"),
+		BannerLinkText:     getEnv("BANNER_LINK_TEXT", ""),
+		BannerLinkURL:      getEnv("BANNER_LINK_URL", ""),
 
 		SessionSecret: getEnv("SESSION_SECRET", ""),
 

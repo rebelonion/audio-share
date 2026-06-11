@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async'
 import { Music, Menu, X } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
+import InfoBanner from './InfoBanner'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
 
 export default function Layout() {
@@ -88,6 +89,8 @@ export default function Layout() {
             </div>
           </div>
         </header>
+
+        <InfoBanner />
 
         <main className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-grow">
           <Outlet />

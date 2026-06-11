@@ -13,6 +13,10 @@ import (
 type FrontendConfig struct {
 	DefaultTitle       string `json:"defaultTitle,omitempty"`
 	DefaultDescription string `json:"defaultDescription,omitempty"`
+	BannerMessage      string `json:"bannerMessage,omitempty"`
+	BannerVariant      string `json:"bannerVariant,omitempty"`
+	BannerLinkText     string `json:"bannerLinkText,omitempty"`
+	BannerLinkURL      string `json:"bannerLinkUrl,omitempty"`
 }
 
 type SPAHandler struct {
