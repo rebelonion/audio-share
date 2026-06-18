@@ -21,7 +21,7 @@ type FolderRecord struct {
 	FolderName    string
 	Name          string
 	OriginalURL   string
-	URLBroken     bool  // computed from child file availability, not stored
+	URLBroken     bool // computed from child file availability, not stored
 	ItemCount     int
 	DirectorySize int64 // computed as sum of child audio file sizes (bytes), not stored
 	PosterImage   string
@@ -30,20 +30,20 @@ type FolderRecord struct {
 }
 
 type AudioFileRecord struct {
-	ID           int64
-	Path         string
-	ParentPath   string
-	Filename     string
-	Size         int64
-	MimeType     string
-	Title        string
-	MetaArtist   string
-	UploadDate   string
-	WebpageURL   string
-	Description  string
-	DownloadedAt string
-	SourcePath   string
-	Thumbnail    string
+	ID            int64
+	Path          string
+	ParentPath    string
+	Filename      string
+	Size          int64
+	MimeType      string
+	Title         string
+	MetaArtist    string
+	UploadDate    string
+	WebpageURL    string
+	Description   string
+	DownloadedAt  string
+	SourcePath    string
+	Thumbnail     string
 	ShareKey      string
 	Deleted       bool
 	UnavailableAt *string
@@ -52,6 +52,7 @@ type AudioFileRecord struct {
 type AudioInfoJSON struct {
 	Title       string  `json:"title"`
 	MetaArtist  string  `json:"meta_artist"`
+	Uploader    string  `json:"uploader"`
 	UploadDate  string  `json:"upload_date"`
 	WebpageURL  string  `json:"webpage_url"`
 	Description string  `json:"description"`
@@ -325,6 +326,9 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 					if json.Unmarshal(data, &infoJSON) == nil {
 						record.Title = infoJSON.Title
 						record.MetaArtist = infoJSON.MetaArtist
+						if record.MetaArtist == "" {
+							record.MetaArtist = infoJSON.Uploader
+						}
 						record.UploadDate = infoJSON.UploadDate
 						record.WebpageURL = infoJSON.WebpageURL
 						record.Description = infoJSON.Description
