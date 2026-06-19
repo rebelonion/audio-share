@@ -17,6 +17,7 @@ type PlaybackResult struct {
 	ParentShareKey   *string `json:"parentShareKey"`
 	AudioImage       *string `json:"audioImage"`
 	PosterImage      *string `json:"posterImage"`
+	AgeLimit         *int    `json:"ageLimit,omitempty"`
 	PlayCount        int     `json:"playCount"`
 	LastPlayed       *string `json:"lastPlayed"`
 }
@@ -89,7 +90,7 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 			af.share_key, af.path, af.filename, af.title, af.meta_artist,
 			af.parent_path, f.name, f.share_key, af.thumbnail, f.poster_image
 		FROM co_occurrences co
-		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0
+		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
 		LEFT JOIN folders f ON f.path = af.parent_path
 		JOIN candidate_totals ct ON ct.audio_file_id = co.audio_file_id
 		ORDER BY RANDOM() ^ (1.0 / GREATEST(
@@ -146,6 +147,7 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 			LEFT JOIN folders f ON f.path = af.parent_path
 			WHERE af.deleted = 0
 				AND af.share_key NOT IN (%s)
+				AND COALESCE(af.age_limit, 0) < 18
 			ORDER BY RANDOM()
 			LIMIT $%d
 		`, strings.Join(placeholders, ", "), len(excludeKeys))
@@ -192,7 +194,7 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 		FROM play_events pe
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.deleted = 0
+		WHERE af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
 		GROUP BY af.id, f.id
 		ORDER BY last_played DESC
 		LIMIT $1
@@ -252,7 +254,7 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 			pw.recent_7d AS play_count,
 			MAX(pe.played_at) AS last_played
 		FROM play_windows pw
-		JOIN audio_files af ON af.id = pw.audio_file_id AND af.deleted = 0
+		JOIN audio_files af ON af.id = pw.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
 		JOIN play_events pe ON pe.audio_file_id = af.id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		GROUP BY af.id, f.id, pw.recent_7d, pw.older_84d
@@ -298,7 +300,7 @@ func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) 
 			f.poster_image
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0
+		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
 		ORDER BY af.downloaded_at DESC
 		LIMIT $1
 	`, limit)
@@ -340,7 +342,7 @@ func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]PlaybackResult, e
 			f.poster_image
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0
+		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
 		ORDER BY af.unavailable_at DESC
 		LIMIT $1
 	`, limit)

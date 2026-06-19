@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
-import { searchAudio, getRandomAudio, fetchDirectoryContents, SearchResult, SearchFilters, SearchField } from '@/lib/api';
+import { searchAudio, getRandomAudio, fetchDirectoryContents, SearchResult, SearchFilters, SearchField, isMatureAge } from '@/lib/api';
 import type { Folder as RootFolder } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useRybbit } from '@/hooks/useRybbit';
+import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import RequestSourceDialog from '@/components/RequestSourceDialog';
 
 const RESULTS_PER_PAGE = 50;
@@ -44,6 +45,7 @@ function filtersFromParams(params: URLSearchParams): SearchFilters {
     }
     const root = params.get('root');
     if (root) filters.root = root;
+    if (params.get('includeMature') === 'true') filters.includeMature = true;
     return filters;
 }
 
@@ -58,6 +60,7 @@ function filtersToParams(filters: SearchFilters): Record<string, string> {
     if (filters.durationMax && filters.durationMax > 0) p.durationMax = filters.durationMax.toString();
     if (filters.fields && filters.fields.length > 0) p.fields = filters.fields.join(',');
     if (filters.root) p.root = filters.root;
+    if (filters.includeMature) p.includeMature = 'true';
     return p;
 }
 
@@ -67,11 +70,13 @@ function hasActiveFilters(filters: SearchFilters): boolean {
         (filters.durationMin && filters.durationMin > 0) ||
         (filters.durationMax && filters.durationMax > 0) ||
         (filters.fields && filters.fields.length > 0) ||
-        filters.root);
+        filters.root ||
+        filters.includeMature);
 }
 
 export default function Search() {
     const { track } = useRybbit();
+    const maturePreference = useMatureContentPreference();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams({});
     const [query, setQuery] = useState(searchParams.get('q') || '');
@@ -334,6 +339,11 @@ export default function Search() {
                                             <h3 className="font-medium text-[var(--foreground)] truncate group-hover:text-[var(--primary)] transition-colors">
                                                 {result.title || result.name}
                                             </h3>
+                                            {result.type === 'audio' && isMatureAge(result.ageLimit) && (
+                                                <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
+                                                    18+
+                                                </span>
+                                            )}
                                             <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                                         </div>
 
@@ -343,7 +353,7 @@ export default function Search() {
                                             </p>
                                         )}
 
-                                        {result.description && (
+                                        {result.description && (!isMatureAge(result.ageLimit) || maturePreference.enabled) && (
                                             <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mt-1">
                                                 {result.description}
                                             </p>
@@ -553,6 +563,25 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                     </div>
                 </>
             )}
+
+            <div className="border-t border-[var(--border)]/50" />
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+                <span className="relative inline-flex h-5 w-9 shrink-0">
+                    <input
+                        type="checkbox"
+                        checked={!!filters.includeMature}
+                        onChange={(event) => update({ includeMature: event.target.checked || undefined })}
+                        className="peer sr-only"
+                    />
+                    <span className="absolute inset-0 rounded-full bg-[var(--secondary)] border border-[var(--border)] peer-checked:bg-amber-500/20 peer-checked:border-amber-500/50 transition-all duration-200" />
+                    <span className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-[var(--muted-foreground)] peer-checked:translate-x-4 peer-checked:bg-amber-400 transition-all duration-200 shadow-sm" />
+                </span>
+                <span className="text-sm text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-amber-500">18+</span>
+                    Include mature content
+                </span>
+            </label>
 
             <div className="border-t border-[var(--border)]/50" />
 

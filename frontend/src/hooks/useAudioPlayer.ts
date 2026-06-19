@@ -9,6 +9,9 @@ interface MetadataType {
     webpageUrl?: string;
     duration?: number;
     description?: string;
+    ageLimit?: number;
+    isMature?: boolean;
+    showMature?: boolean;
 }
 
 export function useAudioPlayer(src: string) {
@@ -24,6 +27,7 @@ export function useAudioPlayer(src: string) {
     const [audioLoaded, setAudioLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [waveformPeaks, setWaveformPeaks] = useState<Uint8Array | null>(null);
+    const [maturePreferenceVersion, setMaturePreferenceVersion] = useState(0);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const progressRef = useRef<HTMLDivElement>(null);
@@ -39,19 +43,24 @@ export function useAudioPlayer(src: string) {
             // src format: /audio/key/{key}
             const key = src.replace(/^\/audio\/key\//, '');
             const metaUrl = `${API_BASE}/api/audio/key/${key}/meta`;
-            const response = await fetch(metaUrl, { signal });
+            const response = await fetch(metaUrl, { signal, credentials: 'include' });
 
             if (response.ok) {
                 const data = await response.json();
                 if (signal && signal.aborted) return;
 
-                setMetadata({
+                const loadedMetadata: MetadataType = {
                     title: data.title || '',
                     artist: data.artist || '',
                     uploadDate: data.uploadDate || '',
                     webpageUrl: data.webpageUrl || '',
                     description: data.description || '',
-                });
+                    ageLimit: data.ageLimit,
+                    isMature: !!data.isMature,
+                    showMature: !!data.showMature,
+                };
+                setMetadata(loadedMetadata);
+                return loadedMetadata;
             }
         } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
@@ -60,11 +69,14 @@ export function useAudioPlayer(src: string) {
             if (signal && signal.aborted) return;
 
             const {artist, track} = getDisplayName(src);
-            setMetadata({
+            const fallbackMetadata: MetadataType = {
                 title: track,
                 artist: artist
-            });
+            };
+            setMetadata(fallbackMetadata);
+            return fallbackMetadata;
         }
+        return null;
     }, [getDisplayName]);
 
     const handleTimeUpdate = useCallback(() => {
@@ -86,11 +98,16 @@ export function useAudioPlayer(src: string) {
     }, []);
 
     useEffect(() => {
+        const listener = () => setMaturePreferenceVersion((version) => version + 1);
+        window.addEventListener('audio-share:mature-preference', listener);
+        return () => window.removeEventListener('audio-share:mature-preference', listener);
+    }, []);
+
+    useEffect(() => {
         const controller = new AbortController();
         const signal = controller.signal;
 
         const key = src.replace(/^\/audio\/key\//, '');
-        const apiThumbUrl = `${API_BASE}/api/audio/key/${key}/thumbnail`;
         setThumbnail(null);
         setMetadata(null);
         setWaveformPeaks(null);
@@ -109,33 +126,32 @@ export function useAudioPlayer(src: string) {
             })
             .catch(() => {});
 
-        fetch(apiThumbUrl, {
-            method: 'HEAD',
-            signal: controller.signal
-        })
-        .then(response => {
-            if (!signal.aborted && response.ok) {
-                setThumbnail(apiThumbUrl);
-            } else if (!signal.aborted) {
-                setThumbnail(null);
-            }
+        loadMetadata(src, signal).then((data) => {
+            if (signal.aborted) return;
+            const view = data?.isMature && !data.showMature ? 'blurred' : 'original';
+            const apiThumbUrl = `${API_BASE}/api/audio/key/${key}/thumbnail?view=${view}`;
+            return fetch(apiThumbUrl, {
+                method: 'HEAD',
+                credentials: 'include',
+                signal: controller.signal
+            }).then(response => {
+                if (!signal.aborted && response.ok) {
+                    setThumbnail(apiThumbUrl);
+                } else if (!signal.aborted) {
+                    setThumbnail(null);
+                }
+            });
         })
         .catch(error => {
             if (!signal.aborted && error.name !== 'AbortError') {
-                console.error('Error checking thumbnail:', error);
+                console.error('Error loading metadata or thumbnail:', error);
                 setThumbnail(null);
             }
         });
-        loadMetadata(src, signal).catch(err => {
-            if (err.name !== 'AbortError') {
-                console.error('Error loading metadata:', err);
-            }
-        });
-
         return () => {
             controller.abort();
         };
-    }, [src, loadMetadata]);
+    }, [src, loadMetadata, maturePreferenceVersion]);
 
     const togglePlay = useCallback(() => {
         if (isPlaying && audioRef.current) {

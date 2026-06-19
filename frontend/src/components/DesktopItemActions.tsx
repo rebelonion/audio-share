@@ -2,16 +2,20 @@ import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
 import {useRybbit} from "@/hooks/useRybbit";
-import {API_BASE} from "@/lib/api";
+import {API_BASE, isMatureAge} from "@/lib/api";
 
 interface DesktopItemActionsProps {
     item: FileSystemItem;
     notification: Notification,
     copyToClipboard: (shareKey: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string; filename: string }) => void;
 }
 
-export default function DesktopItemActions({ item, notification, copyToClipboard }: DesktopItemActionsProps) {
+export default function DesktopItemActions({ item, notification, copyToClipboard, onMatureDownloadRequest }: DesktopItemActionsProps) {
     const {track} = useRybbit();
+
+    const downloadUrl = item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}/download` : '#';
+
     return(
         <td className="px-6 py-4 whitespace-nowrap text-sm text-right"
             style={{width: '10%'}}>
@@ -42,11 +46,16 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                         }
                     </button>
                     <a
-                        href={item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}/download` : '#'}
+                        href={downloadUrl}
                         download={item.name}
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {
                             e.stopPropagation();
+                            if (item.type === 'audio' && isMatureAge(item.ageLimit) && sessionStorage.getItem('mature-download-warning-ack') !== 'true') {
+                                e.preventDefault();
+                                onMatureDownloadRequest({ item, url: downloadUrl, filename: item.name });
+                                return;
+                            }
                             track('audio-download', { path: item.path, name: item.name });
                         }}
                         title="Download"

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type MouseEvent } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Home, FolderOpen, Download } from 'lucide-react';
@@ -6,6 +6,8 @@ import SharePagePlayer from '@/components/SharePagePlayer';
 import TrackListSection from '@/components/TrackListSection';
 import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
+import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
+import MatureContentDialog from '@/components/MatureContentDialog';
 
 interface AudioMeta {
     title: string;
@@ -17,6 +19,9 @@ interface AudioMeta {
     thumbnail: boolean;
     deleted: boolean;
     unavailableAt: string | null;
+    ageLimit?: number;
+    isMature: boolean;
+    showMature: boolean;
 }
 
 const WAVEFORM_BARS = [14, 22, 18, 28, 20, 32, 24, 16, 26, 20, 12, 28, 22, 18, 30, 24, 20, 26, 18, 32];
@@ -27,6 +32,8 @@ export default function Share() {
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [recommendations, setRecommendations] = useState<PlaybackTrack[]>([]);
+    const [showDownloadDialog, setShowDownloadDialog] = useState(false);
+    const maturePreference = useMatureContentPreference();
 
     useEffect(() => {
         if (!key) {
@@ -37,7 +44,7 @@ export default function Share() {
 
         const fetchMeta = async () => {
             try {
-                const response = await fetch(`${API_BASE}/api/audio/key/${key}/meta`);
+                const response = await fetch(`${API_BASE}/api/audio/key/${key}/meta`, { credentials: 'include' });
                 if (response.status === 404) {
                     setNotFound(true);
                 } else if (response.ok) {
@@ -78,8 +85,28 @@ export default function Share() {
             : `${displayTitle} - ${DEFAULT_TITLE}`;
 
     const pageDescription = meta?.description
-        ? meta.description
+        ? (meta.isMature && !maturePreference.enabled ? `${DEFAULT_DESCRIPTION} — ${displayTitle}` : meta.description)
         : `${DEFAULT_DESCRIPTION} — ${displayTitle}`;
+    const thumbnailView = meta?.isMature && !maturePreference.enabled ? 'blurred' : 'original';
+    const thumbnailUrl = `${API_BASE}/api/audio/key/${key}/thumbnail?view=${thumbnailView}`;
+    const downloadUrl = `${API_BASE}/api/audio/key/${key}/download`;
+
+    const triggerDownload = () => {
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = meta?.title || key || 'audio';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    };
+
+    const handleDownloadClick = (event: MouseEvent<HTMLAnchorElement>) => {
+        if (!meta?.isMature || meta.showMature || sessionStorage.getItem('mature-download-warning-ack') === 'true') {
+            return;
+        }
+        event.preventDefault();
+        setShowDownloadDialog(true);
+    };
 
     return (
         <>
@@ -153,7 +180,7 @@ export default function Share() {
                             <div
                                 className="absolute inset-0 pointer-events-none"
                                 style={{
-                                    backgroundImage: `url(${API_BASE}/api/audio/key/${key}/thumbnail)`,
+                                    backgroundImage: `url(${thumbnailUrl})`,
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',
                                     filter: 'blur(70px) brightness(0.5) saturate(1.5)',
@@ -163,9 +190,16 @@ export default function Share() {
                             />
                         )}
                         <div className="relative">
-                        <h1 className="text-3xl sm:text-4xl font-bold mb-4 break-words line-clamp-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
-                            {displayTitle}
-                        </h1>
+                        <div className="mb-4 flex flex-wrap items-start gap-3">
+                            <h1 className="text-3xl sm:text-4xl font-bold break-words line-clamp-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
+                                {displayTitle}
+                            </h1>
+                            {meta?.isMature && (
+                                <span className="mt-1 px-2 py-0.5 rounded border border-amber-500/40 text-xs font-semibold text-amber-500 flex-shrink-0">
+                                    18+
+                                </span>
+                            )}
+                        </div>
 
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                             <p className="text-[var(--muted-foreground)] mb-4 md:mb-0">
@@ -176,8 +210,9 @@ export default function Share() {
 
                             <div className="flex items-center gap-3">
                                 <a
-                                    href={`${API_BASE}/api/audio/key/${key}/download`}
+                                    href={downloadUrl}
                                     download={meta?.title || key}
+                                    onClick={handleDownloadClick}
                                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
                                 >
                                     <Download className="h-4 w-4" />
@@ -204,6 +239,18 @@ export default function Share() {
                     )}
                 </div>
             )}
+            <MatureContentDialog
+                open={showDownloadDialog}
+                title="Mature content"
+                description="This download is marked 18+. Continue download?"
+                confirmLabel="Download"
+                onCancel={() => setShowDownloadDialog(false)}
+                onConfirm={() => {
+                    sessionStorage.setItem('mature-download-warning-ack', 'true');
+                    setShowDownloadDialog(false);
+                    triggerDownload();
+                }}
+            />
         </>
     );
 }

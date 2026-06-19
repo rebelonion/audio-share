@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 import WaveformDisplay from '@/components/WaveformDisplay';
+import MatureContentDialog from '@/components/MatureContentDialog';
 
 interface AudioPlayerProps {
     src: string;
@@ -25,6 +26,7 @@ interface AudioPlayerProps {
 export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+    const [showMatureDialog, setShowMatureDialog] = useState(false);
     const hasTracked = useRef(false);
 
     useEffect(() => {
@@ -53,13 +55,30 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
         formatTime
     } = useAudioPlayer(src);
 
-    const handlePlay = useCallback(() => {
+    const isMature = !!metadata?.isMature;
+    const canShowMatureDetails = !isMature || !!metadata?.showMature;
+
+    const continuePlay = useCallback(() => {
         if (!isPlaying && onPlay && !hasTracked.current) {
             hasTracked.current = true;
             onPlay();
         }
         togglePlay();
     }, [isPlaying, onPlay, togglePlay]);
+
+    const handlePlay = useCallback(() => {
+        if (!isPlaying && isMature && !metadata?.showMature && sessionStorage.getItem('mature-warning-ack') !== 'true') {
+            setShowMatureDialog(true);
+            return;
+        }
+        continuePlay();
+    }, [continuePlay, isPlaying, isMature, metadata?.showMature]);
+
+    const confirmMaturePlayback = useCallback(() => {
+        sessionStorage.setItem('mature-warning-ack', 'true');
+        setShowMatureDialog(false);
+        continuePlay();
+    }, [continuePlay]);
 
     const toggleMinimize = () => {
         setIsMinimized(!isMinimized);
@@ -70,6 +89,7 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
     };
 
     return (
+        <>
         <div
             className={`fixed bottom-4 right-4 z-50 ${isMinimized ? 'w-52' : 'w-80'} rounded-lg overflow-hidden transition-all duration-300`}
             style={{
@@ -125,6 +145,9 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
                         <div className="text-sm font-medium truncate">
                             {metadata?.title || track}
                         </div>
+                        {isMature && (
+                            <div className="mt-1 text-[10px] font-semibold text-amber-400">18+</div>
+                        )}
                     </div>
                     <button
                         onClick={toggleMinimize}
@@ -266,7 +289,7 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
                             </div>
                         )}
 
-                        {metadata?.description && (
+                        {metadata?.description && canShowMatureDetails && (
                             <div className="mt-3 text-xs text-[var(--muted-foreground)]">
                                 <div className="flex justify-between items-center mb-1">
                                     <div className="font-medium text-xs">Description</div>
@@ -287,10 +310,21 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
                                 </div>
                             </div>
                         )}
+                        {metadata?.description && !canShowMatureDetails && (
+                            <div className="mt-3 text-xs text-[var(--muted-foreground)] rounded bg-[var(--card-hover)]/20 p-2">
+                                Description hidden for mature content.
+                            </div>
+                        )}
                     </div>
                 </div>
             </>
             )}
         </div>
+        <MatureContentDialog
+            open={showMatureDialog}
+            onCancel={() => setShowMatureDialog(false)}
+            onConfirm={confirmMaturePlayback}
+        />
+        </>
     );
 }

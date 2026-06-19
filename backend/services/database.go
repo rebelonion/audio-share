@@ -61,6 +61,7 @@ func (d *Database) migrate() {
 			downloaded_at TEXT,
 			source_path TEXT,
 			thumbnail TEXT,
+			age_limit INTEGER,
 			share_key TEXT,
 			deleted INTEGER DEFAULT 0
 		)`,
@@ -105,6 +106,7 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
+		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS age_limit INTEGER`,
 		`ALTER TABLE waveform_cache ADD COLUMN IF NOT EXISTS duration_seconds REAL`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_filename ON audio_files USING gin (filename gin_trgm_ops)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_title ON audio_files USING gin (title gin_trgm_ops)`,

@@ -8,6 +8,7 @@ import MobileItemName from "@/components/MobileItemName";
 import MobileItemDetails from "@/components/MobileItemDetails";
 import TableItem from "@/components/TableItem";
 import SearchBar from "@/components/SearchBar";
+import MatureContentDialog from "@/components/MatureContentDialog";
 import {reverseIf} from "@/lib/utils";
 import {useSearchParams} from "react-router";
 import {useRybbit} from "@/hooks/useRybbit";
@@ -29,6 +30,7 @@ export default function FolderView({items}: FolderViewProps) {
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [pendingDownload, setPendingDownload] = useState<{ item: FileSystemItem; url: string; filename: string } | null>(null);
     const [notification, setNotification] = useState<Notification>({
         path: '',
         message: '',
@@ -240,8 +242,41 @@ export default function FolderView({items}: FolderViewProps) {
         }
     };
 
+    const triggerDownload = useCallback((url: string, filename: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }, []);
+
+    const confirmMatureDownload = useCallback(() => {
+        if (!pendingDownload) return;
+
+        sessionStorage.setItem('mature-download-warning-ack', 'true');
+        setPendingDownload(null);
+        track('audio-download', {
+            path: pendingDownload.item.path,
+            name: pendingDownload.item.name,
+        });
+        triggerDownload(pendingDownload.url, pendingDownload.filename);
+    }, [pendingDownload, track, triggerDownload]);
+
     return (
         <div className="relative">
+            {createPortal(
+                <MatureContentDialog
+                    open={!!pendingDownload}
+                    title="Mature content"
+                    description="This download is marked 18+. Continue download?"
+                    confirmLabel="Download"
+                    onCancel={() => setPendingDownload(null)}
+                    onConfirm={confirmMatureDownload}
+                />,
+                document.body
+            )}
+
             {/* Floating notification */}
             <div
                 className={`fixed bottom-4 right-4 px-4 py-2 rounded-md shadow-lg transform transition-all duration-300 flex items-center gap-2 ${
@@ -383,6 +418,7 @@ export default function FolderView({items}: FolderViewProps) {
                                                         <TableItem item={item} handleAudioSelect={handleAudioSelect}
                                                                    notification={notification}
                                                                    copyToClipboard={copyToClipboard}
+                                                                   onMatureDownloadRequest={setPendingDownload}
                                                                    key={`desktop-${item.path}`}/>
                                                     ))}
                                                 </React.Fragment>
@@ -393,6 +429,7 @@ export default function FolderView({items}: FolderViewProps) {
                                             <TableItem item={item}
                                                 handleAudioSelect={handleAudioSelect} notification={notification}
                                                 copyToClipboard={copyToClipboard}
+                                                onMatureDownloadRequest={setPendingDownload}
                                                 key={`desktop-flat-${item.path}`}/>
                                         ))
                                     )}
@@ -440,7 +477,8 @@ export default function FolderView({items}: FolderViewProps) {
                                                     <MobileItemName item={item}/>
 
                                                     <MobileItemDetails item={item} notification={notification}
-                                                              copyToClipboard={copyToClipboard}/>
+                                                              copyToClipboard={copyToClipboard}
+                                                              onMatureDownloadRequest={setPendingDownload}/>
                                                 </div>
                                             ))}
                                         </React.Fragment>
@@ -458,7 +496,8 @@ export default function FolderView({items}: FolderViewProps) {
                                         <MobileItemName item={item}/>
 
                                         <MobileItemDetails item={item} notification={notification}
-                                                  copyToClipboard={copyToClipboard}/>
+                                                  copyToClipboard={copyToClipboard}
+                                                  onMatureDownloadRequest={setPendingDownload}/>
                                     </div>
                                 ))
                             )}

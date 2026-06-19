@@ -22,6 +22,7 @@ type SearchResult struct {
 	Artist      string `json:"artist,omitempty"`
 	Description string `json:"description,omitempty"`
 	WebpageURL  string `json:"webpageUrl,omitempty"`
+	AgeLimit    *int   `json:"ageLimit,omitempty"`
 
 	// Folder fields
 	OriginalURL   string `json:"originalUrl,omitempty"`
@@ -51,6 +52,8 @@ type SearchOptions struct {
 	Fields []string
 	// Root path slug to limit results to a configured root directory.
 	Root string
+	// Include audio files marked with age_limit >= 18.
+	IncludeMature bool
 }
 
 type SearchService struct {
@@ -122,6 +125,9 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 
 	if opts.UnavailableOnly {
 		audioWhere += " AND unavailable_at IS NOT NULL"
+	}
+	if !opts.IncludeMature {
+		audioWhere += " AND COALESCE(age_limit, 0) < 18"
 	}
 	if opts.DateFrom != "" {
 		audioWhere += fmt.Sprintf(" AND upload_date >= $%d", argIdx)
@@ -211,7 +217,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 			SELECT
 				audio_files.id, COALESCE(NULLIF(audio_files.title, ''), audio_files.filename) as name, audio_files.path, 'audio' as type, audio_files.parent_path,
 				audio_files.size, audio_files.mime_type, audio_files.title, audio_files.meta_artist as artist,
-				audio_files.description, audio_files.webpage_url,
+				audio_files.description, audio_files.webpage_url, audio_files.age_limit,
 				NULL as original_url, NULL::bigint as item_count, NULL as directory_size, NULL as poster_image,
 				SUBSTR(audio_files.upload_date,1,4) || '-' || SUBSTR(audio_files.upload_date,5,2) || '-' || SUBSTR(audio_files.upload_date,7,2) as modified_at,
 				audio_files.share_key, audio_files.unavailable_at
@@ -227,7 +233,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 			SELECT
 				id, name, path, 'folder' as type, parent_path,
 				directory_size_bytes as size, NULL as mime_type, NULL as title, NULL as artist,
-				NULL as description, NULL as webpage_url,
+				NULL as description, NULL as webpage_url, NULL::integer as age_limit,
 				original_url, item_count, directory_size_bytes as directory_size,
 				poster_image,
 				SUBSTR(upload_date,1,4)||'-'||SUBSTR(upload_date,5,2)||'-'||SUBSTR(upload_date,7,2) as modified_at,
@@ -246,7 +252,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	finalSQL := fmt.Sprintf(`
 		SELECT id, name, path, type, parent_path,
 			size, mime_type, title, artist, description, webpage_url,
-			original_url, item_count, directory_size, poster_image, modified_at,
+			age_limit, original_url, item_count, directory_size, poster_image, modified_at,
 			share_key, unavailable_at, COUNT(*) OVER() as total_count
 		FROM (%s) sub
 		ORDER BY %s
@@ -265,6 +271,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		var r SearchResult
 		var parentPath, mimeType, title, artist, description, webpageURL *string
 		var originalURL, posterImage, modifiedAt, shareKey *string
+		var ageLimit *int
 		var directorySize sql.NullInt64
 		var size, itemCount *int64
 		var unavailableAt sql.NullTime
@@ -272,7 +279,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		if err := rows.Scan(
 			&r.ID, &r.Name, &r.Path, &r.Type, &parentPath,
 			&size, &mimeType, &title, &artist, &description, &webpageURL,
-			&originalURL, &itemCount, &directorySize, &posterImage, &modifiedAt,
+			&ageLimit, &originalURL, &itemCount, &directorySize, &posterImage, &modifiedAt,
 			&shareKey, &unavailableAt, &total,
 		); err != nil {
 			return nil, 0, err
@@ -302,6 +309,9 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		}
 		if webpageURL != nil {
 			r.WebpageURL = *webpageURL
+		}
+		if ageLimit != nil {
+			r.AgeLimit = ageLimit
 		}
 		if originalURL != nil {
 			r.OriginalURL = *originalURL
@@ -355,7 +365,7 @@ func (s *SearchService) RandomAudio() (string, error) {
 	var shareKey string
 	err := s.db.DB().QueryRow(`
 		SELECT share_key FROM audio_files
-		WHERE deleted = 0 AND share_key IS NOT NULL
+		WHERE deleted = 0 AND share_key IS NOT NULL AND COALESCE(age_limit, 0) < 18
 		ORDER BY RANDOM() LIMIT 1
 	`).Scan(&shareKey)
 	if err != nil {

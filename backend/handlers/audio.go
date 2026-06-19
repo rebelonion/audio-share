@@ -3,6 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
 	"log"
 	"mime"
 	"net/http"
@@ -19,15 +26,17 @@ type AudioHandler struct {
 	db                     *sql.DB
 	streamBytesPerSecond   int64
 	downloadBytesPerSecond int64
+	sessionSecret          []byte
 	mimeTypes              map[string]string
 }
 
-func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, streamBytesPerSecond, downloadBytesPerSecond int64) *AudioHandler {
+func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, streamBytesPerSecond, downloadBytesPerSecond int64, sessionSecret string) *AudioHandler {
 	return &AudioHandler{
 		fs:                     fs,
 		db:                     db,
 		streamBytesPerSecond:   streamBytesPerSecond,
 		downloadBytesPerSecond: downloadBytesPerSecond,
+		sessionSecret:          []byte(sessionSecret),
 		mimeTypes: map[string]string{
 			".mp3":  "audio/mpeg",
 			".wav":  "audio/wav",
@@ -100,6 +109,7 @@ type audioRow struct {
 	uploadDate    sql.NullString
 	webpageURL    sql.NullString
 	description   sql.NullString
+	ageLimit      sql.NullInt64
 	parentPath    sql.NullString
 }
 
@@ -108,17 +118,21 @@ func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
 	var deletedInt int
 	err := h.db.QueryRow(`
 		SELECT id, path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
-		       webpage_url, description, parent_path
+		       webpage_url, description, age_limit, parent_path
 		FROM audio_files WHERE share_key = $1
 	`, key).Scan(
 		&row.id, &row.path, &deletedInt, &row.unavailableAt, &row.thumbnail, &row.title, &row.artist,
-		&row.uploadDate, &row.webpageURL, &row.description, &row.parentPath,
+		&row.uploadDate, &row.webpageURL, &row.description, &row.ageLimit, &row.parentPath,
 	)
 	if err != nil {
 		return nil, err
 	}
 	row.deleted = deletedInt == 1
 	return &row, nil
+}
+
+func (r *audioRow) isMature() bool {
+	return r.ageLimit.Valid && r.ageLimit.Int64 >= 18
 }
 
 func (h *AudioHandler) resolveFullPath(virtualPath string) (string, bool) {
@@ -235,6 +249,24 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 
+	view := r.URL.Query().Get("view")
+	if view != "blurred" && view != "original" {
+		if row.isMature() && !maturePreferenceEnabled(r, h.sessionSecret) {
+			view = "blurred"
+		} else {
+			view = "original"
+		}
+	}
+
+	if row.isMature() && view == "blurred" {
+		h.serveBlurredThumbnail(w, r, key, fullPath, info)
+		return
+	}
+	if row.isMature() && view == "original" && !maturePreferenceEnabled(r, h.sessionSecret) {
+		http.Error(w, "Mature content preference required", http.StatusForbidden)
+		return
+	}
+
 	ext := strings.ToLower(filepath.Ext(fullPath))
 	contentType := h.mimeTypes[ext]
 	if contentType == "" {
@@ -249,9 +281,211 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 	defer file.Close()
 
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if row.isMature() {
+		w.Header().Set("Cache-Control", "private, max-age=86400")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+	}
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+func (h *AudioHandler) serveBlurredThumbnail(w http.ResponseWriter, r *http.Request, key, fullPath string, info os.FileInfo) {
+	cacheDir := filepath.Join(os.TempDir(), "audio-share-mature-thumbnails")
+	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+		http.Error(w, "Error preparing thumbnail", http.StatusInternalServerError)
+		return
+	}
+
+	cacheName := fmt.Sprintf("%s-blur-v1-%d-%d.jpg", key, info.ModTime().Unix(), info.Size())
+	cachePath := filepath.Join(cacheDir, cacheName)
+	if cachedInfo, err := os.Stat(cachePath); err == nil && !cachedInfo.IsDir() {
+		file, err := os.Open(cachePath)
+		if err == nil {
+			defer file.Close()
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			http.ServeContent(w, r, cacheName, cachedInfo.ModTime(), file)
+			return
+		}
+	}
+
+	if err := generateBlurredThumbnail(fullPath, cachePath); err != nil {
+		if err := generateMaturePlaceholder(cachePath); err != nil {
+			http.Error(w, "Error generating thumbnail", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	cachedInfo, err := os.Stat(cachePath)
+	if err != nil {
+		http.Error(w, "Error reading thumbnail", http.StatusInternalServerError)
+		return
+	}
+	file, err := os.Open(cachePath)
+	if err != nil {
+		http.Error(w, "Error opening thumbnail", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeContent(w, r, cacheName, cachedInfo.ModTime(), file)
+}
+
+func generateBlurredThumbnail(srcPath, dstPath string) error {
+	file, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	src, _, err := image.Decode(file)
+	if err != nil {
+		return err
+	}
+
+	bounds := src.Bounds()
+	width, height := scaledDimensions(bounds.Dx(), bounds.Dy(), 360)
+	scaled := resizeNearest(src, width, height)
+	blurred := boxBlur(scaled, 14, 3)
+	return writeJPEG(dstPath, blurred)
+}
+
+func generateMaturePlaceholder(dstPath string) error {
+	img := image.NewRGBA(image.Rect(0, 0, 360, 360))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 30, G: 28, B: 24, A: 255}}, image.Point{}, draw.Src)
+	for y := 0; y < 360; y++ {
+		for x := 0; x < 360; x++ {
+			if (x/18+y/18)%2 == 0 {
+				img.SetRGBA(x, y, color.RGBA{R: 49, G: 44, B: 36, A: 255})
+			}
+		}
+	}
+	return writeJPEG(dstPath, img)
+}
+
+func resizeNearest(src image.Image, width, height int) *image.RGBA {
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+	b := src.Bounds()
+	srcW := b.Dx()
+	srcH := b.Dy()
+	for y := 0; y < height; y++ {
+		sy := b.Min.Y + y*srcH/height
+		for x := 0; x < width; x++ {
+			sx := b.Min.X + x*srcW/width
+			dst.Set(x, y, src.At(sx, sy))
+		}
+	}
+	return dst
+}
+
+func boxBlur(src *image.RGBA, radius, iterations int) *image.RGBA {
+	if radius <= 0 || iterations <= 0 {
+		return src
+	}
+
+	blurred := src
+	for range iterations {
+		blurred = boxBlurOnce(blurred, radius)
+	}
+	return blurred
+}
+
+func boxBlurOnce(src *image.RGBA, radius int) *image.RGBA {
+	bounds := src.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width == 0 || height == 0 {
+		return src
+	}
+
+	horizontal := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			var r, g, b, a, count uint32
+			for offset := -radius; offset <= radius; offset++ {
+				sx := x + offset
+				if sx < bounds.Min.X {
+					sx = bounds.Min.X
+				} else if sx >= bounds.Max.X {
+					sx = bounds.Max.X - 1
+				}
+				c := src.RGBAAt(sx, y)
+				r += uint32(c.R)
+				g += uint32(c.G)
+				b += uint32(c.B)
+				a += uint32(c.A)
+				count++
+			}
+			horizontal.SetRGBA(x, y, color.RGBA{
+				R: uint8(r / count),
+				G: uint8(g / count),
+				B: uint8(b / count),
+				A: uint8(a / count),
+			})
+		}
+	}
+
+	vertical := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			var r, g, b, a, count uint32
+			for offset := -radius; offset <= radius; offset++ {
+				sy := y + offset
+				if sy < bounds.Min.Y {
+					sy = bounds.Min.Y
+				} else if sy >= bounds.Max.Y {
+					sy = bounds.Max.Y - 1
+				}
+				c := horizontal.RGBAAt(x, sy)
+				r += uint32(c.R)
+				g += uint32(c.G)
+				b += uint32(c.B)
+				a += uint32(c.A)
+				count++
+			}
+			vertical.SetRGBA(x, y, color.RGBA{
+				R: uint8(r / count),
+				G: uint8(g / count),
+				B: uint8(b / count),
+				A: uint8(a / count),
+			})
+		}
+	}
+
+	return vertical
+}
+
+func scaledDimensions(width, height, maxSide int) (int, int) {
+	if width <= 0 || height <= 0 {
+		return maxSide, maxSide
+	}
+	if width >= height {
+		scaledHeight := max(1, height*maxSide/width)
+		return maxSide, scaledHeight
+	}
+	scaledWidth := max(1, width*maxSide/height)
+	return scaledWidth, maxSide
+}
+
+func writeJPEG(path string, img image.Image) error {
+	tmp := path + ".tmp"
+	file, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	if err := jpeg.Encode(file, img, &jpeg.Options{Quality: 72}); err != nil {
+		file.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := file.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 type AudioMeta struct {
@@ -264,6 +498,9 @@ type AudioMeta struct {
 	Thumbnail     bool    `json:"thumbnail"`
 	Deleted       bool    `json:"deleted"`
 	UnavailableAt *string `json:"unavailableAt"`
+	AgeLimit      *int    `json:"ageLimit,omitempty"`
+	IsMature      bool    `json:"isMature"`
+	ShowMature    bool    `json:"showMature"`
 }
 
 func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key string) {
@@ -278,8 +515,14 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 	}
 
 	meta := AudioMeta{
-		Thumbnail: row.thumbnail.Valid && row.thumbnail.String != "",
-		Deleted:   row.deleted,
+		Thumbnail:  row.thumbnail.Valid && row.thumbnail.String != "",
+		Deleted:    row.deleted,
+		IsMature:   row.isMature(),
+		ShowMature: maturePreferenceEnabled(r, h.sessionSecret),
+	}
+	if row.ageLimit.Valid {
+		ageLimit := int(row.ageLimit.Int64)
+		meta.AgeLimit = &ageLimit
 	}
 	if row.unavailableAt.Valid {
 		s := row.unavailableAt.Time.UTC().Format(time.RFC3339)

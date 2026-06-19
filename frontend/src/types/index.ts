@@ -7,6 +7,7 @@ export interface AudioFile {
     type: 'audio';
     mimeType: string;
     title?: string;
+    ageLimit?: number;
     shareKey?: string;
     unavailableAt?: string;
 }

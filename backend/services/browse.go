@@ -86,7 +86,7 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFileRecord, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT id, path, parent_path, filename, size, mime_type,
-		       title, meta_artist, upload_date, webpage_url, description, share_key, unavailable_at
+		       title, meta_artist, upload_date, webpage_url, description, age_limit, share_key, unavailable_at
 		FROM audio_files
 		WHERE parent_path = $1 AND deleted = 0
 		ORDER BY upload_date DESC
@@ -100,10 +100,15 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 	for rows.Next() {
 		var a AudioFileRecord
 		var unavailableAt sql.NullTime
+		var ageLimit sql.NullInt64
 		if err := rows.Scan(&a.ID, &a.Path, &a.ParentPath, &a.Filename, &a.Size,
 			&a.MimeType, &a.Title, &a.MetaArtist, &a.UploadDate,
-			&a.WebpageURL, &a.Description, &a.ShareKey, &unavailableAt); err != nil {
+			&a.WebpageURL, &a.Description, &ageLimit, &a.ShareKey, &unavailableAt); err != nil {
 			return nil, err
+		}
+		if ageLimit.Valid {
+			v := int(ageLimit.Int64)
+			a.AgeLimit = &v
 		}
 		if unavailableAt.Valid {
 			s := unavailableAt.Time.UTC().Format(time.RFC3339)
@@ -156,6 +161,7 @@ func (s *SearchService) audioToFileSystemItem(a AudioFileRecord) FileSystemItem 
 		Type:          "audio",
 		MimeType:      a.MimeType,
 		Title:         a.Title,
+		AgeLimit:      a.AgeLimit,
 		ShareKey:      a.ShareKey,
 		UnavailableAt: a.UnavailableAt,
 	}

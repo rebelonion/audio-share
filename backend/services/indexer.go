@@ -44,6 +44,7 @@ type AudioFileRecord struct {
 	DownloadedAt  string
 	SourcePath    string
 	Thumbnail     string
+	AgeLimit      *int
 	ShareKey      string
 	Deleted       bool
 	UnavailableAt *string
@@ -57,6 +58,7 @@ type AudioInfoJSON struct {
 	WebpageURL  string  `json:"webpage_url"`
 	Description string  `json:"description"`
 	Epoch       float64 `json:"epoch"`
+	AgeLimit    *int    `json:"age_limit"`
 }
 
 func generateShareKey() (string, error) {
@@ -335,6 +337,7 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 						if infoJSON.Epoch > 0 {
 							record.DownloadedAt = time.Unix(int64(infoJSON.Epoch), 0).Format("2006-01-02T15:04:05Z")
 						}
+						record.AgeLimit = infoJSON.AgeLimit
 					}
 				}
 				if record.UploadDate == "" {
@@ -394,8 +397,8 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 		INSERT INTO audio_files
 		(path, parent_path, filename, size, mime_type,
 		 title, meta_artist, upload_date, webpage_url, description,
-		 downloaded_at, source_path, thumbnail, share_key, deleted, indexed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, CURRENT_TIMESTAMP)
+		 downloaded_at, source_path, thumbnail, age_limit, share_key, deleted, indexed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, CURRENT_TIMESTAMP)
 		ON CONFLICT(path) DO UPDATE SET
 			parent_path = excluded.parent_path,
 			filename = excluded.filename,
@@ -409,12 +412,13 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 			downloaded_at = excluded.downloaded_at,
 			source_path = excluded.source_path,
 			thumbnail = excluded.thumbnail,
+			age_limit = excluded.age_limit,
 			share_key = COALESCE(audio_files.share_key, excluded.share_key),
 			deleted = 0,
 			indexed_at = CURRENT_TIMESTAMP
 	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType,
 		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
-		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), shareKey)
+		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, shareKey)
 	return err
 }
 

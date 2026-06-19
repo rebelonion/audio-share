@@ -38,6 +38,7 @@ export interface SearchResult {
     artist?: string;
     description?: string;
     webpageUrl?: string;
+    ageLimit?: number;
     unavailableAt?: string;
 
     // Folder fields
@@ -71,6 +72,31 @@ export interface PlaybackTrack {
     posterImage: string | null;
     playCount: number;
     lastPlayed: string | null;
+}
+
+export function isMatureAge(ageLimit?: number | null): boolean {
+    return typeof ageLimit === 'number' && ageLimit >= 18;
+}
+
+export async function getMatureContentPreference(): Promise<boolean> {
+    const response = await fetch(`${API_BASE}/api/preferences/mature-content`, {
+        credentials: 'include',
+    });
+    if (!response.ok) throw new Error(`Failed to fetch mature preference: ${response.status}`);
+    const data = await response.json();
+    return !!data.enabled;
+}
+
+export async function setMatureContentPreference(enabled: boolean): Promise<boolean> {
+    const response = await fetch(`${API_BASE}/api/preferences/mature-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ enabled }),
+    });
+    if (!response.ok) throw new Error(`Failed to update mature preference: ${response.status}`);
+    const data = await response.json();
+    return !!data.enabled;
 }
 
 export async function recordPlayEvent(shareKey: string): Promise<void> {
@@ -141,6 +167,7 @@ export interface SearchFilters {
     /** Which audio fields to search in. Empty/undefined = all fields. */
     fields?: SearchField[];
     root?: string;
+    includeMature?: boolean;
 }
 
 export async function searchAudio(query: string, limit?: number, offset?: number, filters?: SearchFilters): Promise<SearchResponse> {
@@ -161,6 +188,7 @@ export async function searchAudio(query: string, limit?: number, offset?: number
         if (filters.durationMax != null && filters.durationMax > 0) params.set('durationMax', filters.durationMax.toString());
         if (filters.fields && filters.fields.length > 0) params.set('fields', filters.fields.join(','));
         if (filters.root) params.set('root', filters.root);
+        if (filters.includeMature) params.set('includeMature', 'true');
     }
 
     const response = await fetch(`${API_BASE}/api/search?${params}`);

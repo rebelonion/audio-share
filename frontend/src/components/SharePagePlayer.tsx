@@ -9,9 +9,10 @@ import {
     Calendar,
     Loader2
 } from 'lucide-react';
-import {useRef, useEffect} from 'react';
+import {useRef, useEffect, useState} from 'react';
 import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 import WaveformDisplay from '@/components/WaveformDisplay';
+import MatureContentDialog from '@/components/MatureContentDialog';
 
 interface SharePagePlayerProps {
     src: string;
@@ -20,6 +21,7 @@ interface SharePagePlayerProps {
 }
 
 export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePlayerProps) {
+    const [showMatureDialog, setShowMatureDialog] = useState(false);
     const {
         isPlaying,
         duration,
@@ -45,7 +47,30 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
     const hasTracked = useRef(false);
     useEffect(() => { hasTracked.current = false; }, [src]);
 
+    const isMature = !!metadata?.isMature;
+    const canShowMatureDetails = !isMature || !!metadata?.showMature;
+    const continuePlay = () => {
+        if (!isPlaying && onPlay && !hasTracked.current) {
+            hasTracked.current = true;
+            onPlay();
+        }
+        togglePlay();
+    };
+    const handlePlay = () => {
+        if (!isPlaying && isMature && !metadata?.showMature && sessionStorage.getItem('mature-warning-ack') !== 'true') {
+            setShowMatureDialog(true);
+            return;
+        }
+        continuePlay();
+    };
+    const confirmMaturePlayback = () => {
+        sessionStorage.setItem('mature-warning-ack', 'true');
+        setShowMatureDialog(false);
+        continuePlay();
+    };
+
     return (
+        <>
         <div className="w-full">
             {thumbnail && (
                 <div className="mb-6 flex justify-center">
@@ -114,7 +139,7 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
 
                 <div className="flex justify-center mb-4">
                     <button
-                        onClick={() => { if (!isPlaying && onPlay && !hasTracked.current) { hasTracked.current = true; onPlay(); } togglePlay(); }}
+                        onClick={handlePlay}
                         className="p-4 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
                         aria-label={isPlaying ? "Pause" : "Play"}
                     >
@@ -179,7 +204,7 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
                         </div>
                     )}
 
-                    {metadata?.description && (
+                    {metadata?.description && canShowMatureDetails && (
                         <div className="mt-4">
                             <h3 className="font-medium text-sm mb-2">Description</h3>
                             <p className="text-sm text-[var(--muted-foreground)] whitespace-pre-line bg-[var(--card-hover)]/20 p-3 rounded-md max-h-40 overflow-y-auto">
@@ -187,8 +212,19 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
                             </p>
                         </div>
                     )}
+                    {metadata?.description && !canShowMatureDetails && (
+                        <div className="mt-4 text-sm text-[var(--muted-foreground)] bg-[var(--card-hover)]/20 p-3 rounded-md">
+                            Description hidden for mature content.
+                        </div>
+                    )}
                 </div>
             )}
         </div>
+        <MatureContentDialog
+            open={showMatureDialog}
+            onCancel={() => setShowMatureDialog(false)}
+            onConfirm={confirmMaturePlayback}
+        />
+        </>
     );
 }

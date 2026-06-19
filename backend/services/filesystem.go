@@ -30,6 +30,7 @@ type FileSystemItem struct {
 	Type        string          `json:"type"`
 	MimeType    string          `json:"mimeType,omitempty"`
 	Title       string          `json:"title,omitempty"`
+	AgeLimit    *int            `json:"ageLimit,omitempty"`
 	Metadata    *FolderMetadata `json:"metadata,omitempty"`
 	PosterImage string          `json:"posterImage,omitempty"`
 	ShareKey      string          `json:"shareKey,omitempty"`

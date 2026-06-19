@@ -60,7 +60,7 @@ func main() {
 	playbackService := services.NewPlaybackService(db)
 	requestsService := services.NewRequestsService(db)
 
-	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), cfg.StreamBytesPerSecond, cfg.DownloadBytesPerSecond)
+	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), cfg.StreamBytesPerSecond, cfg.DownloadBytesPerSecond, cfg.SessionSecret)
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
@@ -68,6 +68,7 @@ func main() {
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
 	playbackHandler := handlers.NewPlaybackHandler(playbackService, cfg.SessionSecret)
+	preferencesHandler := handlers.NewPreferencesHandler(cfg.SessionSecret)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
 	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
 
@@ -106,6 +107,7 @@ func main() {
 	mux.HandleFunc("/api/playback/new", playbackHandler.NewHandler())
 	mux.HandleFunc("/api/playback/unavailable", playbackHandler.UnavailableHandler())
 	mux.HandleFunc("/api/playback/recommendations/", playbackHandler.RecommendationsHandler())
+	mux.HandleFunc("/api/preferences/mature-content", preferencesHandler.MatureContentHandler())
 
 	mux.Handle("/api/requests", requestsHandler)
 	mux.Handle("/api/admin/", apiKeyAuth.Middleware(adminHandler))

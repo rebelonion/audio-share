@@ -11,9 +11,10 @@ interface TableItemProps {
     handleAudioSelect: (item: FileSystemItem) => void;
     notification: Notification;
     copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string; filename: string }) => void;
 }
 
-export default function TableItem({ item, handleAudioSelect, notification, copyToClipboard }: TableItemProps) {
+export default function TableItem({ item, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
 
     return (
@@ -68,7 +69,12 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
                 style={{width: '15%'}}>
                 {formatDate(item.modifiedAt)}
             </td>
-            <DesktopItemActions item={item} notification={notification} copyToClipboard={copyToClipboard} />
+            <DesktopItemActions
+                item={item}
+                notification={notification}
+                copyToClipboard={copyToClipboard}
+                onMatureDownloadRequest={onMatureDownloadRequest}
+            />
         </tr>
     )
 }

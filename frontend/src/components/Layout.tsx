@@ -6,10 +6,19 @@ import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
+import { useMatureContentPreference } from '@/hooks/useMatureContentPreference'
+import { useRybbit } from '@/hooks/useRybbit'
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
+  const maturePreference = useMatureContentPreference()
+  const { track } = useRybbit()
+
+  const handleMaturePreferenceChange = (enabled: boolean) => {
+    track('mature-content-toggle', { enabled })
+    void maturePreference.setEnabled(enabled)
+  }
 
   return (
     <>
@@ -135,6 +144,26 @@ export default function Layout() {
                   {DEFAULT_DESCRIPTION}
                 </p>
               )}
+              <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] cursor-pointer select-none">
+                <span className="relative inline-flex h-4 w-7 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={maturePreference.enabled}
+                    disabled={maturePreference.isLoading}
+                    onChange={(event) => handleMaturePreferenceChange(event.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <span
+                    className="absolute inset-0 rounded-full border border-[var(--border)] bg-[var(--background)] transition-colors duration-200 peer-checked:border-[var(--primary)] peer-checked:bg-[var(--primary)] peer-disabled:opacity-50"
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="absolute left-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[var(--muted-foreground)] shadow-sm transition-all duration-200 peer-checked:translate-x-3 peer-checked:bg-white peer-disabled:opacity-50"
+                    aria-hidden="true"
+                  />
+                </span>
+                <span>Show mature content</span>
+              </label>
               <p className="text-center text-[var(--muted-foreground)] text-xs" style={{ opacity: 0.55 }}>
                 &copy; {new Date().getFullYear()} rebelonion &mdash; MIT License
               </p>

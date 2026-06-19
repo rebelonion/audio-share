@@ -73,6 +73,7 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("durationMin") != "" ||
 		r.URL.Query().Get("durationMax") != "" ||
 		r.URL.Query().Get("fields") != "" ||
+		r.URL.Query().Get("includeMature") == "true" ||
 		hasRootFilter
 
 	if len(query) < 2 && !hasFilters {
@@ -110,6 +111,9 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Query().Get("unavailableOnly") == "true" {
 		opts.UnavailableOnly = true
+	}
+	if r.URL.Query().Get("includeMature") == "true" {
+		opts.IncludeMature = true
 	}
 
 	if s := r.URL.Query().Get("sort"); s != "" {
