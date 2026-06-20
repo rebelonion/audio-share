@@ -56,6 +56,8 @@ func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, streamBytesPerS
 }
 
 func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+
 	// Path format: /api/audio/key/{key}[/thumbnail|/meta|/waveform|/download]
 	path := strings.TrimPrefix(r.URL.Path, "/api/audio/key/")
 	path = strings.Trim(path, "/")
@@ -145,6 +147,11 @@ func (h *AudioHandler) resolveFullPath(virtualPath string) (string, bool) {
 }
 
 func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key string, download bool) {
+	if download && isBotLikeUserAgent(r.UserAgent()) {
+		http.Error(w, "Bot downloads are not allowed", http.StatusForbidden)
+		return
+	}
+
 	row, err := h.lookupByKey(key)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
@@ -209,6 +216,46 @@ func (h *AudioHandler) bytesPerSecond(download bool) int64 {
 		return h.downloadBytesPerSecond
 	}
 	return h.streamBytesPerSecond
+}
+
+func isBotLikeUserAgent(userAgent string) bool {
+	ua := strings.ToLower(userAgent)
+	if ua == "" {
+		return false
+	}
+
+	botMarkers := []string{
+		"ahrefsbot",
+		"applebot",
+		"baiduspider",
+		"bingbot",
+		"bytespider",
+		"crawler",
+		"discordbot",
+		"dotbot",
+		"duckduckbot",
+		"facebookexternalhit",
+		"googlebot",
+		"linkedinbot",
+		"mj12bot",
+		"petalbot",
+		"pinterestbot",
+		"preview",
+		"semrushbot",
+		"slackbot",
+		"spider",
+		"telegrambot",
+		"twitterbot",
+		"whatsapp",
+		"yandexbot",
+	}
+
+	for _, marker := range botMarkers {
+		if strings.Contains(ua, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *AudioHandler) recordMediaEvent(r *http.Request, audioFileID int64, shareKey, eventType string, fileSize int64) {

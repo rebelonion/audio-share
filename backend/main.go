@@ -113,6 +113,7 @@ func main() {
 	mux.Handle("/api/admin/", apiKeyAuth.Middleware(adminHandler))
 
 	mux.HandleFunc("/sitemap.xml", contentHandler.SitemapHandler())
+	mux.HandleFunc("/robots.txt", contentHandler.RobotsHandler())
 	mux.HandleFunc("/site.webmanifest", contentHandler.ManifestHandler())
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -86,6 +86,20 @@ func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
 	}
 }
 
+func (h *ContentHandler) RobotsHandler() http.HandlerFunc {
+	body := "User-agent: *\nDisallow: /api/audio/\n"
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte(body))
+	}
+}
+
 func xmlEscape(s string) string {
 	var b strings.Builder
 	xml.EscapeText(&b, []byte(s))
