@@ -73,7 +73,8 @@ type Config struct {
 
 	RateLimitWindow      int // milliseconds
 	MaxRequestsPerWindow int
-	AudioFileLimit       int
+	StreamFileLimit      int
+	DownloadFileLimit    int
 	ShareRequestLimit    int
 	ShareLimitWindow     int // milliseconds
 	ContactRequestLimit  int
@@ -122,7 +123,8 @@ func Load() *Config {
 
 		RateLimitWindow:      getEnvInt("RATE_LIMIT_WINDOW", 60000),
 		MaxRequestsPerWindow: getEnvInt("MAX_REQUESTS_PER_WINDOW", 100),
-		AudioFileLimit:       getEnvInt("AUDIO_FILE_LIMIT", 10),
+		StreamFileLimit:      getEnvInt("STREAM_FILE_LIMIT", 10),
+		DownloadFileLimit:    getEnvInt("DOWNLOAD_FILE_LIMIT", 10),
 		ShareRequestLimit:    getEnvInt("SHARE_REQUEST_LIMIT", 3),
 		ShareLimitWindow:     getEnvInt("SHARE_LIMIT_WINDOW", 86400000),
 		ContactRequestLimit:  getEnvInt("CONTACT_REQUEST_LIMIT", 5),

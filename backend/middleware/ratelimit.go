@@ -14,7 +14,8 @@ import (
 
 type rateLimitData struct {
 	apiCount         int
-	audioCount       int
+	streamCount      int
+	downloadCount    int
 	shareCount       int
 	shareTimestamp   int64
 	contactCount     int
@@ -64,6 +65,10 @@ func (rl *RateLimiter) isAudioRequest(path string) bool {
 		!strings.HasSuffix(path, "/waveform")
 }
 
+func (rl *RateLimiter) isDownloadRequest(path string) bool {
+	return strings.HasPrefix(path, "/api/audio/key/") && strings.HasSuffix(path, "/download")
+}
+
 func (rl *RateLimiter) isImageRequest(path string) bool {
 	path = strings.ToLower(path)
 	return strings.HasSuffix(path, "/poster") || strings.HasSuffix(path, "/thumbnail")
@@ -81,11 +86,13 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 
 		isAudio := rl.isAudioRequest(path)
+		isDownload := rl.isDownloadRequest(path)
+		isStream := isAudio && !isDownload
 		isImage := rl.isImageRequest(path)
 		isShare := path == "/api/share" && r.Method == "POST"
 		isContact := path == "/api/contact" && r.Method == "POST"
 		rangeHeader := r.Header.Get("Range")
-		isSeekRequest := rangeHeader != "" && !strings.HasPrefix(rangeHeader, "bytes=0-")
+		isSeekRequest := isStream && rangeHeader != "" && !strings.HasPrefix(rangeHeader, "bytes=0-")
 
 		rl.mu.Lock()
 		data, exists := rl.limits[ip]
@@ -99,7 +106,8 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 
 		if now-data.timestamp > int64(rl.cfg.RateLimitWindow) {
-			data.audioCount = 0
+			data.streamCount = 0
+			data.downloadCount = 0
 			data.apiCount = 0
 			data.timestamp = now
 		}
@@ -116,9 +124,11 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			data.shareCount++
 		} else if isContact {
 			data.contactCount++
-		} else if !isImage && !(isAudio && isSeekRequest) {
-			if isAudio {
-				data.audioCount++
+		} else if !isImage && !isSeekRequest {
+			if isDownload {
+				data.downloadCount++
+			} else if isStream {
+				data.streamCount++
 			} else {
 				data.apiCount++
 			}
@@ -148,11 +158,16 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			current = data.contactCount
 			limitWindow = rl.cfg.ContactLimitWindow
 			limitType = "contact"
-		} else if isAudio {
-			limit = rl.cfg.AudioFileLimit
-			current = data.audioCount
+		} else if isDownload {
+			limit = rl.cfg.DownloadFileLimit
+			current = data.downloadCount
 			limitWindow = rl.cfg.RateLimitWindow
-			limitType = "audio"
+			limitType = "download"
+		} else if isStream {
+			limit = rl.cfg.StreamFileLimit
+			current = data.streamCount
+			limitWindow = rl.cfg.RateLimitWindow
+			limitType = "stream"
 		} else {
 			limit = rl.cfg.MaxRequestsPerWindow
 			current = data.apiCount

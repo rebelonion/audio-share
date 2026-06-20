@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -190,9 +191,13 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
 			"filename": info.Name(),
 		}))
-		if r.Method == http.MethodGet {
-			h.recordDownload(row.id)
+	}
+	if r.Method == http.MethodGet {
+		eventType := "stream"
+		if download {
+			eventType = "download"
 		}
+		h.recordMediaEvent(r, row.id, key, eventType, info.Size())
 	}
 
 	reader := newThrottledReadSeeker(file, h.bytesPerSecond(download))
@@ -206,10 +211,96 @@ func (h *AudioHandler) bytesPerSecond(download bool) int64 {
 	return h.streamBytesPerSecond
 }
 
-func (h *AudioHandler) recordDownload(audioFileID int64) {
-	if _, err := h.db.Exec("INSERT INTO download_events (audio_file_id) VALUES ($1)", audioFileID); err != nil {
-		log.Printf("Error recording download event for audio_file_id=%d: %v", audioFileID, err)
+func (h *AudioHandler) recordMediaEvent(r *http.Request, audioFileID int64, shareKey, eventType string, fileSize int64) {
+	sessionID := ""
+	if id, ok := currentSessionID(r, h.sessionSecret); ok {
+		sessionID = id
 	}
+
+	requestedBytes := estimateRequestedBytes(r.Header.Get("Range"), fileSize)
+	_, err := h.db.Exec(`
+		INSERT INTO download_events (
+			audio_file_id, event_type, share_key, session_id, client_ip, user_agent,
+			referer, range_header, method, file_size, requested_bytes
+		)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10, $11)
+	`, audioFileID, eventType, shareKey, sessionID, clientIP(r), r.UserAgent(),
+		r.Referer(), r.Header.Get("Range"), r.Method, fileSize, requestedBytes)
+	if err != nil {
+		log.Printf("Error recording %s event for audio_file_id=%d: %v", eventType, audioFileID, err)
+	}
+}
+
+func clientIP(r *http.Request) string {
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	addr := r.RemoteAddr
+	if idx := strings.LastIndex(addr, ":"); idx != -1 {
+		return addr[:idx]
+	}
+	return addr
+}
+
+func estimateRequestedBytes(rangeHeader string, fileSize int64) int64 {
+	if fileSize <= 0 {
+		return 0
+	}
+	if rangeHeader == "" {
+		return fileSize
+	}
+	if !strings.HasPrefix(rangeHeader, "bytes=") {
+		return fileSize
+	}
+
+	var total int64
+	ranges := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), ",")
+	for _, rawRange := range ranges {
+		rawRange = strings.TrimSpace(rawRange)
+		if rawRange == "" {
+			continue
+		}
+		parts := strings.SplitN(rawRange, "-", 2)
+		if len(parts) != 2 {
+			return fileSize
+		}
+
+		if parts[0] == "" {
+			suffixLength, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || suffixLength < 0 {
+				return fileSize
+			}
+			total += min(suffixLength, fileSize)
+			continue
+		}
+
+		start, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil || start < 0 || start >= fileSize {
+			return fileSize
+		}
+		end := fileSize - 1
+		if parts[1] != "" {
+			parsedEnd, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || parsedEnd < start {
+				return fileSize
+			}
+			end = min(parsedEnd, fileSize-1)
+		}
+		total += end - start + 1
+	}
+	if total <= 0 {
+		return fileSize
+	}
+	return min(total, fileSize)
 }
 
 func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, key string) {
