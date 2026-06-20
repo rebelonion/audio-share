@@ -4,12 +4,14 @@ import { Helmet } from 'react-helmet-async';
 import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
+import CustomSelect from '@/components/CustomSelect';
 
 export default function Contact() {
     const { track } = useRybbit();
     const [topic, setTopic] = useState('');
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');
+    const [image, setImage] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const navigate = useNavigate();
@@ -19,8 +21,11 @@ export default function Contact() {
         { value: 'bug', label: 'Bug Report' },
         { value: 'feature', label: 'Feature Request' },
         { value: 'content', label: 'Content Issue' },
+        { value: 'abuse', label: 'Abuse' },
         { value: 'other', label: 'Other' }
     ];
+
+    const isAbuseReport = topic === 'abuse';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,8 +35,23 @@ export default function Contact() {
             return;
         }
 
+        if (isAbuseReport && !email.trim()) {
+            setSubmitMessage({ type: 'error', text: 'Please enter an email address for abuse reports' });
+            return;
+        }
+
         if (!message.trim()) {
             setSubmitMessage({ type: 'error', text: 'Please enter a message' });
+            return;
+        }
+
+        if (image && !image.type.startsWith('image/')) {
+            setSubmitMessage({ type: 'error', text: 'Please attach an image file' });
+            return;
+        }
+
+        if (image && image.size > 15 * 1024 * 1024) {
+            setSubmitMessage({ type: 'error', text: 'Image attachment must be 15 MB or smaller' });
             return;
         }
 
@@ -39,16 +59,17 @@ export default function Contact() {
         setSubmitMessage(null);
 
         try {
+            const formData = new FormData();
+            formData.append('topic', topic);
+            formData.append('email', email.trim());
+            formData.append('message', message.trim());
+            if (image) {
+                formData.append('image', image);
+            }
+
             const response = await fetch(`${API_BASE}/api/contact`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    topic,
-                    email: email.trim() || null,
-                    message: message.trim()
-                })
+                body: formData
             });
 
             const data = await response.json();
@@ -59,6 +80,7 @@ export default function Contact() {
                 setTopic('');
                 setEmail('');
                 setMessage('');
+                setImage(null);
 
                 setTimeout(() => {
                     navigate('/');
@@ -90,25 +112,27 @@ export default function Contact() {
                         <label htmlFor="topic" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
                             Topic <span className="text-[var(--primary)]">*</span>
                         </label>
-                        <select
+                        <CustomSelect
                             id="topic"
                             value={topic}
-                            onChange={(e) => setTopic(e.target.value)}
-                            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] transition-colors"
+                            onChange={(value) => {
+                                setTopic(value);
+                                if (value !== 'abuse') {
+                                    setImage(null);
+                                }
+                            }}
                             disabled={isSubmitting}
-                        >
-                            <option value="">Select a topic...</option>
-                            {topicOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
+                            triggerClassName="px-4 py-3 bg-[var(--card)] rounded-lg focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                            options={[
+                                { value: '', label: 'Select a topic...' },
+                                ...topicOptions,
+                            ]}
+                        />
                     </div>
 
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
-                            Email (optional)
+                            Email {isAbuseReport ? <span className="text-[var(--primary)]">*</span> : '(optional)'}
                         </label>
                         <input
                             type="email"
@@ -118,9 +142,10 @@ export default function Contact() {
                             placeholder="your.email@example.com"
                             className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] transition-colors"
                             disabled={isSubmitting}
+                            required={isAbuseReport}
                         />
                         <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                            Provide your email if you'd like a response.
+                            {isAbuseReport ? 'Required so we can follow up on abuse and ownership claims.' : "Provide your email if you'd like a response."}
                         </p>
                     </div>
 
@@ -132,12 +157,36 @@ export default function Contact() {
                             id="message"
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            placeholder="Tell us what's on your mind..."
+                            placeholder={isAbuseReport ? 'Describe the issue and include proof that you own the content...' : "Tell us what's on your mind..."}
                             rows={8}
                             className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] resize-none transition-colors"
                             disabled={isSubmitting}
                         />
+                        {isAbuseReport && (
+                            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                                You must provide proof of content ownership for abuse or takedown requests.
+                            </p>
+                        )}
                     </div>
+
+                    {isAbuseReport && (
+                        <div>
+                            <label htmlFor="image" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
+                                Image attachment (optional)
+                            </label>
+                            <input
+                                type="file"
+                                id="image"
+                                accept="image/*"
+                                onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+                                className="block w-full text-sm text-[var(--foreground)] file:mr-4 file:rounded-lg file:border file:border-[var(--border)] file:bg-[var(--card)] file:px-4 file:py-2 file:text-[var(--foreground)] file:transition-colors hover:file:bg-[var(--card-hover)] disabled:opacity-50"
+                                disabled={isSubmitting}
+                            />
+                            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                                Screenshots or ownership proof images up to 15 MB are supported.
+                            </p>
+                        </div>
+                    )}
 
                     {submitMessage && (
                         <div

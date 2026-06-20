@@ -2,11 +2,12 @@ package services
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"time"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type NtfyService struct {
@@ -15,6 +16,12 @@ type NtfyService struct {
 	token     string
 	priority  int
 	reviewURL string
+}
+
+type NtfyAttachment struct {
+	Filename    string
+	ContentType string
+	Reader      io.Reader
 }
 
 func NewNtfyService(url, topic, token string, priority int, reviewURL string) *NtfyService {
@@ -51,7 +58,7 @@ func (n *NtfyService) SendShareNotification(requestURL string) error {
 	return n.send(body, "New Audio Source Request", "audio,request,source", actions)
 }
 
-func (n *NtfyService) SendContactNotification(topic, email, message string) error {
+func (n *NtfyService) SendContactNotification(topic, email, message string, attachment *NtfyAttachment) error {
 	if !n.IsConfigured() {
 		return fmt.Errorf("ntfy not configured")
 	}
@@ -61,6 +68,7 @@ func (n *NtfyService) SendContactNotification(topic, email, message string) erro
 		"bug":     "Bug Report",
 		"feature": "Feature Request",
 		"content": "Content Issue",
+		"abuse":   "Abuse / Ownership Claim",
 		"other":   "Other",
 	}
 
@@ -75,7 +83,15 @@ func (n *NtfyService) SendContactNotification(topic, email, message string) erro
 	}
 
 	body := fmt.Sprintf("Topic: %s\nEmail: %s\n\nMessage:\n%s", topicLabel, emailInfo, message)
-	return n.send(body, "New Contact Form Submission", "contact,message,form", "")
+	if err := n.send(body, "New Contact Form Submission", "contact,message,form", ""); err != nil {
+		return err
+	}
+
+	if attachment != nil {
+		return n.sendAttachment(attachment)
+	}
+
+	return nil
 }
 
 func (n *NtfyService) send(body, title, tags, actions string) error {
@@ -108,6 +124,40 @@ func (n *NtfyService) send(body, title, tags, actions string) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("ntfy returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func (n *NtfyService) sendAttachment(attachment *NtfyAttachment) error {
+	endpoint := fmt.Sprintf("%s/%s", n.url, n.topic)
+
+	req, err := http.NewRequest("PUT", endpoint, attachment.Reader)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Filename", attachment.Filename)
+	req.Header.Set("X-Title", "Contact Form Attachment")
+	req.Header.Set("X-Priority", strconv.Itoa(n.priority))
+	req.Header.Set("X-Tags", "contact,attachment,image")
+	if attachment.ContentType != "" {
+		req.Header.Set("Content-Type", attachment.ContentType)
+	}
+
+	if n.token != "" {
+		req.Header.Set("Authorization", "Bearer "+n.token)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("ntfy returned status %d for attachment", resp.StatusCode)
 	}
 
 	return nil

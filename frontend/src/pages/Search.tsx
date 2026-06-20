@@ -10,6 +10,7 @@ import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useRybbit } from '@/hooks/useRybbit';
 import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import RequestSourceDialog from '@/components/RequestSourceDialog';
+import CustomSelect from '@/components/CustomSelect';
 
 const RESULTS_PER_PAGE = 50;
 
@@ -683,81 +684,6 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                     </button>
                 )}
             </div>
-        </div>
-    );
-}
-
-// --- Custom Select ---
-
-interface CustomSelectProps {
-    value: string;
-    onChange: (value: string) => void;
-    options: { value: string; label: string }[];
-}
-
-function CustomSelect({ value, onChange, options }: CustomSelectProps) {
-    const [open, setOpen] = useState(false);
-    const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
-    const triggerRef = useRef<HTMLButtonElement>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (
-                !dropdownRef.current?.contains(e.target as Node) &&
-                !triggerRef.current?.contains(e.target as Node)
-            ) setOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [open]);
-
-    const handleOpen = () => {
-        if (!open && triggerRef.current) {
-            const r = triggerRef.current.getBoundingClientRect();
-            setPopoverStyle({ position: 'fixed', top: r.bottom + 4, left: r.left, width: r.width, zIndex: 9999 });
-        }
-        setOpen(v => !v);
-    };
-
-    const selected = options.find(o => o.value === value);
-
-    return (
-        <div className="relative">
-            <button
-                ref={triggerRef}
-                onClick={handleOpen}
-                className={`w-full px-3 py-1.5 text-sm bg-[var(--secondary)] border rounded flex items-center justify-between gap-2 focus:outline-none transition-colors ${
-                    open ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:border-[var(--primary)]/50'
-                } text-[var(--foreground)]`}
-            >
-                <span>{selected?.label ?? ''}</span>
-                <ChevronDown className={`h-3.5 w-3.5 text-[var(--muted-foreground)] shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-            </button>
-
-            {open && createPortal(
-                <div
-                    ref={dropdownRef}
-                    style={popoverStyle}
-                    className="bg-[var(--card)] border border-[var(--border)] rounded shadow-lg overflow-hidden animate-fadeIn"
-                >
-                    {options.map(opt => (
-                        <button
-                            key={opt.value}
-                            onClick={() => { onChange(opt.value); setOpen(false); }}
-                            className={`w-full px-3 py-2 text-sm text-left transition-colors ${
-                                opt.value === value
-                                    ? 'text-[var(--primary)] bg-[var(--primary)]/10'
-                                    : 'text-[var(--foreground)] hover:bg-[var(--card-hover)]'
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>,
-                document.body
-            )}
         </div>
     );
 }
