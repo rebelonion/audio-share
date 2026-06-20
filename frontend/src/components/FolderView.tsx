@@ -30,7 +30,7 @@ export default function FolderView({items}: FolderViewProps) {
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [pendingDownload, setPendingDownload] = useState<{ item: FileSystemItem; url: string; filename: string } | null>(null);
+    const [pendingDownload, setPendingDownload] = useState<{ item: FileSystemItem; url: string } | null>(null);
     const [notification, setNotification] = useState<Notification>({
         path: '',
         message: '',
@@ -242,13 +242,8 @@ export default function FolderView({items}: FolderViewProps) {
         }
     };
 
-    const triggerDownload = useCallback((url: string, filename: string) => {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+    const openDownload = useCallback((url: string) => {
+        window.open(url, '_blank', 'noopener,noreferrer');
     }, []);
 
     const confirmMatureDownload = useCallback(() => {
@@ -260,8 +255,8 @@ export default function FolderView({items}: FolderViewProps) {
             path: pendingDownload.item.path,
             name: pendingDownload.item.name,
         });
-        triggerDownload(pendingDownload.url, pendingDownload.filename);
-    }, [pendingDownload, track, triggerDownload]);
+        openDownload(pendingDownload.url);
+    }, [pendingDownload, track, openDownload]);
 
     return (
         <div className="relative">

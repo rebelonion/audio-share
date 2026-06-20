@@ -8,7 +8,7 @@ interface DesktopItemActionsProps {
     item: FileSystemItem;
     notification: Notification,
     copyToClipboard: (shareKey: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
-    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string; filename: string }) => void;
+    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
 }
 
 export default function DesktopItemActions({ item, notification, copyToClipboard, onMatureDownloadRequest }: DesktopItemActionsProps) {
@@ -47,13 +47,14 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
                     </button>
                     <a
                         href={downloadUrl}
-                        download={item.name}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1.5 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {
                             e.stopPropagation();
                             if (item.type === 'audio' && isMatureAge(item.ageLimit) && sessionStorage.getItem('mature-download-warning-ack') !== 'true') {
                                 e.preventDefault();
-                                onMatureDownloadRequest({ item, url: downloadUrl, filename: item.name });
+                                onMatureDownloadRequest({ item, url: downloadUrl });
                                 return;
                             }
                             track('audio-download', { path: item.path, name: item.name });

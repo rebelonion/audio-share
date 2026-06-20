@@ -11,7 +11,7 @@ interface TableItemProps {
     handleAudioSelect: (item: FileSystemItem) => void;
     notification: Notification;
     copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
-    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string; filename: string }) => void;
+    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
 }
 
 export default function TableItem({ item, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {

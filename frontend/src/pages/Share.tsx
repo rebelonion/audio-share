@@ -8,6 +8,7 @@ import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import MatureContentDialog from '@/components/MatureContentDialog';
+import { useRybbit } from '@/hooks/useRybbit';
 
 interface AudioMeta {
     title: string;
@@ -28,6 +29,7 @@ const WAVEFORM_BARS = [14, 22, 18, 28, 20, 32, 24, 16, 26, 20, 12, 28, 22, 18, 3
 
 export default function Share() {
     const { key } = useParams<{ key: string }>();
+    const { track } = useRybbit();
     const [meta, setMeta] = useState<AudioMeta | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -91,17 +93,22 @@ export default function Share() {
     const thumbnailUrl = `${API_BASE}/api/audio/key/${key}/thumbnail?view=${thumbnailView}`;
     const downloadUrl = `${API_BASE}/api/audio/key/${key}/download`;
 
-    const triggerDownload = () => {
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = meta?.title || key || 'audio';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+    const trackDownload = () => {
+        track('audio-download', {
+            path: key,
+            name: meta?.title || key || 'audio',
+            source: 'share-page',
+        });
+    };
+
+    const openDownload = () => {
+        trackDownload();
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
     };
 
     const handleDownloadClick = (event: MouseEvent<HTMLAnchorElement>) => {
         if (!meta?.isMature || meta.showMature || sessionStorage.getItem('mature-download-warning-ack') === 'true') {
+            trackDownload();
             return;
         }
         event.preventDefault();
@@ -211,7 +218,8 @@ export default function Share() {
                             <div className="flex items-center gap-3">
                                 <a
                                     href={downloadUrl}
-                                    download={meta?.title || key}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     onClick={handleDownloadClick}
                                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
                                 >
@@ -248,7 +256,7 @@ export default function Share() {
                 onConfirm={() => {
                     sessionStorage.setItem('mature-download-warning-ack', 'true');
                     setShowDownloadDialog(false);
-                    triggerDownload();
+                    openDownload();
                 }}
             />
         </>

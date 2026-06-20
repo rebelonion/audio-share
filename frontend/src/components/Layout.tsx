@@ -6,19 +6,19 @@ import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
-import { useMatureContentPreference } from '@/hooks/useMatureContentPreference'
-import { useRybbit } from '@/hooks/useRybbit'
+// import { useMatureContentPreference } from '@/hooks/useMatureContentPreference'
+// import { useRybbit } from '@/hooks/useRybbit'
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
-  const maturePreference = useMatureContentPreference()
-  const { track } = useRybbit()
+  // const maturePreference = useMatureContentPreference()
+  // const { track } = useRybbit()
 
-  const handleMaturePreferenceChange = (enabled: boolean) => {
-    track('mature-content-toggle', { enabled })
-    void maturePreference.setEnabled(enabled)
-  }
+  // const handleMaturePreferenceChange = (enabled: boolean) => {
+  //   track('mature-content-toggle', { enabled })
+  //   void maturePreference.setEnabled(enabled)
+  // }
 
   return (
     <>
@@ -144,6 +144,7 @@ export default function Layout() {
                   {DEFAULT_DESCRIPTION}
                 </p>
               )}
+              {/* TODO: Restore behind a feature flag once feature flags are available.
               <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] cursor-pointer select-none">
                 <span className="relative inline-flex h-4 w-7 shrink-0">
                   <input
@@ -164,6 +165,7 @@ export default function Layout() {
                 </span>
                 <span>Show mature content</span>
               </label>
+              */}
               <p className="text-center text-[var(--muted-foreground)] text-xs" style={{ opacity: 0.55 }}>
                 &copy; {new Date().getFullYear()} rebelonion &mdash; MIT License
               </p>
