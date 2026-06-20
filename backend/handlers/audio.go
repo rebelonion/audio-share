@@ -199,7 +199,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 			"filename": info.Name(),
 		}))
 	}
-	if r.Method == http.MethodGet {
+	if r.Method == http.MethodGet && (download || isInitialStreamRequest(r)) {
 		eventType := "stream"
 		if download {
 			eventType = "download"
@@ -216,6 +216,11 @@ func (h *AudioHandler) bytesPerSecond(download bool) int64 {
 		return h.downloadBytesPerSecond
 	}
 	return h.streamBytesPerSecond
+}
+
+func isInitialStreamRequest(r *http.Request) bool {
+	rangeHeader := r.Header.Get("Range")
+	return rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-")
 }
 
 func isBotLikeUserAgent(userAgent string) bool {
