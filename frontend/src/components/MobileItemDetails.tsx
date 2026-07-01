@@ -1,7 +1,7 @@
 import {FileSystemItem, Notification} from "@/types";
 import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
-import {formatDate, formatFileSize} from "@/lib/utils";
+import {formatDate, formatDuration, formatFileSize} from "@/lib/utils";
 import {useRybbit} from "@/hooks/useRybbit";
 import {API_BASE, isMatureAge} from "@/lib/api";
 
@@ -29,6 +29,9 @@ export default function MobileItemDetails({ item, notification, copyToClipboard,
                 {item.type === 'folder' && item.metadata?.items && (
                     <span className="mr-3">{item.metadata.items} items</span>
                 )}
+                {item.type === 'audio' && item.durationSeconds ? (
+                    <span className="mr-3">{formatDuration(item.durationSeconds)}</span>
+                ) : null}
                 <span>{formatDate(item.modifiedAt)}</span>
             </div>
 

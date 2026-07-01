@@ -3,6 +3,7 @@ export interface AudioFile {
     name: string;
     path: string;
     size: number;
+    durationSeconds?: number;
     modifiedAt: string;
     type: 'audio';
     mimeType: string;

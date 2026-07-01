@@ -85,11 +85,14 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 
 func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFileRecord, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT id, path, parent_path, filename, size, mime_type,
-		       title, meta_artist, upload_date, webpage_url, description, age_limit, share_key, unavailable_at
+		SELECT audio_files.id, audio_files.path, audio_files.parent_path, audio_files.filename,
+		       audio_files.size, audio_files.mime_type, audio_files.title, audio_files.meta_artist,
+		       audio_files.upload_date, audio_files.webpage_url, audio_files.description, audio_files.age_limit,
+		       audio_files.share_key, audio_files.unavailable_at, wc.duration_seconds
 		FROM audio_files
-		WHERE parent_path = $1 AND deleted = 0
-		ORDER BY upload_date DESC
+		LEFT JOIN waveform_cache wc ON wc.audio_file_id = audio_files.id
+		WHERE audio_files.parent_path = $1 AND audio_files.deleted = 0
+		ORDER BY audio_files.upload_date DESC
 	`, parentPath)
 	if err != nil {
 		return nil, err
@@ -101,9 +104,10 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 		var a AudioFileRecord
 		var unavailableAt sql.NullTime
 		var ageLimit sql.NullInt64
+		var durationSeconds sql.NullFloat64
 		if err := rows.Scan(&a.ID, &a.Path, &a.ParentPath, &a.Filename, &a.Size,
 			&a.MimeType, &a.Title, &a.MetaArtist, &a.UploadDate,
-			&a.WebpageURL, &a.Description, &ageLimit, &a.ShareKey, &unavailableAt); err != nil {
+			&a.WebpageURL, &a.Description, &ageLimit, &a.ShareKey, &unavailableAt, &durationSeconds); err != nil {
 			return nil, err
 		}
 		if ageLimit.Valid {
@@ -113,6 +117,9 @@ func (s *SearchService) getAudioFilesByParentPath(parentPath string) ([]AudioFil
 		if unavailableAt.Valid {
 			s := unavailableAt.Time.UTC().Format(time.RFC3339)
 			a.UnavailableAt = &s
+		}
+		if durationSeconds.Valid {
+			a.DurationSeconds = durationSeconds.Float64
 		}
 		audioFiles = append(audioFiles, a)
 	}
@@ -154,15 +161,16 @@ func (s *SearchService) audioToFileSystemItem(a AudioFileRecord) FileSystemItem 
 		modifiedAt = a.UploadDate[:4] + "-" + a.UploadDate[4:6] + "-" + a.UploadDate[6:8]
 	}
 	return FileSystemItem{
-		Name:          a.Filename,
-		Path:          a.Path,
-		Size:          a.Size,
-		ModifiedAt:    modifiedAt,
-		Type:          "audio",
-		MimeType:      a.MimeType,
-		Title:         a.Title,
-		AgeLimit:      a.AgeLimit,
-		ShareKey:      a.ShareKey,
-		UnavailableAt: a.UnavailableAt,
+		Name:            a.Filename,
+		Path:            a.Path,
+		Size:            a.Size,
+		DurationSeconds: a.DurationSeconds,
+		ModifiedAt:      modifiedAt,
+		Type:            "audio",
+		MimeType:        a.MimeType,
+		Title:           a.Title,
+		AgeLimit:        a.AgeLimit,
+		ShareKey:        a.ShareKey,
+		UnavailableAt:   a.UnavailableAt,
 	}
 }

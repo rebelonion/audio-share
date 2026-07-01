@@ -30,24 +30,25 @@ type FolderRecord struct {
 }
 
 type AudioFileRecord struct {
-	ID            int64
-	Path          string
-	ParentPath    string
-	Filename      string
-	Size          int64
-	MimeType      string
-	Title         string
-	MetaArtist    string
-	UploadDate    string
-	WebpageURL    string
-	Description   string
-	DownloadedAt  string
-	SourcePath    string
-	Thumbnail     string
-	AgeLimit      *int
-	ShareKey      string
-	Deleted       bool
-	UnavailableAt *string
+	ID              int64
+	Path            string
+	ParentPath      string
+	Filename        string
+	Size            int64
+	MimeType        string
+	Title           string
+	MetaArtist      string
+	UploadDate      string
+	WebpageURL      string
+	Description     string
+	DownloadedAt    string
+	SourcePath      string
+	Thumbnail       string
+	AgeLimit        *int
+	ShareKey        string
+	Deleted         bool
+	DurationSeconds float64
+	UnavailableAt   *string
 }
 
 type AudioInfoJSON struct {

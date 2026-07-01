@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Calendar, Check, SortAsc} from 'lucide-react';
+import {Calendar, Check, Clock, SortAsc} from 'lucide-react';
 import {FileSystemItem, Notification} from '@/types';
 import AudioPlayer from './AudioPlayer';
 import AlphaScrollbar from './AlphaScrollbar';
@@ -18,7 +18,7 @@ interface FolderViewProps {
     items: FileSystemItem[];
 }
 
-type SortMethod = 'alpha' | 'modified' | 'size';
+type SortMethod = 'alpha' | 'modified' | 'size' | 'duration';
 
 export default function FolderView({items}: FolderViewProps) {
     const {track} = useRybbit();
@@ -43,7 +43,7 @@ export default function FolderView({items}: FolderViewProps) {
     useEffect(() => {
         const urlSort = searchParams.get("sort") as SortMethod | null;
 
-        if (urlSort && ['alpha', 'modified', 'size'].includes(urlSort)) {
+        if (urlSort && ['alpha', 'modified', 'size', 'duration'].includes(urlSort)) {
             setSortMethod(urlSort);
         } else {
             const folderCount = items.filter(item => item.type === 'folder').length;
@@ -129,6 +129,20 @@ export default function FolderView({items}: FolderViewProps) {
                 const presortedItems = [...filteredItems].sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
                 return reverseIf(presortedItems, sortOrder === 'desc');
             }
+            case 'duration': {
+                return [...filteredItems].sort((a, b) => {
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+
+                    const durationA = a.type === 'audio' ? a.durationSeconds ?? 0 : 0;
+                    const durationB = b.type === 'audio' ? b.durationSeconds ?? 0 : 0;
+                    const durationDiff = sortOrder === 'desc'
+                        ? durationB - durationA
+                        : durationA - durationB;
+
+                    return durationDiff || a.name.localeCompare(b.name);
+                });
+            }
             default:
                 return reverseIf(filteredItems, sortOrder === 'desc');
         }
@@ -152,6 +166,27 @@ export default function FolderView({items}: FolderViewProps) {
     const showAlphaScrollbar = useMemo(() => {
         return sortMethod === 'alpha' && Object.keys(itemsByLetter).length > 5;
     }, [sortMethod, itemsByLetter]);
+
+    const showDurationColumn = useMemo(() => {
+        return items.some(item => item.type === 'audio');
+    }, [items]);
+
+    const nameColumnWidth = showDurationColumn ? '45%' : '55%';
+    const sizeColumnWidth = showDurationColumn ? '17%' : '20%';
+
+    useEffect(() => {
+        if (showDurationColumn || sortMethod !== 'duration') {
+            return;
+        }
+
+        setSortMethod('alpha');
+        setSortOrder('asc');
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('sort', 'alpha');
+        url.searchParams.set('order', 'asc');
+        window.history.replaceState({}, '', url.toString());
+    }, [showDurationColumn, sortMethod]);
 
     useEffect(() => {
         if (notification.visible) {
@@ -324,6 +359,15 @@ export default function FolderView({items}: FolderViewProps) {
                                     >
                                         <SortAsc className="h-3.5 w-3.5 mr-1 hidden md:block"/> A-Z
                                     </button>
+                                    {showDurationColumn && (
+                                        <button
+                                            onClick={() => handleOrderToggle('duration')}
+                                            className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'duration' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
+                                            title="Sort by playtime"
+                                        >
+                                            <Clock className="h-3.5 w-3.5 mr-1 hidden md:block"/> Time
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleOrderToggle('modified')}
                                         className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
@@ -359,18 +403,27 @@ export default function FolderView({items}: FolderViewProps) {
                                     <tr>
                                         <th scope="col"
                                             className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                            style={{width: '55%'}}
+                                            style={{width: nameColumnWidth}}
                                             onClick={() => handleOrderToggle('alpha')}>
                                             Name
                                             {sortMethod === 'alpha' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
                                         </th>
                                         <th scope="col"
                                             className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                            style={{width: '20%'}}
+                                            style={{width: sizeColumnWidth}}
                                             onClick={() => handleOrderToggle('size')}>
                                             Size
                                             {sortMethod === 'size' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
                                         </th>
+                                        {showDurationColumn && (
+                                            <th scope="col"
+                                                className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                                style={{width: '13%'}}
+                                                onClick={() => handleOrderToggle('duration')}>
+                                                Playtime
+                                                {sortMethod === 'duration' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                            </th>
+                                        )}
                                         <th scope="col"
                                             className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
                                             style={{width: '15%'}}
@@ -400,7 +453,7 @@ export default function FolderView({items}: FolderViewProps) {
                                                         className="bg-[var(--card-hover)] sticky z-10 letter-section"
                                                     >
                                                         <td
-                                                            colSpan={4}
+                                                            colSpan={showDurationColumn ? 5 : 4}
                                                             className="pl-4 pr-6 py-1.5 border-l-2 border-[var(--primary)]"
                                                             style={{ fontFamily: 'var(--font-display)' }}
                                                         >
@@ -410,7 +463,7 @@ export default function FolderView({items}: FolderViewProps) {
 
                                                     {/* Items starting with this letter */}
                                                     {letterItems.map((item) => (
-                                                        <TableItem item={item} handleAudioSelect={handleAudioSelect}
+                                                        <TableItem item={item} showDurationColumn={showDurationColumn} handleAudioSelect={handleAudioSelect}
                                                                    notification={notification}
                                                                    copyToClipboard={copyToClipboard}
                                                                    onMatureDownloadRequest={setPendingDownload}
@@ -422,6 +475,7 @@ export default function FolderView({items}: FolderViewProps) {
                                         // Non-alphabetical view - flat list
                                         sortedItems.map((item) => (
                                             <TableItem item={item}
+                                                showDurationColumn={showDurationColumn}
                                                 handleAudioSelect={handleAudioSelect} notification={notification}
                                                 copyToClipboard={copyToClipboard}
                                                 onMatureDownloadRequest={setPendingDownload}

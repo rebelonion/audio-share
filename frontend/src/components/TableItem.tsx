@@ -1,5 +1,5 @@
 import {Folder, Music, Unlink} from "lucide-react";
-import {formatDate, formatFileSize} from "@/lib/utils";
+import {formatDate, formatDuration, formatFileSize} from "@/lib/utils";
 import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
 import {FileSystemItem, Notification} from "@/types";
@@ -8,14 +8,17 @@ import PosterImage from '@/components/PosterImage';
 
 interface TableItemProps {
     item: FileSystemItem;
+    showDurationColumn: boolean;
     handleAudioSelect: (item: FileSystemItem) => void;
     notification: Notification;
     copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
     onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
 }
 
-export default function TableItem({ item, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
+export default function TableItem({ item, showDurationColumn, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+    const nameColumnWidth = showDurationColumn ? '45%' : '55%';
+    const sizeColumnWidth = showDurationColumn ? '17%' : '20%';
 
     return (
         <tr
@@ -26,7 +29,7 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
             onClick={() => item.type === 'audio' && handleAudioSelect(item)}
         >
             <td className="px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis"
-                style={{width: '55%'}}>
+                style={{width: nameColumnWidth}}>
                 {item.type === 'folder' ? (
                     <Link
                         to={folderHref}
@@ -58,13 +61,19 @@ export default function TableItem({ item, handleAudioSelect, notification, copyT
                 )}
             </td>
             <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center"
-                style={{width: '20%'}}>
+                style={{width: sizeColumnWidth}}>
                 {item.type === 'audio' ? formatFileSize(item.size) :
                     (item.type === 'folder' && (item.size || item.metadata?.items)) ?
                         [item.size ? formatFileSize(item.size) : null, item.metadata?.items ? `${item.metadata.items} items` : null]
                             .filter(Boolean).join(' | ')
                         : '-'}
             </td>
+            {showDurationColumn && (
+                <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center tabular-nums"
+                    style={{width: '13%'}}>
+                    {item.type === 'audio' && item.durationSeconds ? formatDuration(item.durationSeconds) : '-'}
+                </td>
+            )}
             <td className="px-6 py-4 text-sm text-[var(--muted-foreground)] text-center"
                 style={{width: '15%'}}>
                 {formatDate(item.modifiedAt)}
