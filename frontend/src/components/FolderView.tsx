@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Calendar, Check, Clock, SortAsc} from 'lucide-react';
 import {FileSystemItem, Notification} from '@/types';
@@ -20,6 +20,151 @@ interface FolderViewProps {
 
 type SortMethod = 'alpha' | 'modified' | 'size' | 'duration';
 
+type SearchableItem = {
+    item: FileSystemItem;
+    searchableText: string;
+};
+
+type DisplayEntry =
+    | { type: 'letter'; key: string; letter: string }
+    | { type: 'item'; key: string; item: FileSystemItem };
+
+const DESKTOP_LETTER_HEIGHT = 33;
+const DESKTOP_ITEM_HEIGHT = 65;
+const MOBILE_LETTER_HEIGHT = 40; // h-8 + mb-2
+const MOBILE_ITEM_HEIGHT = 102; // h-[90px] + mb-3
+
+function getIsDesktop() {
+    return typeof window === 'undefined'
+        ? true
+        : window.matchMedia('(min-width: 768px)').matches;
+}
+
+function upperFirstLetter(value: string) {
+    return ([...value][0] ?? '').toUpperCase();
+}
+
+function lowerBound(values: number[], target: number) {
+    let low = 0;
+    let high = values.length;
+
+    while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (values[middle] < target) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+
+    return low;
+}
+
+function useWindowedEntries(entries: DisplayEntry[], isDesktop: boolean) {
+    const containerRef = useRef<HTMLDivElement | HTMLTableSectionElement | null>(null);
+    const [viewport, setViewport] = useState({top: 0, height: 800});
+    const letterHeight = isDesktop ? DESKTOP_LETTER_HEIGHT : MOBILE_LETTER_HEIGHT;
+    const itemHeight = isDesktop ? DESKTOP_ITEM_HEIGHT : MOBILE_ITEM_HEIGHT;
+    const overscan = isDesktop ? 600 : 800;
+
+    const rowMetrics = useMemo(() => {
+        const offsets: number[] = [];
+        const letterOffsets: Record<string, number> = {};
+        let totalHeight = 0;
+
+        entries.forEach((entry) => {
+            const height = entry.type === 'letter' ? letterHeight : itemHeight;
+
+            offsets.push(totalHeight);
+
+            if (entry.type === 'letter') {
+                letterOffsets[entry.letter] = totalHeight;
+            }
+
+            totalHeight += height;
+        });
+
+        return {offsets, letterOffsets, totalHeight};
+    }, [entries, itemHeight, letterHeight]);
+
+    useLayoutEffect(() => {
+        let frame = 0;
+
+        const updateViewport = () => {
+            window.cancelAnimationFrame(frame);
+            frame = window.requestAnimationFrame(() => {
+                const container = containerRef.current;
+                if (!container) return;
+
+                const containerTop = container.getBoundingClientRect().top + window.scrollY;
+                setViewport({
+                    top: Math.max(0, window.scrollY - containerTop),
+                    height: window.innerHeight,
+                });
+            });
+        };
+
+        updateViewport();
+        window.addEventListener('scroll', updateViewport, {passive: true});
+        window.addEventListener('resize', updateViewport);
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.removeEventListener('scroll', updateViewport);
+            window.removeEventListener('resize', updateViewport);
+        };
+    }, [entries, isDesktop]);
+
+    const windowedEntries = useMemo(() => {
+        if (entries.length === 0) {
+            return {
+                visibleEntries: [],
+                topSpacerHeight: 0,
+                bottomSpacerHeight: 0,
+            };
+        }
+
+        const startTop = Math.max(0, viewport.top - overscan);
+        const endTop = viewport.top + viewport.height + overscan;
+        const startIndex = Math.max(0, lowerBound(rowMetrics.offsets, startTop) - 1);
+        const endIndex = Math.min(entries.length, lowerBound(rowMetrics.offsets, endTop) + 1);
+        const topSpacerHeight = rowMetrics.offsets[startIndex] ?? 0;
+        const endOffset = endIndex >= entries.length
+            ? rowMetrics.totalHeight
+            : rowMetrics.offsets[endIndex] ?? rowMetrics.totalHeight;
+
+        return {
+            visibleEntries: entries.slice(startIndex, endIndex),
+            topSpacerHeight,
+            bottomSpacerHeight: Math.max(0, rowMetrics.totalHeight - endOffset),
+        };
+    }, [entries, overscan, rowMetrics, viewport]);
+
+    const scrollToLetterOffset = useCallback((letter: string) => {
+        const container = containerRef.current;
+        const offset = rowMetrics.letterOffsets[letter];
+
+        if (!container || offset == null) {
+            return;
+        }
+
+        window.scrollTo({
+            top: container.getBoundingClientRect().top + window.scrollY + offset - 60,
+            behavior: 'smooth',
+        });
+    }, [rowMetrics.letterOffsets]);
+
+    const setContainerRef = useCallback((node: HTMLDivElement | HTMLTableSectionElement | null) => {
+        containerRef.current = node;
+    }, []);
+
+    return {
+        setContainerRef,
+        scrollToLetterOffset,
+        ...windowedEntries,
+    };
+}
+
 export default function FolderView({items}: FolderViewProps) {
     const {track} = useRybbit();
     const {selectTrack, setSurface} = useGlobalAudioPlayer();
@@ -28,6 +173,7 @@ export default function FolderView({items}: FolderViewProps) {
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isDesktop, setIsDesktop] = useState(getIsDesktop);
     const [pendingDownload, setPendingDownload] = useState<{ item: FileSystemItem; url: string } | null>(null);
     const [notification, setNotification] = useState<Notification>({
         path: '',
@@ -36,7 +182,15 @@ export default function FolderView({items}: FolderViewProps) {
         visible: false,
     });
 
-    const letterRefs = useRef<Record<string, HTMLElement | null>>({});
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(min-width: 768px)');
+        const updateLayoutMode = () => setIsDesktop(mediaQuery.matches);
+
+        updateLayoutMode();
+        mediaQuery.addEventListener('change', updateLayoutMode);
+
+        return () => mediaQuery.removeEventListener('change', updateLayoutMode);
+    }, []);
 
     useEffect(() => {
         const urlSort = searchParams.get("sort") as SortMethod | null;
@@ -79,31 +233,33 @@ export default function FolderView({items}: FolderViewProps) {
         }
     }, [setSortOrder, sortMethod, sortOrder]);
 
+    const searchableItems = useMemo<SearchableItem[]>(() => {
+        return items.map(item => {
+            const parts = [item.name];
+
+            if (item.type === 'folder' && item.metadata) {
+                if (item.metadata.name) parts.push(item.metadata.name);
+                if (item.metadata.description) parts.push(item.metadata.description);
+            }
+
+            return {
+                item,
+                searchableText: parts.join('\n').toLowerCase(),
+            };
+        });
+    }, [items]);
+
     const filteredItems = useMemo(() => {
-        if (!searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+
+        if (!query) {
             return items;
         }
 
-        const query = searchQuery.toLowerCase().trim();
-
-        return items.filter(item => {
-            if (item.name.toLowerCase().includes(query)) {
-                return true;
-            }
-
-            if (item.type === 'folder' && item.metadata) {
-                if (item.metadata.name && item.metadata.name.toLowerCase().includes(query)) {
-                    return true;
-                }
-
-                if (item.metadata.description && item.metadata.description.toLowerCase().includes(query)) {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-    }, [items, searchQuery]);
+        return searchableItems
+            .filter(({searchableText}) => searchableText.includes(query))
+            .map(({item}) => item);
+    }, [items, searchableItems, searchQuery]);
 
     const sortedItems = useMemo(() => {
         switch (sortMethod) {
@@ -151,7 +307,7 @@ export default function FolderView({items}: FolderViewProps) {
         const grouped: Record<string, FileSystemItem[]> = {};
 
         sortedItems.forEach(item => {
-            const firstLetter = ([...item.name][0] ?? '').toUpperCase();
+            const firstLetter = upperFirstLetter(item.name);
             if (!grouped[firstLetter]) {
                 grouped[firstLetter] = [];
             }
@@ -161,9 +317,49 @@ export default function FolderView({items}: FolderViewProps) {
         return grouped;
     }, [sortedItems]);
 
+    const sortedLetterGroups = useMemo(() => {
+        return Object.entries(itemsByLetter)
+            .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
+    }, [itemsByLetter, sortOrder]);
+
+    const availableLetters = useMemo(() => {
+        return sortedLetterGroups.map(([letter]) => letter);
+    }, [sortedLetterGroups]);
+
     const showAlphaScrollbar = useMemo(() => {
-        return sortMethod === 'alpha' && Object.keys(itemsByLetter).length > 5;
-    }, [sortMethod, itemsByLetter]);
+        return sortMethod === 'alpha' && availableLetters.length > 5;
+    }, [sortMethod, availableLetters]);
+
+    const displayEntries = useMemo<DisplayEntry[]>(() => {
+        if (sortMethod !== 'alpha') {
+            return sortedItems.map(item => ({
+                type: 'item',
+                key: item.path,
+                item,
+            }));
+        }
+
+        return sortedLetterGroups.flatMap(([letter, letterItems]) => [
+            {
+                type: 'letter' as const,
+                key: `letter-${letter}`,
+                letter,
+            },
+            ...letterItems.map(item => ({
+                type: 'item' as const,
+                key: item.path,
+                item,
+            })),
+        ]);
+    }, [sortMethod, sortedItems, sortedLetterGroups]);
+
+    const {
+        setContainerRef,
+        visibleEntries,
+        topSpacerHeight,
+        bottomSpacerHeight,
+        scrollToLetterOffset,
+    } = useWindowedEntries(displayEntries, isDesktop);
 
     const showDurationColumn = useMemo(() => {
         return items.some(item => item.type === 'audio');
@@ -195,7 +391,7 @@ export default function FolderView({items}: FolderViewProps) {
         }
     }, [notification]);
 
-    const handleAudioSelect = (item: FileSystemItem) => {
+    const handleAudioSelect = useCallback((item: FileSystemItem) => {
         if (item.type === 'audio' && !isAudioSelectionLocked) {
             setIsAudioSelectionLocked(true);
 
@@ -216,40 +412,13 @@ export default function FolderView({items}: FolderViewProps) {
                 setIsAudioSelectionLocked(false);
             }, 300);
         }
-    };
+    }, [isAudioSelectionLocked, selectTrack, setSurface, track]);
 
-    const scrollToLetter = (letter: string) => {
-        const isMobile = window.innerWidth < 768;
+    const scrollToLetter = useCallback((letter: string) => {
+        scrollToLetterOffset(letter);
+    }, [scrollToLetterOffset]);
 
-        if (isMobile) {
-            const letterSelector = `.letter-section-mobile[data-letter="${letter}"]`;
-            const targetElement = document.querySelector(letterSelector);
-
-            if (targetElement && targetElement instanceof HTMLElement) {
-                setTimeout(() => {
-                    window.scrollTo({
-                        top: targetElement.getBoundingClientRect().top + window.scrollY - 60,
-                        behavior: 'smooth'
-                    });
-                }, 10);
-            }
-        } else {
-            // Desktop
-            const targetId = `letter-section-${letter}`;
-            const element = document.getElementById(targetId);
-
-            if (element) {
-                setTimeout(() => {
-                    window.scrollTo({
-                        top: element.getBoundingClientRect().top + window.scrollY - 60,
-                        behavior: 'smooth'
-                    });
-                }, 10);
-            }
-        }
-    };
-
-    const copyToClipboard = (shareKey: string, e: React.MouseEvent) => {
+    const copyToClipboard = useCallback((shareKey: string, e: React.MouseEvent) => {
         e.stopPropagation();
         const url = `${window.location.origin}/share/${shareKey}`;
 
@@ -281,7 +450,7 @@ export default function FolderView({items}: FolderViewProps) {
                 visible: true
             });
         }
-    };
+    }, []);
 
     const openDownload = useCallback((url: string) => {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -390,170 +559,146 @@ export default function FolderView({items}: FolderViewProps) {
                         </div>
                     </div>
 
-                    {/* Desktop view */}
-                    <div className="hidden md:flex items-start gap-2">
-                        <div
-                            className="flex-1 min-w-0 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
-                            <div className="overflow-x-auto scrollbar-hide" id="table-container">
-                                <table className="w-full table-fixed divide-y divide-[var(--border)]">
-                                    <thead className="bg-[var(--secondary)] sticky top-0 z-20">
-                                    <tr>
-                                        <th scope="col"
-                                            className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                            style={{width: nameColumnWidth}}
-                                            onClick={() => handleOrderToggle('alpha')}>
-                                            Name
-                                            {sortMethod === 'alpha' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                        </th>
-                                        <th scope="col"
-                                            className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                            style={{width: sizeColumnWidth}}
-                                            onClick={() => handleOrderToggle('size')}>
-                                            Size
-                                            {sortMethod === 'size' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                        </th>
-                                        {showDurationColumn && (
+                    {isDesktop ? (
+                        <div className="flex items-start gap-2">
+                            <div
+                                className="flex-1 min-w-0 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
+                                <div className="overflow-x-auto scrollbar-hide" id="table-container">
+                                    <table className="w-full table-fixed border-collapse">
+                                        <thead className="bg-[var(--secondary)] sticky top-0 z-20">
+                                        <tr>
+                                            <th scope="col"
+                                                className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                                style={{width: nameColumnWidth}}
+                                                onClick={() => handleOrderToggle('alpha')}>
+                                                Name
+                                                {sortMethod === 'alpha' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                            </th>
                                             <th scope="col"
                                                 className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                                style={{width: '13%'}}
-                                                onClick={() => handleOrderToggle('duration')}>
-                                                Playtime
-                                                {sortMethod === 'duration' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                                style={{width: sizeColumnWidth}}
+                                                onClick={() => handleOrderToggle('size')}>
+                                                Size
+                                                {sortMethod === 'size' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
                                             </th>
+                                            {showDurationColumn && (
+                                                <th scope="col"
+                                                    className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                                    style={{width: '13%'}}
+                                                    onClick={() => handleOrderToggle('duration')}>
+                                                    Playtime
+                                                    {sortMethod === 'duration' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                                </th>
+                                            )}
+                                            <th scope="col"
+                                                className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
+                                                style={{width: '15%'}}
+                                                onClick={() => handleOrderToggle('modified')}>
+                                                Modified
+                                                {sortMethod === 'modified' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
+                                            </th>
+                                            <th scope="col"
+                                                className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
+                                                style={{width: '10%'}}>
+                                                Actions
+                                            </th>
+                                        </tr>
+                                        </thead>
+                                        <tbody ref={setContainerRef} className="bg-[var(--card)]">
+                                        {topSpacerHeight > 0 && (
+                                            <tr aria-hidden="true" className="border-0 bg-[var(--card)]">
+                                                <td
+                                                    colSpan={showDurationColumn ? 5 : 4}
+                                                    className="border-0 bg-[var(--card)]"
+                                                    style={{height: topSpacerHeight, padding: 0}}
+                                                />
+                                            </tr>
                                         )}
-                                        <th scope="col"
-                                            className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                            style={{width: '15%'}}
-                                            onClick={() => handleOrderToggle('modified')}>
-                                            Modified
-                                            {sortMethod === 'modified' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                        </th>
-                                        <th scope="col"
-                                            className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                            style={{width: '10%'}}>
-                                            Actions
-                                        </th>
-                                    </tr>
-                                    </thead>
-                                    <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
-                                    {sortMethod === 'alpha' ? (
-                                        Object.entries(itemsByLetter)
-                                            .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b))
-                                            .map(([letter, letterItems]) => (
-                                                <React.Fragment key={`letter-group-${letter}`}>
-                                                    <tr
-                                                        id={`letter-section-${letter}`}
-                                                        data-letter={letter}
-                                                        ref={(el) => {
-                                                            if (el) letterRefs.current[letter] = el;
-                                                        }}
-                                                        className="bg-[var(--card-hover)] sticky z-10 letter-section"
-                                                    >
-                                                        <td
-                                                            colSpan={showDurationColumn ? 5 : 4}
-                                                            className="pl-4 pr-6 py-1.5 border-l-2 border-[var(--primary)]"
-                                                            style={{ fontFamily: 'var(--font-display)' }}
+                                        {visibleEntries.map((entry) => (
+                                            entry.type === 'letter' ? (
+                                                        <tr
+                                                            key={entry.key}
+                                                            id={`letter-section-${entry.letter}`}
+                                                            data-letter={entry.letter}
+                                                            className="h-[33px] bg-[var(--card-hover)] border-t border-[var(--border)] sticky z-10 letter-section"
                                                         >
-                                                            <span className="text-[var(--primary)] font-semibold tracking-widest text-sm">{letter}</span>
-                                                        </td>
-                                                    </tr>
-
-                                                    {/* Items starting with this letter */}
-                                                    {letterItems.map((item) => (
-                                                        <TableItem item={item} showDurationColumn={showDurationColumn} handleAudioSelect={handleAudioSelect}
-                                                                   notification={notification}
-                                                                   copyToClipboard={copyToClipboard}
-                                                                   onMatureDownloadRequest={setPendingDownload}
-                                                                   key={`desktop-${item.path}`}/>
-                                                    ))}
-                                                </React.Fragment>
-                                            ))
-                                    ) : (
-                                        // Non-alphabetical view - flat list
-                                        sortedItems.map((item) => (
-                                            <TableItem item={item}
-                                                showDurationColumn={showDurationColumn}
-                                                handleAudioSelect={handleAudioSelect} notification={notification}
-                                                copyToClipboard={copyToClipboard}
-                                                onMatureDownloadRequest={setPendingDownload}
-                                                key={`desktop-flat-${item.path}`}/>
-                                        ))
-                                    )}
-                                    </tbody>
-                                </table>
+                                                            <td
+                                                                colSpan={showDurationColumn ? 5 : 4}
+                                                                className="pl-4 pr-6 py-1.5 border-l-2 border-[var(--primary)]"
+                                                                style={{ fontFamily: 'var(--font-display)' }}
+                                                            >
+                                                                <span className="text-[var(--primary)] font-semibold tracking-widest text-sm">{entry.letter}</span>
+                                                            </td>
+                                                        </tr>
+                                            ) : (
+                                                <TableItem item={entry.item}
+                                                    showDurationColumn={showDurationColumn}
+                                                    handleAudioSelect={handleAudioSelect} notification={notification}
+                                                    copyToClipboard={copyToClipboard}
+                                                    onMatureDownloadRequest={setPendingDownload}
+                                                    key={`desktop-${entry.key}`}/>
+                                            )
+                                        ))}
+                                        {bottomSpacerHeight > 0 && (
+                                            <tr aria-hidden="true" className="border-0 bg-[var(--card)]">
+                                                <td
+                                                    colSpan={showDurationColumn ? 5 : 4}
+                                                    className="border-0 bg-[var(--card)]"
+                                                    style={{height: bottomSpacerHeight, padding: 0}}
+                                                />
+                                            </tr>
+                                        )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
-                        {showAlphaScrollbar && (
-                            <div className="sticky top-4 self-start">
-                                <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Mobile view */}
-                    <div className="md:hidden flex items-start gap-1">
-                        <div className="flex-1 min-w-0" id="mobile-content-container">
-                        {sortMethod === 'alpha' ? (
-                                Object.entries(itemsByLetter)
-                                    .sort(([a], [b]) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b))
-                                    .map(([letter, letterItems]) => (
-                                        <React.Fragment key={`letter-group-mobile-${letter}`}>
-                                            <div
-                                                id={`letter-section-mobile-${letter}`}
-                                                data-letter={letter}
-                                                ref={(el) => {
-                                                    if (el) letterRefs.current[letter] = el;
-                                                }}
-                                                className="bg-[var(--card-hover)] rounded-sm px-4 py-1.5 mb-2 sticky top-0 z-10 letter-section-mobile border-l-2 border-[var(--primary)]"
-                                                style={{ fontFamily: 'var(--font-display)' }}
-                                            >
-                                                <span className="text-[var(--primary)] font-semibold tracking-widest text-sm">{letter}</span>
-                                            </div>
-
-                                            {/* Items starting with this letter */}
-                                            {letterItems.map((item) => (
-                                                <div
-                                                    key={`mobile-${item.path}`}
-                                                    className={`border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
-                                                        item.type === 'audio' ? 'cursor-pointer' : ''
-                                                    } ${item.type === 'audio' && item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
-                                                    title={item.type === 'audio' && item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
-                                                    onClick={() => item.type === 'audio' && handleAudioSelect(item)}
-                                                >
-                                                    <MobileItemName item={item}/>
-
-                                                    <MobileItemDetails item={item} notification={notification}
-                                                              copyToClipboard={copyToClipboard}
-                                                              onMatureDownloadRequest={setPendingDownload}/>
-                                                </div>
-                                            ))}
-                                        </React.Fragment>
-                                    ))
-                            ) : (
-                                // Non-alphabetical view - flat list
-                                sortedItems.map((item) => (
-                                    <div
-                                        key={`mobile-flat-${item.path}`}
-                                        className={`border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
-                                            item.type === 'audio' ? 'cursor-pointer' : ''
-                                        } ${item.type === 'audio' && item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
-                                        onClick={() => item.type === 'audio' && handleAudioSelect(item)}
-                                    >
-                                        <MobileItemName item={item}/>
-
-                                        <MobileItemDetails item={item} notification={notification}
-                                                  copyToClipboard={copyToClipboard}
-                                                  onMatureDownloadRequest={setPendingDownload}/>
-                                    </div>
-                                ))
+                            {showAlphaScrollbar && (
+                                <div className="sticky top-4 self-start">
+                                    <AlphaScrollbar letters={availableLetters} onScrollToLetterAction={scrollToLetter}/>
+                                </div>
                             )}
                         </div>
-                        {showAlphaScrollbar && (
-                            <div className="sticky top-4 self-start">
-                                <AlphaScrollbar items={sortedItems} onScrollToLetterAction={scrollToLetter}/>
+                    ) : (
+                        <div className="flex items-start gap-1">
+                            <div ref={setContainerRef} className="flex-1 min-w-0" id="mobile-content-container">
+                            {topSpacerHeight > 0 && <div aria-hidden="true" style={{height: topSpacerHeight}} />}
+                            {visibleEntries.map((entry) => (
+                                entry.type === 'letter' ? (
+                                                <div
+                                                    key={entry.key}
+                                                    id={`letter-section-mobile-${entry.letter}`}
+                                                    data-letter={entry.letter}
+                                                    className="h-8 bg-[var(--card-hover)] rounded-sm px-4 py-1.5 mb-2 sticky top-0 z-10 letter-section-mobile border-l-2 border-[var(--primary)]"
+                                                    style={{ fontFamily: 'var(--font-display)' }}
+                                                >
+                                                    <span className="text-[var(--primary)] font-semibold tracking-widest text-sm">{entry.letter}</span>
+                                                </div>
+                                ) : (
+                                                    <div
+                                                        key={`mobile-${entry.key}`}
+                                                        className={`h-[90px] border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
+                                                            entry.item.type === 'audio' ? 'cursor-pointer' : ''
+                                                        } ${entry.item.type === 'audio' && entry.item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
+                                                        title={entry.item.type === 'audio' && entry.item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
+                                                        onClick={() => entry.item.type === 'audio' && handleAudioSelect(entry.item)}
+                                                    >
+                                                        <MobileItemName item={entry.item}/>
+
+                                                        <MobileItemDetails item={entry.item} notification={notification}
+                                                                  copyToClipboard={copyToClipboard}
+                                                                  onMatureDownloadRequest={setPendingDownload}/>
+                                                    </div>
+                                )
+                            ))}
+                            {bottomSpacerHeight > 0 && <div aria-hidden="true" style={{height: bottomSpacerHeight}} />}
                             </div>
-                        )}
-                    </div>
+                            {showAlphaScrollbar && (
+                                <div className="sticky top-4 self-start">
+                                    <AlphaScrollbar letters={availableLetters} onScrollToLetterAction={scrollToLetter}/>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </>
             )}
         </div>

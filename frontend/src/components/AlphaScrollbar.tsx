@@ -1,29 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileSystemItem } from '@/types';
+import { useCallback, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
-import { useSearchParams } from 'react-router';
 
 interface AlphaScrollbarProps {
-    items: FileSystemItem[];
+    letters: string[];
     onScrollToLetterAction: (letter: string) => void;
 }
 
-export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaScrollbarProps) {
-    const [searchParams] = useSearchParams();
-    const [availableLetters, setAvailableLetters] = useState<string[]>([]);
+export default function AlphaScrollbar({ letters, onScrollToLetterAction }: AlphaScrollbarProps) {
     const [activeLetter, setActiveLetter] = useState<string | null>(null);
     const scrollbarRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const sortOrder = searchParams?.get('order') === 'desc' ? 'desc' : 'asc';
-
-        const letters = items
-            .map(item => ([...item.name][0] ?? '').toUpperCase())
-            .filter((letter, index, self) => self.indexOf(letter) === index)
-            .sort((a, b) => sortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
-
-        setAvailableLetters(letters);
-    }, [items, searchParams]);
 
     const handleLetterClick = useCallback((letter: string) => {
         setActiveLetter(letter);
@@ -46,7 +31,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
         }
     }, []);
 
-    if (availableLetters.length <= 1) {
+    if (letters.length <= 1) {
         return null;
     }
 
@@ -65,7 +50,7 @@ export default function AlphaScrollbar({ items, onScrollToLetterAction }: AlphaS
                 className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 md:p-1 max-h-[60vh] overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100 transition-opacity"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
-                {availableLetters.map(letter => (
+                {letters.map(letter => (
                     <button
                         key={letter}
                         data-letter={letter}

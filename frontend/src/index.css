@@ -134,11 +134,11 @@
     }
 
     .file-row {
-        @apply transition-all duration-200 ease-in-out;
+        @apply transition-colors duration-150 ease-in-out;
     }
 
     .file-row:hover {
-        @apply transform scale-[1.005] shadow-md;
+        @apply shadow-md;
     }
 
     .animate-fadeIn {

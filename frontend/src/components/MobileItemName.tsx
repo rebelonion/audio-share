@@ -2,12 +2,13 @@ import {Folder, Music, Unlink} from "lucide-react";
 import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
+import React from "react";
 
 interface ItemNameProps {
     item: FileSystemItem;
 }
 
-export default function MobileItemName({ item }: ItemNameProps) {
+function MobileItemName({ item }: ItemNameProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
 
     return (
@@ -52,3 +53,5 @@ export default function MobileItemName({ item }: ItemNameProps) {
         </div>
     )
 }
+
+export default React.memo(MobileItemName);

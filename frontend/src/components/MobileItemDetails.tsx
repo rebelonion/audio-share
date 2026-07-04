@@ -12,7 +12,7 @@ interface MobileItemDetailsProps {
     onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
 }
 
-export default function MobileItemDetails({ item, notification, copyToClipboard, onMatureDownloadRequest }: MobileItemDetailsProps) {
+function MobileItemDetails({ item, notification, copyToClipboard, onMatureDownloadRequest }: MobileItemDetailsProps) {
     const {track} = useRybbit();
 
     const downloadUrl = item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}/download` : '#';
@@ -112,3 +112,5 @@ export default function MobileItemDetails({ item, notification, copyToClipboard,
         </div>
     );
 }
+
+export default React.memo(MobileItemDetails);

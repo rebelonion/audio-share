@@ -11,7 +11,7 @@ interface DesktopItemActionsProps {
     onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
 }
 
-export default function DesktopItemActions({ item, notification, copyToClipboard, onMatureDownloadRequest }: DesktopItemActionsProps) {
+function DesktopItemActions({ item, notification, copyToClipboard, onMatureDownloadRequest }: DesktopItemActionsProps) {
     const {track} = useRybbit();
 
     const downloadUrl = item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}/download` : '#';
@@ -96,3 +96,5 @@ export default function DesktopItemActions({ item, notification, copyToClipboard
         </td>
     )
 }
+
+export default React.memo(DesktopItemActions);

@@ -15,14 +15,14 @@ interface TableItemProps {
     onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
 }
 
-export default function TableItem({ item, showDurationColumn, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
+function TableItem({ item, showDurationColumn, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
     const nameColumnWidth = showDurationColumn ? '45%' : '55%';
     const sizeColumnWidth = showDurationColumn ? '17%' : '20%';
 
     return (
         <tr
-            className={`file-row hover:bg-[var(--card-hover)] ${
+            className={`file-row h-[65px] border-t border-[var(--border)] hover:bg-[var(--card-hover)] ${
                 item.type === 'audio' ? 'cursor-pointer' : ''
             } ${item.type === 'audio' && item.unavailableAt ? 'bg-amber-500/5 hover:bg-amber-500/10' : ''}`}
             title={item.type === 'audio' && item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
@@ -87,3 +87,5 @@ export default function TableItem({ item, showDurationColumn, handleAudioSelect,
         </tr>
     )
 }
+
+export default React.memo(TableItem);
