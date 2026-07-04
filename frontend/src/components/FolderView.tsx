@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Calendar, Check, Clock, SortAsc} from 'lucide-react';
 import {FileSystemItem, Notification} from '@/types';
-import AudioPlayer from './AudioPlayer';
 import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
 import MobileItemDetails from "@/components/MobileItemDetails";
@@ -13,6 +12,7 @@ import {reverseIf} from "@/lib/utils";
 import {useSearchParams} from "react-router";
 import {useRybbit} from "@/hooks/useRybbit";
 import {recordPlayEvent} from "@/lib/api";
+import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -22,10 +22,8 @@ type SortMethod = 'alpha' | 'modified' | 'size' | 'duration';
 
 export default function FolderView({items}: FolderViewProps) {
     const {track} = useRybbit();
+    const {selectTrack, setSurface} = useGlobalAudioPlayer();
     const [searchParams] = useSearchParams();
-    const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
-    const [selectedAudioKey, setSelectedAudioKey] = useState<string>('');
-    const [selectedAudioName, setSelectedAudioName] = useState<string>('');
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
@@ -202,9 +200,17 @@ export default function FolderView({items}: FolderViewProps) {
             setIsAudioSelectionLocked(true);
 
             const key = item.shareKey || '';
-            setSelectedAudio(key ? `/audio/key/${key}` : null);
-            setSelectedAudioKey(key);
-            setSelectedAudioName(item.name);
+            if (key) {
+                selectTrack({
+                    src: `/audio/key/${key}`,
+                    shareKey: key,
+                    name: item.title || item.name,
+                    unavailable: !!item.unavailableAt,
+                    source: 'browse',
+                    onFirstPlay: () => recordPlayEvent(key).catch(() => {}),
+                });
+                setSurface('floating');
+            }
             track('audio-player-open', { path: item.path, name: item.name });
             setTimeout(() => {
                 setIsAudioSelectionLocked(false);
@@ -326,15 +332,6 @@ export default function FolderView({items}: FolderViewProps) {
                 )}
                 <span>{notification.message || 'Link copied to clipboard!'}</span>
             </div>
-
-            {selectedAudio && createPortal(
-                <AudioPlayer
-                    src={selectedAudio}
-                    name={selectedAudioName}
-                    onPlay={() => recordPlayEvent(selectedAudioKey).catch(() => {})}
-                />,
-                document.body
-            )}
 
             {items.length === 0 ? (
                 <div className="text-center py-8 text-[var(--muted-foreground)]">

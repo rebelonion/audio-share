@@ -1,4 +1,4 @@
-import {useState, useRef, useCallback, useEffect} from 'react';
+import {useState, useRef, useCallback} from 'react';
 import {
     Play,
     Pause,
@@ -13,27 +13,18 @@ import {
     Expand,
     Loader2
 } from 'lucide-react';
-import {useAudioPlayer} from '@/hooks/useAudioPlayer';
 import WaveformDisplay from '@/components/WaveformDisplay';
 import MatureContentDialog from '@/components/MatureContentDialog';
+import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 
-interface AudioPlayerProps {
-    src: string;
-    name?: string;
-    onPlay?: () => void;
-}
-
-export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
+export default function AudioPlayer() {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [showMatureDialog, setShowMatureDialog] = useState(false);
-    const hasTracked = useRef(false);
-
-    useEffect(() => {
-        hasTracked.current = false;
-    }, [src]);
+    const progressRef = useRef<HTMLDivElement>(null);
 
     const {
+        currentTrack,
         isPlaying,
         duration,
         currentTime,
@@ -47,24 +38,19 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
         artist,
         track,
         waveformPeaks,
-        progressRef,
         togglePlay,
         toggleMute,
         handleVolumeChange,
         handleProgressClick,
         formatTime
-    } = useAudioPlayer(src);
+    } = useGlobalAudioPlayer();
 
     const isMature = !!metadata?.isMature;
     const canShowMatureDetails = !isMature || !!metadata?.showMature;
 
     const continuePlay = useCallback(() => {
-        if (!isPlaying && onPlay && !hasTracked.current) {
-            hasTracked.current = true;
-            onPlay();
-        }
         togglePlay();
-    }, [isPlaying, onPlay, togglePlay]);
+    }, [togglePlay]);
 
     const handlePlay = useCallback(() => {
         if (!isPlaying && isMature && !metadata?.showMature && sessionStorage.getItem('mature-warning-ack') !== 'true') {
@@ -87,6 +73,10 @@ export default function AudioPlayer({src, onPlay}: AudioPlayerProps) {
     const toggleDescriptionExpand = () => {
         setIsDescriptionExpanded(!isDescriptionExpanded);
     };
+
+    if (!currentTrack) {
+        return null;
+    }
 
     return (
         <>

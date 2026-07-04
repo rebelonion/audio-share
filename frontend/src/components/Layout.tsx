@@ -5,9 +5,21 @@ import { Music, Menu, X } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
+import AudioPlayer from './AudioPlayer'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
+import { AudioPlayerProvider, useGlobalAudioPlayer } from '@/contexts/AudioPlayerContext'
 // import { useMatureContentPreference } from '@/hooks/useMatureContentPreference'
 // import { useRybbit } from '@/hooks/useRybbit'
+
+function FloatingAudioPlayerSlot() {
+  const { currentTrack, surface } = useGlobalAudioPlayer()
+
+  if (!currentTrack || surface !== 'floating') {
+    return null
+  }
+
+  return <AudioPlayer />
+}
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -21,7 +33,7 @@ export default function Layout() {
   // }
 
   return (
-    <>
+    <AudioPlayerProvider>
       <Helmet>
         <title>{DEFAULT_TITLE}</title>
         <link rel="icon" href="/favicon.svg" />
@@ -106,6 +118,7 @@ export default function Layout() {
         </main>
 
         <FloatingActionButton />
+        <FloatingAudioPlayerSlot />
 
         <footer className="bg-[var(--card)] border-t border-[var(--border)] mt-auto">
           <div className="h-[1px] bg-[var(--primary)]" style={{ opacity: 0.4 }} />
@@ -173,6 +186,6 @@ export default function Layout() {
           </div>
         </footer>
       </div>
-    </>
+    </AudioPlayerProvider>
   )
 }

@@ -9,10 +9,10 @@ import {
     Calendar,
     Loader2
 } from 'lucide-react';
-import {useRef, useEffect, useState} from 'react';
-import {useAudioPlayer} from '@/hooks/useAudioPlayer';
+import {useEffect, useRef, useState} from 'react';
 import WaveformDisplay from '@/components/WaveformDisplay';
 import MatureContentDialog from '@/components/MatureContentDialog';
+import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 
 interface SharePagePlayerProps {
     src: string;
@@ -22,7 +22,10 @@ interface SharePagePlayerProps {
 
 export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePlayerProps) {
     const [showMatureDialog, setShowMatureDialog] = useState(false);
+    const progressRef = useRef<HTMLDivElement>(null);
     const {
+        selectTrack,
+        setSurface,
         isPlaying,
         duration,
         currentTime,
@@ -36,24 +39,25 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
         artist,
         track,
         waveformPeaks,
-        progressRef,
         togglePlay,
         toggleMute,
         handleVolumeChange,
         handleProgressClick,
         formatTime
-    } = useAudioPlayer(src);
+    } = useGlobalAudioPlayer();
 
-    const hasTracked = useRef(false);
-    useEffect(() => { hasTracked.current = false; }, [src]);
+    useEffect(() => {
+        selectTrack({src, unavailable, source: 'share', onFirstPlay: onPlay});
+        setSurface('inline');
+
+        return () => {
+            setSurface('floating');
+        };
+    }, [onPlay, selectTrack, setSurface, src, unavailable]);
 
     const isMature = !!metadata?.isMature;
     const canShowMatureDetails = !isMature || !!metadata?.showMature;
     const continuePlay = () => {
-        if (!isPlaying && onPlay && !hasTracked.current) {
-            hasTracked.current = true;
-            onPlay();
-        }
         togglePlay();
     };
     const handlePlay = () => {
