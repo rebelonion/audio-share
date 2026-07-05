@@ -16,6 +16,7 @@ import {
 import WaveformDisplay from '@/components/WaveformDisplay';
 import MatureContentDialog from '@/components/MatureContentDialog';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
+import {useAudioPlayerKeybinds} from '@/hooks/useAudioPlayerKeybinds';
 
 export default function AudioPlayer() {
     const [isMinimized, setIsMinimized] = useState(false);
@@ -59,6 +60,8 @@ export default function AudioPlayer() {
         }
         continuePlay();
     }, [continuePlay, isPlaying, isMature, metadata?.showMature]);
+
+    useAudioPlayerKeybinds({onTogglePlay: handlePlay});
 
     const confirmMaturePlayback = useCallback(() => {
         sessionStorage.setItem('mature-warning-ack', 'true');

@@ -57,6 +57,9 @@ interface AudioPlayerContextValue {
     setSurface: (surface: PlayerSurface) => void;
     togglePlay: () => void;
     toggleMute: () => void;
+    seekBy: (seconds: number) => void;
+    seekTo: (seconds: number) => void;
+    adjustVolume: (delta: number) => void;
     handleVolumeChange: (event: ChangeEvent<HTMLInputElement>) => void;
     handleProgressClick: (event: MouseEvent<HTMLDivElement>) => void;
     formatTime: (time: number) => string;
@@ -321,6 +324,14 @@ export function AudioPlayerProvider({children}: { children: ReactNode }) {
             if (audioRef.current !== newAudio) return;
             setCurrentTime(newAudio.currentTime);
         });
+        newAudio.addEventListener('play', () => {
+            if (audioRef.current !== newAudio) return;
+            setIsPlaying(true);
+        });
+        newAudio.addEventListener('pause', () => {
+            if (audioRef.current !== newAudio) return;
+            setIsPlaying(false);
+        });
         newAudio.addEventListener('loadedmetadata', () => {
             if (audioRef.current !== newAudio) return;
             setDuration(newAudio.duration);
@@ -373,31 +384,51 @@ export function AudioPlayerProvider({children}: { children: ReactNode }) {
         trackEvent('audio-mute', {muted: nextMuted});
     }, [isMuted, trackEvent]);
 
-    const handleVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-        const newVolume = parseFloat(event.target.value);
-        const nextMuted = newVolume === 0 ? true : false;
+    const setPlayerVolume = useCallback((newVolume: number) => {
+        const clampedVolume = Math.min(1, Math.max(0, newVolume));
+        const nextMuted = clampedVolume === 0;
 
-        setVolume(newVolume);
+        setVolume(clampedVolume);
         setIsMuted(nextMuted);
         if (audioRef.current) {
-            audioRef.current.volume = newVolume;
+            audioRef.current.volume = clampedVolume;
             audioRef.current.muted = nextMuted;
         }
     }, []);
 
-    const handleProgressClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    const handleVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+        setPlayerVolume(parseFloat(event.target.value));
+    }, [setPlayerVolume]);
+
+    const seekTo = useCallback((seconds: number) => {
         const audio = audioRef.current;
         if (!audio) return;
 
+        const activeDuration = duration || metadata?.duration || audio.duration || 0;
+        if (!activeDuration) return;
+
+        const seekTime = Math.min(activeDuration, Math.max(0, seconds));
+        audio.currentTime = seekTime;
+        setCurrentTime(seekTime);
+    }, [duration, metadata?.duration]);
+
+    const seekBy = useCallback((seconds: number) => {
+        seekTo(currentTime + seconds);
+    }, [currentTime, seekTo]);
+
+    const adjustVolume = useCallback((delta: number) => {
+        setPlayerVolume(volume + delta);
+    }, [setPlayerVolume, volume]);
+
+    const handleProgressClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const ratio = (event.clientX - bounds.left) / bounds.width;
         const seekTime = ratio * (duration || 0);
 
         if (seekTime >= 0 && seekTime <= duration) {
-            audio.currentTime = seekTime;
-            setCurrentTime(seekTime);
+            seekTo(seekTime);
         }
-    }, [duration]);
+    }, [duration, seekTo]);
 
     const formatTime = useCallback((time: number) => {
         let displayTime = time;
@@ -433,6 +464,9 @@ export function AudioPlayerProvider({children}: { children: ReactNode }) {
         setSurface,
         togglePlay,
         toggleMute,
+        seekBy,
+        seekTo,
+        adjustVolume,
         handleVolumeChange,
         handleProgressClick,
         formatTime,
@@ -456,6 +490,9 @@ export function AudioPlayerProvider({children}: { children: ReactNode }) {
         closePlayer,
         togglePlay,
         toggleMute,
+        seekBy,
+        seekTo,
+        adjustVolume,
         handleVolumeChange,
         handleProgressClick,
         formatTime,

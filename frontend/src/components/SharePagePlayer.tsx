@@ -9,10 +9,11 @@ import {
     Calendar,
     Loader2
 } from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import WaveformDisplay from '@/components/WaveformDisplay';
 import MatureContentDialog from '@/components/MatureContentDialog';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
+import {useAudioPlayerKeybinds} from '@/hooks/useAudioPlayerKeybinds';
 
 interface SharePagePlayerProps {
     src: string;
@@ -57,21 +58,23 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
 
     const isMature = !!metadata?.isMature;
     const canShowMatureDetails = !isMature || !!metadata?.showMature;
-    const continuePlay = () => {
+    const continuePlay = useCallback(() => {
         togglePlay();
-    };
-    const handlePlay = () => {
+    }, [togglePlay]);
+    const handlePlay = useCallback(() => {
         if (!isPlaying && isMature && !metadata?.showMature && sessionStorage.getItem('mature-warning-ack') !== 'true') {
             setShowMatureDialog(true);
             return;
         }
         continuePlay();
-    };
-    const confirmMaturePlayback = () => {
+    }, [continuePlay, isPlaying, isMature, metadata?.showMature]);
+    useAudioPlayerKeybinds({onTogglePlay: handlePlay});
+
+    const confirmMaturePlayback = useCallback(() => {
         sessionStorage.setItem('mature-warning-ack', 'true');
         setShowMatureDialog(false);
         continuePlay();
-    };
+    }, [continuePlay]);
 
     return (
         <>
