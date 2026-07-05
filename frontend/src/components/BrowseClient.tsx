@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { fetchDirectoryContents, FileSystemItem } from '@/lib/api';
+import {
+    cacheDirectory,
+    getCachedDirectory,
+} from '@/lib/browseState';
 import FolderView from './FolderView';
 import Breadcrumb from './Breadcrumb';
 
@@ -37,13 +41,47 @@ function BrowseSkeleton() {
 
 export default function BrowseClient({ initialPath = '', showTitle = false }: BrowseClientProps) {
     const navigate = useNavigate();
-    const [items, setItems] = useState<FileSystemItem[]>([]);
-    const [currentPath, setCurrentPath] = useState(initialPath);
-    const [loading, setLoading] = useState(true);
+    const initialDirectory = getCachedDirectory(initialPath);
+    const [items, setItems] = useState<FileSystemItem[]>(initialDirectory?.items ?? []);
+    const [currentPath, setCurrentPath] = useState(initialDirectory?.currentPath ?? initialPath);
+    const [loading, setLoading] = useState(!initialDirectory);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        const previousScrollRestoration = window.history.scrollRestoration;
+        window.history.scrollRestoration = 'manual';
+
+        return () => {
+            window.history.scrollRestoration = previousScrollRestoration;
+        };
+    }, []);
+
+    useLayoutEffect(() => {
+        window.scrollTo({top: 0, behavior: 'auto'});
+    }, [initialPath]);
+
+    useEffect(() => {
         let mounted = true;
+
+        const cachedDirectory = getCachedDirectory(initialPath);
+        if (cachedDirectory) {
+            setItems(cachedDirectory.items);
+            setCurrentPath(cachedDirectory.currentPath);
+            setLoading(false);
+            setError(null);
+
+            if (cachedDirectory.currentPath && cachedDirectory.currentPath !== initialPath) {
+                const encodedPath = cachedDirectory.currentPath
+                    .split('/')
+                    .map(segment => encodeURIComponent(segment))
+                    .join('/');
+                navigate(`/browse/${encodedPath}`, {replace: true});
+            }
+
+            return () => {
+                mounted = false;
+            };
+        }
 
         async function loadDirectory() {
             setLoading(true);
@@ -51,6 +89,8 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
 
             try {
                 const data = await fetchDirectoryContents(initialPath);
+                cacheDirectory(initialPath, data);
+
                 if (mounted) {
                     setItems(data.items);
                     setCurrentPath(data.currentPath);
@@ -79,7 +119,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
         return () => {
             mounted = false;
         };
-    }, [initialPath]);
+    }, [initialPath, navigate]);
 
     if (loading) {
         return (
