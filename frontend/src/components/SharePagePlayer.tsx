@@ -24,8 +24,10 @@ interface SharePagePlayerProps {
 export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePlayerProps) {
     const [showMatureDialog, setShowMatureDialog] = useState(false);
     const progressRef = useRef<HTMLDivElement>(null);
+    const isPlayingRef = useRef(false);
     const {
         selectTrack,
+        closePlayer,
         setSurface,
         isPlaying,
         duration,
@@ -48,13 +50,22 @@ export default function SharePagePlayer({src, onPlay, unavailable}: SharePagePla
     } = useGlobalAudioPlayer();
 
     useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
+
+    useEffect(() => {
         selectTrack({src, unavailable, source: 'share', onFirstPlay: onPlay});
         setSurface('inline');
 
         return () => {
-            setSurface('floating');
+            if (isPlayingRef.current) {
+                setSurface('floating');
+                return;
+            }
+
+            closePlayer();
         };
-    }, [onPlay, selectTrack, setSurface, src, unavailable]);
+    }, [closePlayer, onPlay, selectTrack, setSurface, src, unavailable]);
 
     const isMature = !!metadata?.isMature;
     const canShowMatureDetails = !isMature || !!metadata?.showMature;
