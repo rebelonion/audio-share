@@ -198,6 +198,21 @@ export async function searchAudio(query: string, limit?: number, offset?: number
     return response.json();
 }
 
+export async function getRandomAudioFromSearch(query: string, filters: SearchFilters = {}): Promise<string | null> {
+    if (filters.type === 'folder') return null;
+
+    const audioFilters: SearchFilters = { ...filters, type: 'audio' };
+    const firstMatch = await searchAudio(query, 1, 0, audioFilters);
+    if (firstMatch.total === 0) return null;
+
+    const randomOffset = Math.floor(Math.random() * firstMatch.total);
+    const match = randomOffset === 0
+        ? firstMatch.results[0]
+        : (await searchAudio(query, 1, randomOffset, audioFilters)).results[0];
+
+    return match?.shareKey || null;
+}
+
 export async function fetchRequests(): Promise<RequestsByStatus> {
     const response = await fetch(`${API_BASE}/api/requests`);
     if (!response.ok) {

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
-import { searchAudio, getRandomAudio, fetchDirectoryContents, SearchResult, SearchFilters, SearchField, isMatureAge } from '@/lib/api';
+import { searchAudio, getRandomAudio, getRandomAudioFromSearch, fetchDirectoryContents, SearchResult, SearchFilters, SearchField, isMatureAge } from '@/lib/api';
 import type { Folder as RootFolder } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
@@ -180,8 +180,11 @@ export default function Search() {
     const handleLucky = async () => {
         setIsLucky(true);
         try {
-            const shareKey = await getRandomAudio();
-            track('feeling-lucky');
+            const searchShareKey = query.length >= 2
+                ? await getRandomAudioFromSearch(query, filters)
+                : null;
+            const shareKey = searchShareKey ?? await getRandomAudio();
+            track('feeling-lucky', { query: query || undefined, matchedSearch: !!searchShareKey });
             navigate(`/share/${shareKey}`);
         } catch (error) {
             console.error('Failed to get random audio:', error);
