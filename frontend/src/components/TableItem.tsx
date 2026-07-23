@@ -17,7 +17,7 @@ interface TableItemProps {
 
 function TableItem({ item, showDurationColumn, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
-    const nameColumnWidth = showDurationColumn ? '45%' : '55%';
+    const nameColumnWidth = showDurationColumn ? '35%' : '45%';
     const sizeColumnWidth = showDurationColumn ? '17%' : '20%';
 
     return (

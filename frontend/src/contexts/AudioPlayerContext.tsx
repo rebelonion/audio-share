@@ -6,39 +6,60 @@ import {
     useMemo,
     useRef,
     useState,
-    type ChangeEvent,
-    type MouseEvent,
     type ReactNode,
 } from 'react';
-import {API_BASE} from '@/lib/api';
-import {useRybbit} from '@/hooks/useRybbit';
-
-interface MetadataType {
-    title: string;
-    artist: string;
-    uploadDate?: string;
-    webpageUrl?: string;
-    duration?: number;
-    description?: string;
-    ageLimit?: number;
-    isMature?: boolean;
-    showMature?: boolean;
-}
+import MatureContentDialog from '@/components/MatureContentDialog';
+import {getRecommendations, type TrackSummary} from '@/lib/api';
+import {registerMediaSessionActions} from '@/lib/mediaSession';
+import {
+    needsMaturePlaybackConfirmation,
+    shouldWaitForMaturePlaybackMetadata,
+} from '@/lib/maturePlayback';
+import {
+    advance,
+    clearUpcoming,
+    enqueue,
+    makePlayerTrack,
+    nextPlaybackStep,
+    nextPlaybackStepForCurrent,
+    queueForPersistence,
+    removeQueued,
+    retreat,
+    startContext,
+    startSingleton,
+    type PlayerTrack,
+    type QueueState,
+    type TrackSource,
+} from '@/lib/playerQueue';
+import {removeLocalStorage, writeLocalStorage} from '@/lib/storage';
+import {
+    POSITION_STORAGE_KEY,
+    useAudioEngine,
+} from '@/hooks/useAudioEngine';
+import {
+    QUEUE_STORAGE_KEY,
+    usePersistentPlayerQueue,
+} from '@/hooks/usePersistentPlayerQueue';
+import {
+    usePlayerMetadata,
+    type PlayerMetadata,
+} from '@/hooks/usePlayerMetadata';
 
 export interface AudioPlayerTrack {
+    id?: string;
     src: string;
     shareKey?: string;
     name?: string;
-    unavailable?: boolean;
-    source?: 'browse' | 'share';
-    onFirstPlay?: () => void;
+    artist?: string;
+    deleted?: boolean;
+    ageLimit?: number;
+    source?: TrackSource;
 }
 
-type PlayerSurface = 'floating' | 'inline';
+type QueueActionResult = 'ignored' | 'ready' | 'queued' | 'playing';
 
 interface AudioPlayerContextValue {
-    currentTrack: AudioPlayerTrack | null;
-    surface: PlayerSurface;
+    currentTrack: PlayerTrack | null;
     isPlaying: boolean;
     duration: number;
     currentTime: number;
@@ -46,406 +67,360 @@ interface AudioPlayerContextValue {
     isMuted: boolean;
     error: string | null;
     thumbnail: string | null;
-    metadata: MetadataType | null;
+    metadata: PlayerMetadata | null;
     audioLoaded: boolean;
     isLoading: boolean;
     artist: string;
     track: string;
     waveformPeaks: Uint8Array | null;
-    selectTrack: (track: AudioPlayerTrack) => void;
+    upcoming: PlayerTrack[];
+    contextLabel: string | null;
+    autoplay: boolean;
+    playTrack: (track: AudioPlayerTrack) => void;
+    playContext: (tracks: AudioPlayerTrack[], selectedIndex: number, label: string) => void;
+    addToQueue: (track: AudioPlayerTrack) => QueueActionResult;
+    playNext: (track: AudioPlayerTrack) => QueueActionResult;
+    removeFromQueue: (id: string) => void;
+    clearQueue: () => void;
+    skipNext: () => void;
+    skipPrevious: () => void;
     closePlayer: () => void;
-    setSurface: (surface: PlayerSurface) => void;
+    toggleAutoplay: () => void;
     togglePlay: () => void;
     toggleMute: () => void;
     seekBy: (seconds: number) => void;
     seekTo: (seconds: number) => void;
     adjustVolume: (delta: number) => void;
-    handleVolumeChange: (event: ChangeEvent<HTMLInputElement>) => void;
-    handleProgressClick: (event: MouseEvent<HTMLDivElement>) => void;
-    formatTime: (time: number) => string;
+    setVolume: (volume: number) => void;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
+type AudioPlayerCommandsContextValue = Pick<
+    AudioPlayerContextValue,
+    'playTrack' | 'playContext' | 'addToQueue' | 'playNext'
+>;
+const AudioPlayerCommandsContext = createContext<AudioPlayerCommandsContextValue | null>(null);
 
 function getKey(src: string): string {
     return src.replace(/^\/audio\/key\//, '');
 }
 
-function getDisplayName(src: string, name?: string): { artist: string; track: string } {
-    return {artist: '', track: name || getKey(src)};
+function normalizeTrack(track: AudioPlayerTrack): PlayerTrack {
+    const shareKey = track.shareKey || getKey(track.src);
+    return makePlayerTrack({
+        id: track.id,
+        src: track.src,
+        shareKey,
+        name: track.name || shareKey,
+        artist: track.artist,
+        deleted: track.deleted,
+        ageLimit: track.ageLimit,
+        source: track.source || 'manual',
+    });
 }
 
-export function AudioPlayerProvider({children}: { children: ReactNode }) {
-    const {track: trackEvent} = useRybbit();
-    const [currentTrack, setCurrentTrack] = useState<AudioPlayerTrack | null>(null);
-    const [surface, setSurface] = useState<PlayerSurface>('floating');
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [volume, setVolume] = useState(1);
-    const [isMuted, setIsMuted] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [thumbnail, setThumbnail] = useState<string | null>(null);
-    const [metadata, setMetadata] = useState<MetadataType | null>(null);
-    const [audioLoaded, setAudioLoaded] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [waveformPeaks, setWaveformPeaks] = useState<Uint8Array | null>(null);
-    const [maturePreferenceVersion, setMaturePreferenceVersion] = useState(0);
+function recommendationToTrack(track: TrackSummary): PlayerTrack {
+    return makePlayerTrack({
+        src: `/audio/key/${track.shareKey}`,
+        shareKey: track.shareKey,
+        name: track.title || track.filename,
+        artist: track.artist || track.parentFolderName || undefined,
+        ageLimit: track.ageLimit,
+        source: 'autoplay',
+    });
+}
 
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const currentTrackRef = useRef<AudioPlayerTrack | null>(null);
-    const recordedPlaySrcRef = useRef<string | null>(null);
+function maturePlaybackAcknowledged(): boolean {
+    return sessionStorage.getItem('mature-warning-ack') === 'true';
+}
+
+export function AudioPlayerProvider({children}: {children: ReactNode}) {
+    const {queue, queueRef, updateQueue} = usePersistentPlayerQueue();
+    const currentTrack = queue.current;
+    const currentTrackRef = useRef(currentTrack);
+    currentTrackRef.current = currentTrack;
+
+    const {
+        metadata,
+        thumbnail,
+        waveformPeaks,
+        waveformDuration,
+    } = usePlayerMetadata(currentTrack);
+    const metadataRef = useRef(metadata);
+    metadataRef.current = metadata;
+
+    const advancePlaybackRef = useRef<() => void>(() => {});
+    const {
+        audioRef,
+        isPlaying,
+        duration,
+        currentTime,
+        volume,
+        isMuted,
+        error,
+        audioLoaded,
+        isLoading,
+        play,
+        pause,
+        resetForTrack,
+        toggleMute,
+        setPlayerVolume,
+        seekBy,
+        seekTo,
+        adjustVolume,
+        reportError,
+    } = useAudioEngine({
+        currentTrackRef,
+        metadataRef,
+        onEndedRef: advancePlaybackRef,
+        waveformDuration,
+    });
+
+    const [showMatureDialog, setShowMatureDialog] = useState(false);
+    const pendingPlayRef = useRef(false);
+    const pendingMatureMetadataPlayRef = useRef<string | null>(null);
+    const requestPlayCurrentRef = useRef<() => void>(() => {});
+    const pauseCurrentRef = useRef<() => void>(() => {});
+    const seekToRef = useRef(seekTo);
+    const recommendationControllerRef = useRef<AbortController | null>(null);
+    seekToRef.current = seekTo;
+
+    const upcoming = useMemo(() => [...queue.manual, ...queue.context], [queue.context, queue.manual]);
 
     useEffect(() => {
-        currentTrackRef.current = currentTrack;
-    }, [currentTrack]);
+        const persistLatestQueue = () => {
+            writeLocalStorage(QUEUE_STORAGE_KEY, JSON.stringify(queueForPersistence(queueRef.current)));
+            const active = queueRef.current.current;
+            const audio = audioRef.current;
+            if (active && audio) {
+                writeLocalStorage(POSITION_STORAGE_KEY, JSON.stringify({
+                    shareKey: active.shareKey,
+                    time: audio.currentTime,
+                }));
+            }
+        };
+        window.addEventListener('pagehide', persistLatestQueue);
+        return () => window.removeEventListener('pagehide', persistLatestQueue);
+    }, [audioRef, queueRef]);
 
-    const resetPlaybackState = useCallback(() => {
-        setIsPlaying(false);
-        setCurrentTime(0);
-        setDuration(0);
-        setAudioLoaded(false);
-        setError(null);
-        setIsLoading(false);
-    }, []);
+    useEffect(() => () => recommendationControllerRef.current?.abort(), []);
 
-    const destroyAudio = useCallback(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        audio.pause();
-        audio.src = '';
-        audio.load();
-        audioRef.current = null;
-    }, []);
-
-    const selectTrack = useCallback((track: AudioPlayerTrack) => {
-        const existing = currentTrackRef.current;
-        if (existing?.src === track.src) {
-            const nextTrack = {...existing, ...track};
-            currentTrackRef.current = nextTrack;
-            setCurrentTrack(nextTrack);
-            return;
+    const transitionQueue = useCallback((next: QueueState, shouldPlay = false) => {
+        if (queueRef.current.current?.id !== next.current?.id) {
+            recommendationControllerRef.current?.abort();
+            setShowMatureDialog(false);
+            pendingMatureMetadataPlayRef.current = null;
+            resetForTrack();
         }
+        updateQueue(next);
+        pendingPlayRef.current = shouldPlay && !!next.current;
+    }, [queueRef, resetForTrack, updateQueue]);
 
-        destroyAudio();
-        resetPlaybackState();
-        setThumbnail(null);
-        setMetadata(null);
-        setWaveformPeaks(null);
-        recordedPlaySrcRef.current = null;
-        currentTrackRef.current = track;
-        setCurrentTrack(track);
-    }, [destroyAudio, resetPlaybackState]);
+    const playTrack = useCallback((track: AudioPlayerTrack) => {
+        if (track.deleted) return;
+        transitionQueue(startSingleton(queueRef.current, normalizeTrack(track)), true);
+    }, [queueRef, transitionQueue]);
+
+    const playContext = useCallback((tracks: AudioPlayerTrack[], selectedIndex: number, label: string) => {
+        const playable = tracks.flatMap((track, index) => (
+            track.deleted ? [] : [{track: normalizeTrack(track), selected: index === selectedIndex}]
+        ));
+        if (playable.length === 0) return;
+        const playableIndex = playable.findIndex(item => item.selected);
+        transitionQueue(
+            startContext(
+                queueRef.current,
+                playable.map(item => item.track),
+                Math.max(0, playableIndex),
+                label,
+            ),
+            true,
+        );
+    }, [queueRef, transitionQueue]);
+
+    const addToQueue = useCallback((track: AudioPlayerTrack): QueueActionResult => {
+        if (track.deleted) return 'ignored';
+        const normalized = normalizeTrack({...track, source: 'manual'});
+        if (!queueRef.current.current) {
+            transitionQueue(startSingleton(queueRef.current, normalized));
+            return 'ready';
+        }
+        transitionQueue(enqueue(queueRef.current, normalized));
+        return 'queued';
+    }, [queueRef, transitionQueue]);
+
+    const playNext = useCallback((track: AudioPlayerTrack): QueueActionResult => {
+        if (track.deleted) return 'ignored';
+        const normalized = normalizeTrack({...track, source: 'manual'});
+        if (!queueRef.current.current || audioRef.current?.ended) {
+            transitionQueue(startSingleton(queueRef.current, normalized), true);
+            return needsMaturePlaybackConfirmation(normalized, null, maturePlaybackAcknowledged())
+                ? 'ready'
+                : 'playing';
+        }
+        transitionQueue(enqueue(queueRef.current, normalized, true));
+        return 'queued';
+    }, [audioRef, queueRef, transitionQueue]);
+
+    const removeFromQueue = useCallback((id: string) => {
+        transitionQueue(removeQueued(queueRef.current, id));
+    }, [queueRef, transitionQueue]);
+
+    const clearQueue = useCallback(() => {
+        transitionQueue(clearUpcoming(queueRef.current));
+    }, [queueRef, transitionQueue]);
 
     const closePlayer = useCallback(() => {
-        destroyAudio();
-        resetPlaybackState();
-        currentTrackRef.current = null;
-        setCurrentTrack(null);
-        setThumbnail(null);
-        setMetadata(null);
-        setWaveformPeaks(null);
-        setSurface('floating');
-        recordedPlaySrcRef.current = null;
-    }, [destroyAudio, resetPlaybackState]);
+        recommendationControllerRef.current?.abort();
+        setShowMatureDialog(false);
+        resetForTrack();
+        updateQueue({
+            ...queueRef.current,
+            current: null,
+            history: [],
+            context: [],
+            manual: [],
+            contextLabel: null,
+        });
+        pendingPlayRef.current = false;
+        pendingMatureMetadataPlayRef.current = null;
+        removeLocalStorage(POSITION_STORAGE_KEY);
+    }, [queueRef, resetForTrack, updateQueue]);
 
-    useEffect(() => {
-        const listener = () => setMaturePreferenceVersion((version) => version + 1);
-        window.addEventListener('audio-share:mature-preference', listener);
-        return () => window.removeEventListener('audio-share:mature-preference', listener);
-    }, []);
-
-    useEffect(() => {
-        const src = currentTrack?.src;
-        if (!src) return;
-
-        const controller = new AbortController();
-        const signal = controller.signal;
-        const key = getKey(src);
-
-        setThumbnail(null);
-        setMetadata(null);
-        setWaveformPeaks(null);
-        setDuration(0);
-
-        fetch(`${API_BASE}/api/audio/key/${key}/waveform`, {signal})
-            .then(response => response.status === 200 ? response.json() : null)
-            .then(data => {
-                if (signal.aborted) return;
-                if (data?.peaks) {
-                    setWaveformPeaks(Uint8Array.from(atob(data.peaks), c => c.charCodeAt(0)));
-                }
-                if (data?.duration) {
-                    setDuration(data.duration);
-                }
-            })
-            .catch(() => {});
-
-        fetch(`${API_BASE}/api/audio/key/${key}/meta`, {signal, credentials: 'include'})
-            .then(response => response.ok ? response.json() : null)
-            .then(data => {
-                if (signal.aborted) return null;
-
-                const loadedMetadata: MetadataType | null = data ? {
-                    title: data.title || '',
-                    artist: data.artist || '',
-                    uploadDate: data.uploadDate || '',
-                    webpageUrl: data.webpageUrl || '',
-                    description: data.description || '',
-                    ageLimit: data.ageLimit,
-                    isMature: !!data.isMature,
-                    showMature: !!data.showMature,
-                } : {
-                    title: currentTrack.name || key,
-                    artist: '',
-                };
-
-                setMetadata(loadedMetadata);
-                return loadedMetadata;
-            })
-            .then((loadedMetadata) => {
-                if (signal.aborted || !loadedMetadata) return;
-
-                const view = loadedMetadata.isMature && !loadedMetadata.showMature ? 'blurred' : 'original';
-                const apiThumbUrl = `${API_BASE}/api/audio/key/${key}/thumbnail?view=${view}`;
-                return fetch(apiThumbUrl, {
-                    method: 'HEAD',
-                    credentials: 'include',
-                    signal,
-                }).then(response => {
-                    if (!signal.aborted && response.ok) {
-                        setThumbnail(apiThumbUrl);
-                    } else if (!signal.aborted) {
-                        setThumbnail(null);
-                    }
-                }).catch(error => {
-                    if (!signal.aborted && error.name !== 'AbortError') {
-                        setThumbnail(null);
-                    }
-                });
-            })
-            .catch(error => {
-                if (!signal.aborted && error.name !== 'AbortError') {
-                    const fallbackMetadata = {
-                        title: currentTrack.name || key,
-                        artist: '',
-                    };
-                    setMetadata(fallbackMetadata);
-                    setThumbnail(null);
-                }
-            });
-
-        return () => controller.abort();
-    }, [currentTrack?.src, currentTrack?.name, maturePreferenceVersion]);
+    const requestPlayCurrent = useCallback(() => {
+        recommendationControllerRef.current?.abort();
+        const selectedTrack = queueRef.current.current;
+        if (shouldWaitForMaturePlaybackMetadata(
+            selectedTrack,
+            metadataRef.current,
+            maturePlaybackAcknowledged(),
+        )) {
+            pendingMatureMetadataPlayRef.current = selectedTrack?.id || null;
+            return;
+        }
+        pendingMatureMetadataPlayRef.current = null;
+        if (needsMaturePlaybackConfirmation(
+            selectedTrack,
+            metadataRef.current,
+            maturePlaybackAcknowledged(),
+        )) {
+            setShowMatureDialog(true);
+            return;
+        }
+        play();
+    }, [play, queueRef]);
 
     const togglePlay = useCallback(() => {
-        const selectedTrack = currentTrackRef.current;
-        if (!selectedTrack) return;
-
-        const existingAudio = audioRef.current;
-        if (isPlaying && existingAudio) {
-            existingAudio.pause();
-            setIsPlaying(false);
-            trackEvent('audio-pause');
+        const audio = audioRef.current;
+        if (audio && !audio.paused) {
+            pause();
             return;
         }
+        requestPlayCurrent();
+    }, [audioRef, pause, requestPlayCurrent]);
 
-        const playAudio = (audio: HTMLAudioElement) => {
-            setIsLoading(true);
-            const playPromise = audio.play();
-            if (playPromise === undefined) {
-                setIsPlaying(true);
-                setIsLoading(false);
-                setError(null);
+    requestPlayCurrentRef.current = requestPlayCurrent;
+    pauseCurrentRef.current = pause;
+
+    useEffect(() => {
+        if (!pendingPlayRef.current || !currentTrack) return;
+        pendingPlayRef.current = false;
+        requestPlayCurrentRef.current();
+    }, [currentTrack]);
+
+    useEffect(() => {
+        if (
+            metadata
+            && currentTrack
+            && pendingMatureMetadataPlayRef.current === currentTrack.id
+        ) {
+            requestPlayCurrentRef.current();
+        }
+    }, [currentTrack, metadata]);
+
+    const advancePlayback = useCallback(async () => {
+        recommendationControllerRef.current?.abort();
+        const state = queueRef.current;
+        const step = nextPlaybackStep(state);
+        if (step.type === 'advance') {
+            transitionQueue(step.state, true);
+            return;
+        }
+        if (step.type === 'stop' || !state.current) return;
+
+        const controller = new AbortController();
+        recommendationControllerRef.current = controller;
+        try {
+            const recommendations = await getRecommendations(state.current.shareKey, controller.signal);
+            if (controller.signal.aborted) return;
+            const latest = queueRef.current;
+            const latestStep = nextPlaybackStepForCurrent(latest, state.current.id);
+            if (!latestStep) return;
+            if (latestStep.type === 'advance') {
+                transitionQueue(latestStep.state, true);
                 return;
             }
+            if (latestStep.type !== 'recommend') return;
 
-            playPromise
-                .then(() => {
-                    const latestTrack = currentTrackRef.current;
-                    if (audioRef.current !== audio || latestTrack?.src !== selectedTrack.src) {
-                        return;
-                    }
-                    setIsPlaying(true);
-                    setIsLoading(false);
-                    setError(null);
-                    if (latestTrack && recordedPlaySrcRef.current !== latestTrack.src) {
-                        recordedPlaySrcRef.current = latestTrack.src;
-                        latestTrack.onFirstPlay?.();
-                    }
-                    trackEvent('audio-play', {title: metadata?.title || selectedTrack.src});
-                })
-                .catch(async (err) => {
-                    if (audioRef.current !== audio || currentTrackRef.current?.src !== selectedTrack.src) {
-                        return;
-                    }
-                    setIsPlaying(false);
-                    setAudioLoaded(false);
-                    setIsLoading(false);
-
-                    if (err.name === 'NotAllowedError') {
-                        setError('Playback was blocked by browser policy. Try interacting with the page first.');
-                    } else if (err.name === 'NotSupportedError') {
-                        setError('This audio format is not supported by your browser.');
-                    } else {
-                        try {
-                            const response = await fetch(selectedTrack.src.replace(/^\/audio\/key\//, `${API_BASE}/api/audio/key/`), {method: 'HEAD'});
-                            if (response.status === 429) {
-                                setError('Rate limit exceeded. Please try again later.');
-                            } else if (response.status >= 500) {
-                                setError('Server error while loading audio. Please try again later.');
-                            } else if (response.status >= 400) {
-                                setError('Could not load audio file. The file may not exist or is in an unsupported format.');
-                            } else {
-                                setError('Could not play audio file. Please try again.');
-                            }
-                        } catch {
-                            setError('Network error while loading audio. Please check your connection.');
-                        }
-                    }
-                });
-        };
-
-        if (existingAudio && audioLoaded && !error) {
-            playAudio(existingAudio);
-            return;
+            const excluded = new Set([
+                state.current.shareKey,
+                ...state.history.slice(-50).map(track => track.shareKey),
+            ]);
+            const candidates = recommendations
+                .map(recommendationToTrack)
+                .filter(track => !track.deleted && !excluded.has(track.shareKey));
+            if (candidates.length === 0) return;
+            transitionQueue(advance({...latest, context: candidates, contextLabel: 'Autoplay'}), true);
+        } catch {
+            if (controller.signal.aborted) return;
+            const latestStep = nextPlaybackStepForCurrent(queueRef.current, state.current.id);
+            if (latestStep?.type === 'advance') {
+                transitionQueue(latestStep.state, true);
+            } else if (latestStep?.type === 'recommend') {
+                reportError('Autoplay could not find another track.');
+            }
+        } finally {
+            if (recommendationControllerRef.current === controller) {
+                recommendationControllerRef.current = null;
+            }
         }
+    }, [queueRef, reportError, transitionQueue]);
 
-        destroyAudio();
-        setIsLoading(true);
-        setError(null);
-        setAudioLoaded(false);
+    advancePlaybackRef.current = () => {
+        removeLocalStorage(POSITION_STORAGE_KEY);
+        void advancePlayback();
+    };
 
-        const apiAudioPath = selectedTrack.src.replace(/^\/audio\/key\//, `${API_BASE}/api/audio/key/`);
-        const newAudio = new Audio(apiAudioPath);
+    const skipNext = useCallback(() => {
+        void advancePlayback();
+    }, [advancePlayback]);
 
-        newAudio.addEventListener('timeupdate', () => {
-            if (audioRef.current !== newAudio) return;
-            setCurrentTime(newAudio.currentTime);
-        });
-        newAudio.addEventListener('play', () => {
-            if (audioRef.current !== newAudio) return;
-            setIsPlaying(true);
-        });
-        newAudio.addEventListener('pause', () => {
-            if (audioRef.current !== newAudio) return;
-            setIsPlaying(false);
-        });
-        newAudio.addEventListener('loadedmetadata', () => {
-            if (audioRef.current !== newAudio) return;
-            setDuration(newAudio.duration);
-            setIsLoading(false);
-            setAudioLoaded(true);
-        });
-        newAudio.addEventListener('ended', () => {
-            if (audioRef.current !== newAudio) return;
-            setIsPlaying(false);
-        });
-        newAudio.addEventListener('error', () => {
-            if (audioRef.current !== newAudio) return;
-            setIsLoading(false);
-            setIsPlaying(false);
-            setAudioLoaded(false);
-
-            fetch(apiAudioPath, {method: 'HEAD'})
-                .then(response => {
-                    if (audioRef.current !== newAudio) return;
-                    if (response.status === 429) {
-                        setError('Rate limit exceeded. Please try again later.');
-                    } else if (response.status >= 500) {
-                        setError('Server error while loading audio. Please try again later.');
-                    } else if (response.status >= 400) {
-                        setError('Could not load audio file. The file may not exist or is in an unsupported format.');
-                    } else {
-                        setError('Error playing audio. The connection may have been interrupted.');
-                    }
-                })
-                .catch(() => {
-                    if (audioRef.current === newAudio) {
-                        setError('Network error while loading audio. Please check your connection.');
-                    }
-                });
-        });
-
-        newAudio.volume = volume;
-        newAudio.muted = isMuted;
-        newAudio.preload = 'none';
-        audioRef.current = newAudio;
-        playAudio(newAudio);
-    }, [audioLoaded, destroyAudio, error, isMuted, isPlaying, metadata?.title, trackEvent, volume]);
-
-    const toggleMute = useCallback(() => {
-        const nextMuted = !isMuted;
-        setIsMuted(nextMuted);
-        if (audioRef.current) {
-            audioRef.current.muted = nextMuted;
+    const skipPrevious = useCallback(() => {
+        recommendationControllerRef.current?.abort();
+        const next = retreat(queueRef.current);
+        if (next.current?.id !== queueRef.current.current?.id) {
+            transitionQueue(next, true);
+        } else {
+            seekToRef.current(0);
         }
-        trackEvent('audio-mute', {muted: nextMuted});
-    }, [isMuted, trackEvent]);
+    }, [queueRef, transitionQueue]);
 
-    const setPlayerVolume = useCallback((newVolume: number) => {
-        const clampedVolume = Math.min(1, Math.max(0, newVolume));
-        const nextMuted = clampedVolume === 0;
+    const toggleAutoplay = useCallback(() => {
+        updateQueue({...queueRef.current, autoplay: !queueRef.current.autoplay});
+    }, [queueRef, updateQueue]);
 
-        setVolume(clampedVolume);
-        setIsMuted(nextMuted);
-        if (audioRef.current) {
-            audioRef.current.volume = clampedVolume;
-            audioRef.current.muted = nextMuted;
-        }
-    }, []);
-
-    const handleVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-        setPlayerVolume(parseFloat(event.target.value));
-    }, [setPlayerVolume]);
-
-    const seekTo = useCallback((seconds: number) => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        const activeDuration = duration || metadata?.duration || audio.duration || 0;
-        if (!activeDuration) return;
-
-        const seekTime = Math.min(activeDuration, Math.max(0, seconds));
-        audio.currentTime = seekTime;
-        setCurrentTime(seekTime);
-    }, [duration, metadata?.duration]);
-
-    const seekBy = useCallback((seconds: number) => {
-        seekTo(currentTime + seconds);
-    }, [currentTime, seekTo]);
-
-    const adjustVolume = useCallback((delta: number) => {
-        setPlayerVolume(volume + delta);
-    }, [setPlayerVolume, volume]);
-
-    const handleProgressClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const ratio = (event.clientX - bounds.left) / bounds.width;
-        const seekTime = ratio * (duration || 0);
-
-        if (seekTime >= 0 && seekTime <= duration) {
-            seekTo(seekTime);
-        }
-    }, [duration, seekTo]);
-
-    const formatTime = useCallback((time: number) => {
-        let displayTime = time;
-        if (!displayTime && !audioLoaded && metadata?.duration) {
-            displayTime = metadata.duration;
-        }
-
-        const minutes = Math.floor(displayTime / 60);
-        const seconds = Math.floor(displayTime % 60);
-        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    }, [audioLoaded, metadata?.duration]);
-
-    const displayName = currentTrack ? getDisplayName(currentTrack.src, currentTrack.name) : {artist: '', track: ''};
+    useEffect(() => {
+        if (!('mediaSession' in navigator) || !currentTrack) return;
+        return registerMediaSessionActions(navigator.mediaSession, {
+            play: () => requestPlayCurrentRef.current(),
+            pause: () => pauseCurrentRef.current(),
+            next: () => advancePlaybackRef.current(),
+            previous: () => skipPrevious(),
+        });
+    }, [currentTrack, skipPrevious]);
 
     const value = useMemo<AudioPlayerContextValue>(() => ({
         currentTrack,
-        surface,
         isPlaying,
         duration,
         currentTime,
@@ -456,59 +431,95 @@ export function AudioPlayerProvider({children}: { children: ReactNode }) {
         metadata,
         audioLoaded,
         isLoading,
-        artist: displayName.artist,
-        track: displayName.track,
+        artist: currentTrack?.artist || '',
+        track: currentTrack?.name || '',
         waveformPeaks,
-        selectTrack,
+        upcoming,
+        contextLabel: queue.contextLabel,
+        autoplay: queue.autoplay,
+        playTrack,
+        playContext,
+        addToQueue,
+        playNext,
+        removeFromQueue,
+        clearQueue,
+        skipNext,
+        skipPrevious,
         closePlayer,
-        setSurface,
+        toggleAutoplay,
         togglePlay,
         toggleMute,
         seekBy,
         seekTo,
         adjustVolume,
-        handleVolumeChange,
-        handleProgressClick,
-        formatTime,
+        setVolume: setPlayerVolume,
     }), [
-        currentTrack,
-        surface,
-        isPlaying,
-        duration,
-        currentTime,
-        volume,
-        isMuted,
-        error,
-        thumbnail,
-        metadata,
-        audioLoaded,
-        isLoading,
-        displayName.artist,
-        displayName.track,
-        waveformPeaks,
-        selectTrack,
+        addToQueue,
+        clearQueue,
         closePlayer,
-        togglePlay,
-        toggleMute,
+        currentTrack,
+        adjustVolume,
+        audioLoaded,
+        currentTime,
+        duration,
+        error,
+        isLoading,
+        isMuted,
+        isPlaying,
+        metadata,
+        playContext,
+        playNext,
+        playTrack,
+        queue.autoplay,
+        queue.contextLabel,
+        removeFromQueue,
         seekBy,
         seekTo,
-        adjustVolume,
-        handleVolumeChange,
-        handleProgressClick,
-        formatTime,
+        setPlayerVolume,
+        skipNext,
+        skipPrevious,
+        thumbnail,
+        toggleAutoplay,
+        toggleMute,
+        togglePlay,
+        upcoming,
+        volume,
+        waveformPeaks,
     ]);
 
+    const commands = useMemo<AudioPlayerCommandsContextValue>(() => ({
+        playTrack,
+        playContext,
+        addToQueue,
+        playNext,
+    }), [addToQueue, playContext, playNext, playTrack]);
+
     return (
-        <AudioPlayerContext.Provider value={value}>
-            {children}
-        </AudioPlayerContext.Provider>
+        <AudioPlayerCommandsContext.Provider value={commands}>
+            <AudioPlayerContext.Provider value={value}>
+                {children}
+                <MatureContentDialog
+                    open={showMatureDialog}
+                    onCancel={() => setShowMatureDialog(false)}
+                    onConfirm={() => {
+                        sessionStorage.setItem('mature-warning-ack', 'true');
+                        setShowMatureDialog(false);
+                        play();
+                    }}
+                />
+            </AudioPlayerContext.Provider>
+        </AudioPlayerCommandsContext.Provider>
     );
 }
 
 export function useGlobalAudioPlayer() {
     const value = useContext(AudioPlayerContext);
-    if (!value) {
-        throw new Error('useGlobalAudioPlayer must be used within AudioPlayerProvider');
-    }
+    if (!value) throw new Error('useGlobalAudioPlayer must be used within AudioPlayerProvider');
+    return value;
+}
+
+export function useAudioPlayerCommands() {
+    const value = useContext(AudioPlayerCommandsContext);
+    if (!value) throw new Error('useAudioPlayerCommands must be used within AudioPlayerProvider');
     return value;
 }

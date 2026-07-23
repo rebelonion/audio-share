@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMatureContentPreference, setMatureContentPreference } from '@/lib/api';
-
-const maturePreferenceEvent = 'audio-share:mature-preference';
+import {
+    MATURE_PREFERENCE_EVENT,
+    resetMatureContentClientState,
+} from '@/lib/matureContentPreference';
 
 export function useMatureContentPreference() {
     const [enabled, setEnabled] = useState(false);
@@ -29,8 +31,8 @@ export function useMatureContentPreference() {
             const customEvent = event as CustomEvent<boolean>;
             setEnabled(!!customEvent.detail);
         };
-        window.addEventListener(maturePreferenceEvent, listener);
-        return () => window.removeEventListener(maturePreferenceEvent, listener);
+        window.addEventListener(MATURE_PREFERENCE_EVENT, listener);
+        return () => window.removeEventListener(MATURE_PREFERENCE_EVENT, listener);
     }, []);
 
     const update = useCallback(async (value: boolean) => {
@@ -38,10 +40,10 @@ export function useMatureContentPreference() {
         try {
             const saved = await setMatureContentPreference(value);
             setEnabled(saved);
-            window.dispatchEvent(new CustomEvent(maturePreferenceEvent, { detail: saved }));
             if (!saved) {
-                sessionStorage.removeItem('mature-warning-ack');
-                sessionStorage.removeItem('mature-download-warning-ack');
+                resetMatureContentClientState();
+            } else {
+                window.dispatchEvent(new CustomEvent<boolean>(MATURE_PREFERENCE_EVENT, {detail: true}));
             }
         } catch {
             setEnabled((current) => !current);

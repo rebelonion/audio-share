@@ -11,6 +11,8 @@ import { useRybbit } from '@/hooks/useRybbit';
 import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import RequestSourceDialog from '@/components/RequestSourceDialog';
 import CustomSelect from '@/components/CustomSelect';
+import TrackQuickActions from '@/components/TrackQuickActions';
+import type {AudioPlayerTrack} from '@/contexts/AudioPlayerContext';
 
 const RESULTS_PER_PAGE = 50;
 
@@ -207,7 +209,7 @@ export default function Search() {
         return `/browse/${encodedPath}`;
     };
 
-    const getParentLink = (result: SearchResult) => {
+    const getParentLink = (result: SearchResult): string | null => {
         if (!result.parentPath) return null;
         const encodedPath = result.parentPath.split('/').map(s => encodeURIComponent(s)).join('/');
         return `/browse/${encodedPath}`;
@@ -225,7 +227,7 @@ export default function Search() {
         <>
             <Helmet>
                 <title>Search - {DEFAULT_TITLE}</title>
-                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Search`} />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} · Search`} />
             </Helmet>
 
             <div className="max-w-4xl mx-auto animate-slideUp">
@@ -312,84 +314,100 @@ export default function Search() {
 
                 {results.length > 0 && (
                     <div className="space-y-2">
-                        {results.map((result) => (
-                            <Link
-                                key={result.id}
-                                to={getResultPath(result)}
-                                onClick={() => track('search-result-click', { query, resultPath: result.path, resultType: result.type })}
-                                className={`block border border-[var(--border)] rounded-lg p-4 transition-colors group no-underline ${
-                                    result.type === 'audio' && result.unavailableAt
-                                        ? 'bg-amber-500/5 hover:bg-amber-500/10'
-                                        : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'
-                                }`}
-                                title={result.type === 'audio' && result.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="flex-shrink-0 mt-1">
-                                        {result.type === 'folder' ? (
-                                            <Folder className="h-5 w-5 text-[var(--primary)]" />
-                                        ) : (
-                                            <div className="relative">
-                                                <Music className="h-5 w-5 text-[var(--primary)]" />
-                                                {result.unavailableAt && (
-                                                    <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
+                        {results.map((result) => {
+                            const playerTrack: AudioPlayerTrack | null = result.type === 'audio' && result.shareKey ? {
+                                src: `/audio/key/${result.shareKey}`,
+                                shareKey: result.shareKey,
+                                name: result.title || result.name,
+                                artist: result.artist,
+                                ageLimit: result.ageLimit,
+                                source: 'search',
+                            } : null;
+                            return (
+                                <div
+                                    key={result.id}
+                                    className={`flex flex-col gap-3 border border-[var(--border)] rounded-lg p-4 transition-colors group sm:flex-row sm:items-start ${
+                                        result.type === 'audio' && result.unavailableAt
+                                            ? 'bg-amber-500/5 hover:bg-amber-500/10'
+                                            : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'
+                                    }`}
+                                    title={result.type === 'audio' && result.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
+                                >
+                                    <Link
+                                        to={getResultPath(result)}
+                                        onClick={() => track('search-result-click', { query, resultPath: result.path, resultType: result.type })}
+                                        className="flex items-start gap-3 flex-1 min-w-0 no-underline"
+                                    >
+                                        <div className="flex-shrink-0 mt-1">
+                                            {result.type === 'folder' ? (
+                                                <Folder className="h-5 w-5 text-[var(--primary)]" />
+                                            ) : (
+                                                <div className="relative">
+                                                    <Music className="h-5 w-5 text-[var(--primary)]" />
+                                                    {result.unavailableAt && (
+                                                        <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-grow min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-medium text-[var(--foreground)] truncate group-hover:text-[var(--primary)] transition-colors">
+                                                    {result.title || result.name}
+                                                </h3>
+                                                {result.type === 'audio' && isMatureAge(result.ageLimit) && (
+                                                    <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
+                                                        18+
+                                                    </span>
+                                                )}
+                                                <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                            </div>
+
+                                            {result.artist && (
+                                                <p className="text-sm text-[var(--muted-foreground)] truncate">
+                                                    {result.artist}
+                                                </p>
+                                            )}
+
+                                            {result.description && (!isMatureAge(result.ageLimit) || maturePreference.enabled) && (
+                                                <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mt-1">
+                                                    {result.description}
+                                                </p>
+                                            )}
+
+                                            <div className="flex items-center gap-2 mt-2 text-xs text-[var(--muted-foreground)]">
+                                                <span className="px-2 py-0.5 bg-[var(--secondary)] rounded">
+                                                    {result.type}
+                                                </span>
+                                                {result.modifiedAt && (
+                                                    <span className="flex items-center gap-1 flex-shrink-0">
+                                                        <Calendar className="h-3 w-3" />
+                                                        {formatDate(result.modifiedAt)}
+                                                    </span>
                                                 )}
                                             </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex-grow min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-medium text-[var(--foreground)] truncate group-hover:text-[var(--primary)] transition-colors">
-                                                {result.title || result.name}
-                                            </h3>
-                                            {result.type === 'audio' && isMatureAge(result.ageLimit) && (
-                                                <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
-                                                    18+
-                                                </span>
-                                            )}
-                                            <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                                         </div>
-
-                                        {result.artist && (
-                                            <p className="text-sm text-[var(--muted-foreground)] truncate">
-                                                {result.artist}
-                                            </p>
-                                        )}
-
-                                        {result.description && (!isMatureAge(result.ageLimit) || maturePreference.enabled) && (
-                                            <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mt-1">
-                                                {result.description}
-                                            </p>
-                                        )}
-
-                                        <div className="flex items-center gap-2 mt-2 text-xs text-[var(--muted-foreground)]">
-                                            <span className="px-2 py-0.5 bg-[var(--secondary)] rounded">
-                                                {result.type}
-                                            </span>
+                                    </Link>
+                                    {(result.parentPath || playerTrack) && (
+                                        <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:contents">
                                             {result.parentPath && (
-                                                <span className="truncate">
-                                                    in{' '}
-                                                    <Link
-                                                        to={getParentLink(result) || '#'}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="text-[var(--primary)] hover:underline"
-                                                    >
-                                                        {getParentName(result)}
-                                                    </Link>
-                                                </span>
+                                                <Link
+                                                    to={getParentLink(result) || '/browse'}
+                                                    className="min-w-0 flex-1 truncate text-xs text-[var(--primary)] hover:underline sm:max-w-32 sm:flex-none sm:shrink-0 sm:self-center"
+                                                    title={`Browse ${getParentName(result)}`}
+                                                >
+                                                    in {getParentName(result)}
+                                                </Link>
                                             )}
-                                            {result.modifiedAt && (
-                                                <span className="flex items-center gap-1 flex-shrink-0">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {formatDate(result.modifiedAt)}
-                                                </span>
+                                            {playerTrack && (
+                                                <TrackQuickActions track={playerTrack} className="ml-auto shrink-0" />
                                             )}
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
-                            </Link>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
 
@@ -527,7 +545,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                                 className={`px-3 py-1.5 text-sm rounded border transition-all duration-150 ${
                                     (filters.type ?? '') === t
                                         ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/50 hover:text-[var(--foreground)]'
+                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary-border-hover)] hover:text-[var(--foreground)]'
                                 }`}
                             >
                                 {t === '' ? 'All' : t === 'audio' ? 'Audio' : 'Folders'}
@@ -550,7 +568,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
 
             {roots.length > 0 && (
                 <>
-                    <div className="border-t border-[var(--border)]/50" />
+                    <div className="border-t border-[var(--border-subtle)]" />
 
                     <div>
                         <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
@@ -568,7 +586,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 </>
             )}
 
-            <div className="border-t border-[var(--border)]/50" />
+            <div className="border-t border-[var(--border-subtle)]" />
 
             <label className="flex items-center gap-2.5 cursor-pointer select-none group">
                 <span className="relative inline-flex h-5 w-9 shrink-0">
@@ -587,7 +605,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 </span>
             </label>
 
-            <div className="border-t border-[var(--border)]/50" />
+            <div className="border-t border-[var(--border-subtle)]" />
 
             <div>
                 <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
@@ -611,7 +629,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                                 className={`px-3 py-1.5 text-sm rounded border transition-all duration-150 ${
                                     active
                                         ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)]/50 hover:text-[var(--foreground)]'
+                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary-border-hover)] hover:text-[var(--foreground)]'
                                 }`}
                             >
                                 {label}
@@ -621,7 +639,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 </div>
             </div>
 
-            <div className="border-t border-[var(--border)]/50" />
+            <div className="border-t border-[var(--border-subtle)]" />
 
             <div>
                 <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-3 uppercase tracking-widest">
@@ -634,7 +652,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 />
             </div>
 
-            <div className="border-t border-[var(--border)]/50" />
+            <div className="border-t border-[var(--border-subtle)]" />
 
             <div>
                 <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
@@ -657,7 +675,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 </div>
             </div>
 
-            <div className="border-t border-[var(--border)]/50" />
+            <div className="border-t border-[var(--border-subtle)]" />
 
             <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none group">
@@ -814,7 +832,7 @@ function DatePicker({ value, onChange, placeholder, alignRight }: DatePickerProp
                 ref={triggerRef}
                 onClick={openPicker}
                 className={`w-full px-3 py-1.5 text-sm bg-[var(--secondary)] border rounded flex items-center justify-between gap-2 focus:outline-none transition-colors ${
-                    open ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:border-[var(--primary)]/50'
+                    open ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:border-[var(--primary-border-hover)]'
                 }`}
             >
                 <span className={`flex items-center gap-1.5 min-w-0 ${value ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}`}>
@@ -863,7 +881,7 @@ function DatePicker({ value, onChange, placeholder, alignRight }: DatePickerProp
                                         i === selectedMonth
                                             ? 'bg-[var(--primary)] text-white font-medium'
                                             : i === viewMonth
-                                            ? 'bg-[var(--primary)]/20 text-[var(--primary)] font-medium hover:bg-[var(--primary)]/30'
+                                            ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium hover:bg-[var(--primary-soft-hover)]'
                                             : 'text-[var(--foreground)] hover:bg-[var(--card-hover)]'
                                     }`}
                                 >
@@ -897,7 +915,7 @@ function DatePicker({ value, onChange, placeholder, alignRight }: DatePickerProp
                                                 isSelected
                                                     ? 'bg-[var(--primary)] text-white font-medium'
                                                     : isToday
-                                                    ? 'bg-[var(--primary)]/20 text-[var(--primary)] font-medium hover:bg-[var(--primary)]/30'
+                                                    ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium hover:bg-[var(--primary-soft-hover)]'
                                                     : 'text-[var(--foreground)] hover:bg-[var(--card-hover)]'
                                             }`}
                                         >

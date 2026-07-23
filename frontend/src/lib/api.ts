@@ -1,7 +1,9 @@
-export const API_BASE = import.meta.env.VITE_API_URL || '';
+import {syncRybbitIdentity} from '@/lib/rybbitIdentity';
 
 export type { FileSystemItem, FolderMetadata, AudioFile, Folder, Tag, RequestStatus, SourceRequest, RequestsByStatus } from '@/types';
 import type { FileSystemItem, RequestsByStatus } from '@/types';
+
+export const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export interface DirectoryContents {
     items: FileSystemItem[];
@@ -59,7 +61,7 @@ export interface SearchResponse {
     limit: number;
 }
 
-export interface PlaybackTrack {
+export interface TrackSummary {
     shareKey: string;
     path: string;
     filename: string;
@@ -70,8 +72,31 @@ export interface PlaybackTrack {
     parentShareKey: string | null;
     audioImage: string | null;
     posterImage: string | null;
+    ageLimit?: number;
+}
+
+export interface PlaybackStatsTrack extends TrackSummary {
     playCount: number;
     lastPlayed: string | null;
+}
+
+export interface UnavailableTrack extends TrackSummary {
+    unavailableAt: string;
+}
+
+export interface LikedTrack extends TrackSummary {
+    unavailableAt?: string | null;
+    deleted: boolean;
+}
+
+interface LikesResponse {
+    profileId: string;
+    hasRecoveryKey: boolean;
+    shareKeys: string[];
+}
+
+interface LikedTracksResponse {
+    tracks: LikedTrack[];
 }
 
 export function isMatureAge(ageLimit?: number | null): boolean {
@@ -99,48 +124,104 @@ export async function setMatureContentPreference(enabled: boolean): Promise<bool
     return !!data.enabled;
 }
 
-export async function recordPlayEvent(shareKey: string): Promise<void> {
+function listeningSessionId(): string {
+    const storageKey = 'audio-share:listening-session';
+    let value = sessionStorage.getItem(storageKey);
+    if (!value) {
+        value = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        sessionStorage.setItem(storageKey, value);
+    }
+    return value;
+}
+
+export async function recordPlayEvent(shareKey: string, origin = 'unknown'): Promise<void> {
     const response = await fetch(`${API_BASE}/api/playback/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ shareKey }),
+        body: JSON.stringify({shareKey, origin, listeningSessionId: listeningSessionId()}),
     });
+    if (!response.ok) throw new Error(`Failed to record playback: ${response.status}`);
     const data = await response.json();
-    if (window.rybbit && window.rybbit.getUserId() !== data.sessionId) {
-        window.rybbit.identify(data.sessionId);
-    }
+    syncRybbitIdentity(data.sessionId);
 }
 
-export async function getRecommendations(shareKey: string): Promise<PlaybackTrack[]> {
-    const response = await fetch(`${API_BASE}/api/playback/recommendations/${shareKey}`);
+export async function createRecoveryKey(): Promise<string> {
+    const response = await fetch(`${API_BASE}/api/profile/recovery-key`, {
+        method: 'POST',
+        credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Failed to create recovery key');
+    const data = await response.json();
+    return data.recoveryKey;
+}
+
+export async function recoverBrowserProfile(recoveryKey: string): Promise<string> {
+    const response = await fetch(`${API_BASE}/api/profile/recover`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({recoveryKey}),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to recover likes');
+    if (typeof data.profileId !== 'string' || !data.profileId) throw new Error('Failed to recover likes');
+    return data.profileId;
+}
+
+export async function getLikes(signal?: AbortSignal): Promise<LikesResponse> {
+    const response = await fetch(`${API_BASE}/api/likes`, {credentials: 'include', signal});
+    if (!response.ok) throw new Error('Failed to load likes');
+    return response.json();
+}
+
+export async function getLikedTracks(signal?: AbortSignal): Promise<LikedTrack[]> {
+    const response = await fetch(`${API_BASE}/api/likes/tracks`, {credentials: 'include', signal});
+    if (!response.ok) throw new Error('Failed to load liked tracks');
+    const data = await response.json() as LikedTracksResponse;
+    return data.tracks;
+}
+
+export async function setTrackLiked(shareKey: string, liked: boolean, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/likes/${encodeURIComponent(shareKey)}`, {
+        method: liked ? 'PUT' : 'DELETE',
+        credentials: 'include',
+        signal,
+    });
+    if (!response.ok) throw new Error('Failed to update like');
+}
+
+export async function getRecommendations(shareKey: string, signal?: AbortSignal): Promise<TrackSummary[]> {
+    const response = await fetch(`${API_BASE}/api/playback/recommendations/${encodeURIComponent(shareKey)}`, {signal});
     if (!response.ok) throw new Error(`Failed to fetch recommendations: ${response.status}`);
     const data = await response.json();
     return data.tracks;
 }
 
-export async function getRecentlyPlayed(): Promise<PlaybackTrack[]> {
+export async function getRecentlyPlayed(): Promise<PlaybackStatsTrack[]> {
     const response = await fetch(`${API_BASE}/api/playback/recent`);
     if (!response.ok) throw new Error(`Failed to fetch recent tracks: ${response.status}`);
     const data = await response.json();
     return data.tracks;
 }
 
-export async function getPopularTracks(): Promise<PlaybackTrack[]> {
+export async function getPopularTracks(): Promise<PlaybackStatsTrack[]> {
     const response = await fetch(`${API_BASE}/api/playback/popular`);
     if (!response.ok) throw new Error(`Failed to fetch popular tracks: ${response.status}`);
     const data = await response.json();
     return data.tracks;
 }
 
-export async function getRecentlyAdded(): Promise<PlaybackTrack[]> {
+export async function getRecentlyAdded(): Promise<TrackSummary[]> {
     const response = await fetch(`${API_BASE}/api/playback/new`);
     if (!response.ok) throw new Error(`Failed to fetch new tracks: ${response.status}`);
     const data = await response.json();
     return data.tracks;
 }
 
-export async function getRecentlyUnavailable(): Promise<PlaybackTrack[]> {
+export async function getRecentlyUnavailable(): Promise<UnavailableTrack[]> {
     const response = await fetch(`${API_BASE}/api/playback/unavailable`);
     if (!response.ok) throw new Error(`Failed to fetch unavailable tracks: ${response.status}`);
     const data = await response.json();

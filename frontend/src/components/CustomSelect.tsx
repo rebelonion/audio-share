@@ -68,7 +68,7 @@ export default function CustomSelect({
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 className={`w-full px-3 py-1.5 text-sm bg-[var(--secondary)] border rounded flex items-center justify-between gap-2 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    open ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:border-[var(--primary)]/50'
+                    open ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:border-[var(--primary-border-hover)]'
                 } text-[var(--foreground)] ${triggerClassName}`}
             >
                 <span>{selected?.label ?? ''}</span>
@@ -91,7 +91,7 @@ export default function CustomSelect({
                             onClick={() => { onChange(opt.value); setOpen(false); }}
                             className={`w-full px-3 py-2 text-sm text-left transition-colors ${
                                 opt.value === value
-                                    ? 'text-[var(--primary)] bg-[var(--primary)]/10'
+                                    ? 'text-[var(--primary)] bg-[var(--primary-tint)]'
                                     : 'text-[var(--foreground)] hover:bg-[var(--card-hover)]'
                             }`}
                         >

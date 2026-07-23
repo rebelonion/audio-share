@@ -153,7 +153,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
                 <h2 className="text-2xl font-bold mb-6" style={{ fontFamily: 'var(--font-display)' }}>{directoryTitle}</h2>
             )}
             {currentPath !== '' && <Breadcrumb path={currentPath} />}
-            <FolderView items={items} />
+            <FolderView items={items} currentPath={currentPath} />
         </div>
     );
 }

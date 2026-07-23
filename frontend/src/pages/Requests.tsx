@@ -181,7 +181,7 @@ export default function Requests() {
         <div className="-mb-8 animate-slideUp">
             <Helmet>
                 <title>{DEFAULT_TITLE} - Requests</title>
-                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Requests`} />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} · Requests`} />
             </Helmet>
             <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6 text-[var(--foreground)] text-center" style={{ fontFamily: 'var(--font-display)' }}>
                 Source Requests

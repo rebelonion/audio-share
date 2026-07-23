@@ -1,26 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { Unlink, Music, ChevronLeft, ChevronRight } from 'lucide-react';
-import { PlaybackTrack, API_BASE } from '@/lib/api';
+import type {UnavailableTrack} from '@/lib/api';
 import { useRybbit } from '@/hooks/useRybbit';
+import {trackArtworkUrls} from '@/lib/tracks';
 
 interface Props {
-    tracks: PlaybackTrack[];
+    tracks: UnavailableTrack[];
 }
 
 const INTERVAL_MS = 5000;
 
-function TrackImage({ track }: { track: PlaybackTrack }) {
-    const [imageError, setImageError] = useState(false);
-
-    const thumbnailUrl = track.shareKey && track.audioImage
-        ? `${API_BASE}/api/audio/key/${track.shareKey}/thumbnail`
-        : null;
-    const posterUrl = !thumbnailUrl && track.parentShareKey && track.posterImage
-        ? `${API_BASE}/api/folder/key/${track.parentShareKey}/poster`
-        : null;
-
-    const imageUrl = imageError ? null : (thumbnailUrl || posterUrl);
+function TrackImage({ track }: { track: UnavailableTrack }) {
+    const [imageIndex, setImageIndex] = useState(0);
+    const imageUrl = trackArtworkUrls(track)[imageIndex];
 
     if (!imageUrl) {
         return (
@@ -35,7 +28,7 @@ function TrackImage({ track }: { track: PlaybackTrack }) {
             src={imageUrl}
             alt=""
             className="w-full h-full object-cover"
-            onError={() => setImageError(true)}
+            onError={() => setImageIndex(current => current + 1)}
         />
     );
 }
@@ -88,7 +81,7 @@ export default function UnavailableBanner({ tracks }: Props) {
                 className={`flex gap-4 p-4 transition-opacity duration-200 ${fading ? 'opacity-0' : 'opacity-100'}`}
             >
                 <div className="flex-shrink-0 w-36 aspect-video rounded-md overflow-hidden">
-                    <TrackImage track={track} />
+                    <TrackImage key={track.shareKey} track={track} />
                 </div>
 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">

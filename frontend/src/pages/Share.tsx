@@ -1,14 +1,15 @@
-import { useEffect, useState, useCallback, type MouseEvent } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Home, FolderOpen, Download } from 'lucide-react';
+import { Calendar, Download, ExternalLink, FolderOpen, Home, Music, Unlink } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
 import TrackListSection from '@/components/TrackListSection';
-import { API_BASE, recordPlayEvent, getRecommendations, PlaybackTrack } from '@/lib/api';
+import { API_BASE, getRecommendations, type TrackSummary } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import MatureContentDialog from '@/components/MatureContentDialog';
 import { useRybbit } from '@/hooks/useRybbit';
+import TrackQuickActions from '@/components/TrackQuickActions';
 
 interface AudioMeta {
     title: string;
@@ -27,17 +28,27 @@ interface AudioMeta {
 
 const WAVEFORM_BARS = [14, 22, 18, 28, 20, 32, 24, 16, 26, 20, 12, 28, 22, 18, 30, 24, 20, 26, 18, 32];
 
+function formatUploadDate(value: string): string {
+    if (/^\d{8}$/.test(value)) return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+    return value;
+}
+
 export default function Share() {
     const { key } = useParams<{ key: string }>();
     const { track } = useRybbit();
     const [meta, setMeta] = useState<AudioMeta | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [recommendations, setRecommendations] = useState<PlaybackTrack[]>([]);
+    const [recommendations, setRecommendations] = useState<TrackSummary[]>([]);
     const [showDownloadDialog, setShowDownloadDialog] = useState(false);
     const maturePreference = useMatureContentPreference();
 
     useEffect(() => {
+        const controller = new AbortController();
+        setMeta(null);
+        setNotFound(false);
+        setIsLoading(true);
+        setRecommendations([]);
         if (!key) {
             setNotFound(true);
             setIsLoading(false);
@@ -46,7 +57,10 @@ export default function Share() {
 
         const fetchMeta = async () => {
             try {
-                const response = await fetch(`${API_BASE}/api/audio/key/${key}/meta`, { credentials: 'include' });
+                const response = await fetch(`${API_BASE}/api/audio/key/${key}/meta`, {
+                    credentials: 'include',
+                    signal: controller.signal,
+                });
                 if (response.status === 404) {
                     setNotFound(true);
                 } else if (response.ok) {
@@ -55,21 +69,18 @@ export default function Share() {
                 } else {
                     setNotFound(true);
                 }
-            } catch {
+            } catch (error) {
+                if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
                 setNotFound(true);
             } finally {
-                setIsLoading(false);
+                if (!controller.signal.aborted) setIsLoading(false);
             }
         };
 
         fetchMeta();
 
-        getRecommendations(key).then(setRecommendations).catch(() => {});
-    }, [key]);
-
-    const handlePlay = useCallback(() => {
-        if (!key) return;
-        recordPlayEvent(key).catch(() => {});
+        getRecommendations(key, controller.signal).then(setRecommendations).catch(() => {});
+        return () => controller.abort();
     }, [key]);
 
     const displayTitle = meta?.title || key || 'Unknown';
@@ -87,8 +98,8 @@ export default function Share() {
             : `${displayTitle} - ${DEFAULT_TITLE}`;
 
     const pageDescription = meta?.description
-        ? (meta.isMature && !maturePreference.enabled ? `${DEFAULT_DESCRIPTION} — ${displayTitle}` : meta.description)
-        : `${DEFAULT_DESCRIPTION} — ${displayTitle}`;
+        ? (meta.isMature && !maturePreference.enabled ? `${DEFAULT_DESCRIPTION} · ${displayTitle}` : meta.description)
+        : `${DEFAULT_DESCRIPTION} · ${displayTitle}`;
     const thumbnailView = meta?.isMature && !maturePreference.enabled ? 'blurred' : 'original';
     const thumbnailUrl = `${API_BASE}/api/audio/key/${key}/thumbnail?view=${thumbnailView}`;
     const downloadUrl = `${API_BASE}/api/audio/key/${key}/download`;
@@ -182,7 +193,7 @@ export default function Share() {
                 </div>
             ) : (
                 <div className="container mx-auto p-4 max-w-4xl animate-slideUp">
-                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-6 mb-8 relative overflow-hidden">
+                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-5 sm:p-6 mb-8 relative overflow-clip">
                         {meta?.thumbnail && (
                             <div
                                 className="absolute inset-0 pointer-events-none"
@@ -197,53 +208,109 @@ export default function Share() {
                             />
                         )}
                         <div className="relative">
-                        <div className="mb-4 flex flex-wrap items-start gap-3">
-                            <h1 className="text-3xl sm:text-4xl font-bold break-words line-clamp-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
-                                {displayTitle}
-                            </h1>
-                            {meta?.isMature && (
-                                <span className="mt-1 px-2 py-0.5 rounded border border-amber-500/40 text-xs font-semibold text-amber-500 flex-shrink-0">
-                                    18+
-                                </span>
-                            )}
-                        </div>
+                            <div className="grid gap-6 sm:grid-cols-[minmax(0,15rem)_1fr] sm:items-center">
+                                <div className="aspect-video overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--secondary)] shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+                                    {meta?.thumbnail ? (
+                                        <img src={thumbnailUrl} alt={`${displayTitle} artwork`} className="h-full w-full object-cover" width={480} height={270} />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center">
+                                            <Music className="h-10 w-10 text-[var(--primary)] opacity-45" />
+                                        </div>
+                                    )}
+                                </div>
 
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                            <p className="text-[var(--muted-foreground)] mb-4 md:mb-0">
-                                {parentName && (
-                                    <span className="font-medium">{decodeURIComponent(parentName)}</span>
-                                )}
-                            </p>
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-start gap-3">
+                                        <h1 className="min-w-0 text-3xl sm:text-4xl font-bold break-words line-clamp-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
+                                            {displayTitle}
+                                        </h1>
+                                        {meta?.isMature && (
+                                            <span className="mt-1 px-2 py-0.5 rounded border border-amber-500/40 text-xs font-semibold text-amber-500 flex-shrink-0">18+</span>
+                                        )}
+                                    </div>
 
-                            <div className="flex items-center gap-3">
-                                <a
-                                    href={downloadUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={handleDownloadClick}
-                                    className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
-                                >
-                                    <Download className="h-4 w-4" />
-                                    <span>Download</span>
-                                </a>
-                                {meta?.parentPath && (
-                                    <Link
-                                        to={folderPath}
-                                        className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
-                                    >
-                                        <FolderOpen className="h-4 w-4" />
-                                        <span>Browse folder</span>
-                                    </Link>
-                                )}
+                                    {(meta?.artist || parentName) && (
+                                        <p className="mt-3 text-base text-[var(--muted-foreground)]">
+                                            {meta?.artist || decodeURIComponent(parentName || '')}
+                                        </p>
+                                    )}
+
+                                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                                        {key && (
+                                            <TrackQuickActions track={{
+                                                src: `/audio/key/${key}`,
+                                                shareKey: key,
+                                                name: displayTitle,
+                                                artist: meta?.artist,
+                                                deleted: !!meta?.deleted,
+                                                ageLimit: meta?.ageLimit,
+                                                source: 'share',
+                                            }} />
+                                        )}
+                                        <a
+                                            href={downloadUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={handleDownloadClick}
+                                            className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                                        >
+                                            <Download className="h-4 w-4" /> Download
+                                        </a>
+                                        {meta?.parentPath && (
+                                            <Link to={folderPath} className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
+                                                <FolderOpen className="h-4 w-4" /> Browse folder
+                                            </Link>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <SharePagePlayer src={`/audio/key/${key}`} onPlay={handlePlay} unavailable={!!meta?.unavailableAt} />
+                            <div className="mt-6">
+                                <SharePagePlayer src={`/audio/key/${key}`} name={displayTitle} artist={meta?.artist} ageLimit={meta?.ageLimit} />
+                            </div>
+
+                            {(meta?.uploadDate || meta?.webpageUrl || meta?.description) && (
+                                <div className="pt-6">
+                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm text-[var(--muted-foreground)]">
+                                        {meta?.uploadDate && (
+                                            <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> {formatUploadDate(meta.uploadDate)}</span>
+                                        )}
+                                        {meta?.webpageUrl && (
+                                            <a
+                                                href={meta.webpageUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className={meta.unavailableAt
+                                                    ? 'flex items-center gap-2 text-amber-400 transition-colors hover:text-amber-300'
+                                                    : 'flex items-center gap-2 transition-colors hover:text-[var(--primary)]'
+                                                }
+                                            >
+                                                {meta.unavailableAt ? <Unlink className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
+                                                {meta.unavailableAt ? 'Original source no longer available' : 'View original source'}
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {meta?.description && (!meta.isMature || meta.showMature) && (
+                                        <div className="mt-5">
+                                            <h2 className="mb-2 text-lg font-semibold">Description</h2>
+                                            <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-[var(--card-hover-subtle)] p-4 text-sm leading-relaxed text-[var(--muted-foreground)] custom-scrollbar">
+                                                {meta.description}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {meta?.description && meta.isMature && !meta.showMature && (
+                                        <div className="mt-5 rounded-lg bg-[var(--card-hover-subtle)] p-4 text-sm text-[var(--muted-foreground)]">
+                                            Description hidden for mature content.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {recommendations.length > 0 && (
-                        <TrackListSection title="You Might Also Like" tracks={recommendations} />
+                        <TrackListSection title="You Might Also Like" tracks={recommendations} source="share" />
                     )}
                 </div>
             )}

@@ -58,6 +58,7 @@ func main() {
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
 	playbackService := services.NewPlaybackService(db)
+	libraryService := services.NewLibraryService(db)
 	requestsService := services.NewRequestsService(db)
 
 	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), cfg.StreamBytesPerSecond, cfg.DownloadBytesPerSecond, cfg.SessionSecret)
@@ -68,6 +69,7 @@ func main() {
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
 	playbackHandler := handlers.NewPlaybackHandler(playbackService, cfg.SessionSecret)
+	libraryHandler := handlers.NewLibraryHandler(libraryService, cfg.SessionSecret)
 	preferencesHandler := handlers.NewPreferencesHandler(cfg.SessionSecret)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
 	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
@@ -108,6 +110,11 @@ func main() {
 	mux.HandleFunc("/api/playback/unavailable", playbackHandler.UnavailableHandler())
 	mux.HandleFunc("/api/playback/recommendations/", playbackHandler.RecommendationsHandler())
 	mux.HandleFunc("/api/preferences/mature-content", preferencesHandler.MatureContentHandler())
+	mux.HandleFunc("/api/profile/recovery-key", libraryHandler.RecoveryKeyHandler())
+	mux.HandleFunc("/api/profile/recover", libraryHandler.RecoverHandler())
+	mux.HandleFunc("/api/likes", libraryHandler.LikesHandler())
+	mux.HandleFunc("/api/likes/tracks", libraryHandler.LikedTracksHandler())
+	mux.HandleFunc("/api/likes/", libraryHandler.LikeItemHandler())
 
 	mux.Handle("/api/requests", requestsHandler)
 	mux.Handle("/api/admin/", apiKeyAuth.Middleware(adminHandler))
@@ -145,7 +152,7 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		if origin != "" && allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range, X-API-Key")
 			w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")

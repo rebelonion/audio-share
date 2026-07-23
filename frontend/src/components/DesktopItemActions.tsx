@@ -3,6 +3,8 @@ import React from "react";
 import {FileSystemItem, Notification} from "@/types";
 import {useRybbit} from "@/hooks/useRybbit";
 import {API_BASE, isMatureAge} from "@/lib/api";
+import TrackQuickActions from '@/components/TrackQuickActions';
+import {audioFileToPlayerTrack} from '@/lib/tracks';
 
 interface DesktopItemActionsProps {
     item: FileSystemItem;
@@ -17,10 +19,11 @@ function DesktopItemActions({ item, notification, copyToClipboard, onMatureDownl
     const downloadUrl = item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}/download` : '#';
 
     return(
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-right"
-            style={{width: '10%'}}>
+        <td className="px-4 py-4 whitespace-nowrap text-sm text-right"
+            style={{width: '20%'}}>
             {item.type === 'audio' && (
                 <div className="flex gap-2 justify-end">
+                    <TrackQuickActions track={audioFileToPlayerTrack(item)} compact />
                     <a
                         href={item.type === 'audio' && item.shareKey ? `/share/${item.shareKey}` : '#'}
                         target="_blank"

@@ -31,7 +31,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
         if (!hasAcknowledged) {
             setStatus({
                 success: false,
-                message: 'Please confirm you understand the request rules before submitting.'
+                message: 'Check the box to confirm you understand the request rules.'
             });
             return;
         }
@@ -39,7 +39,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
         if (!requestUrl.trim()) {
             setStatus({
                 success: false,
-                message: 'Please enter a url'
+                message: 'Please enter a URL.'
             });
             return;
         }
@@ -68,7 +68,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
 
             setStatus({
                 success: true,
-                message: 'Request sent successfully!'
+                message: 'Request sent.'
             });
 
             track('artist-request');
@@ -84,7 +84,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
             console.error('Error submitting request:', error);
             setStatus({
                 success: false,
-                message: error instanceof Error ? error.message : 'An error occurred'
+                message: error instanceof Error ? error.message : 'Could not send the request.'
             });
         } finally {
             setIsSubmitting(false);
@@ -94,10 +94,10 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
             <div className="bg-[var(--card)] rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
                 <div className="flex justify-between items-center px-4 py-3 border-b border-[var(--border)]">
-                    <h3 className="text-lg font-medium text-[var(--foreground)]">Request New Artist</h3>
+                    <h3 className="text-lg font-medium text-[var(--foreground)]">Request a source</h3>
                     <button
                         onClick={handleClose}
                         className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
@@ -110,7 +110,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                 <form onSubmit={handleSubmit} className="p-4">
                     <div className="mb-4">
                         <label htmlFor="requestUrl" className="block text-sm font-medium text-[var(--foreground)] mb-1">
-                            Artist/Channel URL
+                            Artist or channel URL
                         </label>
                         <input
                             type="text"
@@ -122,17 +122,17 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                             disabled={isSubmitting}
                         />
                         <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                            Enter a YouTube, Twitch, or other content creator URL
+                            Enter a YouTube, Twitch, or other creator URL.
                         </p>
                         <p className="text-xs text-[var(--muted-foreground)] mt-1">
                             Requests are manually reviewed before appearing on the requests page.
                         </p>
                     </div>
 
-                    <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--secondary)]/70 p-3">
+                    <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--secondary-translucent)] p-3">
                         <div className="mb-2 flex items-start gap-2 text-sm font-medium text-[var(--foreground)]">
                             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--primary)]" />
-                            <span>Before submitting, please confirm:</span>
+                            <span>Request rules</span>
                         </div>
                         <ul className="space-y-1.5 pl-6 text-sm leading-relaxed text-[var(--muted-foreground)]">
                             <li className="list-disc">This artist does not already exist in the archive.</li>
@@ -150,7 +150,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                             <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border border-[var(--border)] bg-[var(--card)] text-transparent transition-colors peer-checked:border-[var(--primary)] peer-checked:bg-[var(--primary)] peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]">
                                 <Check className="h-3.5 w-3.5" />
                             </span>
-                            <span className="text-sm font-medium text-[var(--foreground)]">I understand this</span>
+                            <span className="text-sm font-medium text-[var(--foreground)]">I understand these rules</span>
                         </label>
                     </div>
 
@@ -177,10 +177,10 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                             {isSubmitting ? (
                                 <>
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Submitting...
+                                    Sending…
                                 </>
                             ) : (
-                                'Submit Request'
+                                'Send request'
                             )}
                         </button>
                     </div>

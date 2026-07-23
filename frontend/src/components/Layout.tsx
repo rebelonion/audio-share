@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Outlet, Link, useLocation } from 'react-router'
 import { Helmet } from 'react-helmet-async'
 import { Music, Menu, X } from 'lucide-react'
@@ -7,21 +8,16 @@ import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
 import AudioPlayer from './AudioPlayer'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
-import { AudioPlayerProvider, useGlobalAudioPlayer } from '@/contexts/AudioPlayerContext'
+import { AudioPlayerProvider } from '@/contexts/AudioPlayerContext'
+import { LikesProvider } from '@/contexts/LikesContext'
 // import { useMatureContentPreference } from '@/hooks/useMatureContentPreference'
 // import { useRybbit } from '@/hooks/useRybbit'
 
 function FloatingAudioPlayerSlot() {
-  const { currentTrack, surface } = useGlobalAudioPlayer()
-
-  if (!currentTrack || surface !== 'floating') {
-    return null
-  }
-
-  return <AudioPlayer />
+  return createPortal(<AudioPlayer />, document.body)
 }
 
-export default function Layout() {
+function LayoutContent() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   // const maturePreference = useMatureContentPreference()
@@ -33,7 +29,7 @@ export default function Layout() {
   // }
 
   return (
-    <AudioPlayerProvider>
+    <>
       <Helmet>
         <title>{DEFAULT_TITLE}</title>
         <link rel="icon" href="/favicon.svg" />
@@ -56,7 +52,7 @@ export default function Layout() {
               <div className="flex items-center gap-4 sm:gap-8">
                 <GlobalSearchBar />
                 <nav className="hidden sm:flex items-center gap-7">
-                  {(['About', 'Stats', 'Requests', 'Contact'] as const).map(page => {
+                  {(['Likes', 'About', 'Stats', 'Requests', 'Contact'] as const).map(page => {
                     const isActive = location.pathname === `/${page.toLowerCase()}`
                     return (
                       <Link
@@ -91,7 +87,7 @@ export default function Layout() {
           <div className={`sm:hidden grid transition-[grid-template-rows] duration-300 ease-in-out ${menuOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
             <div className="overflow-hidden">
               <div className="border-t border-[var(--border)] px-4 py-3 space-y-1">
-                {(['About', 'Stats', 'Requests', 'Contact'] as const).map(page => {
+                {(['Likes', 'About', 'Stats', 'Requests', 'Contact'] as const).map(page => {
                   const isActive = location.pathname === `/${page.toLowerCase()}`
                   return (
                     <Link
@@ -114,7 +110,15 @@ export default function Layout() {
         <InfoBanner />
 
         <main className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center text-[var(--muted-foreground)]">
+                Loading…
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
 
         <FloatingActionButton />
@@ -125,7 +129,7 @@ export default function Layout() {
           <div className="px-4 sm:px-6 lg:px-8 py-5">
             <div className="flex flex-col items-center gap-4">
               <nav className="flex items-center gap-6">
-                {(['About', 'Stats', 'Requests', 'Contact'] as const).map(page => (
+                {(['Likes', 'About', 'Stats', 'Requests', 'Contact'] as const).map(page => (
                   <Link
                     key={page}
                     to={`/${page.toLowerCase()}`}
@@ -186,6 +190,16 @@ export default function Layout() {
           </div>
         </footer>
       </div>
-    </AudioPlayerProvider>
+    </>
+  )
+}
+
+export default function Layout() {
+  return (
+    <LikesProvider>
+      <AudioPlayerProvider>
+        <LayoutContent />
+      </AudioPlayerProvider>
+    </LikesProvider>
   )
 }

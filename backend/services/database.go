@@ -91,6 +91,18 @@ func (d *Database) migrate() {
 			peaks TEXT NOT NULL,
 			generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS anonymous_profiles (
+			session_id TEXT PRIMARY KEY,
+			recovery_key_hash BYTEA UNIQUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS likes (
+			profile_id TEXT NOT NULL REFERENCES anonymous_profiles(session_id) ON DELETE CASCADE,
+			audio_file_id BIGINT NOT NULL REFERENCES audio_files(id) ON DELETE CASCADE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (profile_id, audio_file_id)
+		)`,
 		`CREATE INDEX IF NOT EXISTS idx_folders_parent_path ON folders(parent_path)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_share_key ON folders(share_key)`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_parent_path ON audio_files(parent_path)`,
@@ -98,9 +110,12 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_source_path ON audio_files(source_path)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audio_files_share_key ON audio_files(share_key)`,
 		`ALTER TABLE play_events ADD COLUMN IF NOT EXISTS session_id TEXT`,
+		`ALTER TABLE play_events ADD COLUMN IF NOT EXISTS listening_session_id TEXT`,
+		`ALTER TABLE play_events ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'legacy'`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_audio_file_id ON play_events(audio_file_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_session_id ON play_events(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_play_events_listening_session_id ON play_events(listening_session_id)`,
 		`ALTER TABLE download_events ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT 'download'`,
 		`ALTER TABLE download_events ADD COLUMN IF NOT EXISTS share_key TEXT`,
 		`ALTER TABLE download_events ADD COLUMN IF NOT EXISTS session_id TEXT`,
@@ -117,6 +132,8 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_download_events_client_ip ON download_events(client_ip)`,
 		`CREATE INDEX IF NOT EXISTS idx_download_events_session_id ON download_events(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_likes_audio_file_id ON likes(audio_file_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_likes_profile_created_at ON likes(profile_id, created_at DESC)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS age_limit INTEGER`,

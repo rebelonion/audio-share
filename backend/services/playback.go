@@ -4,22 +4,48 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
+const trackSummaryColumns = `
+	af.share_key,
+	af.path,
+	af.filename,
+	af.title,
+	af.meta_artist,
+	af.parent_path,
+	f.name,
+	f.share_key,
+	af.thumbnail,
+	f.poster_image,
+	af.age_limit
+`
+
 type PlaybackResult struct {
-	ShareKey         string  `json:"shareKey"`
-	Path             string  `json:"path"`
-	Filename         string  `json:"filename"`
-	Title            *string `json:"title"`
-	Artist           *string `json:"artist"`
-	ParentPath       *string `json:"parentPath"`
-	ParentFolderName *string `json:"parentFolderName"`
-	ParentShareKey   *string `json:"parentShareKey"`
-	AudioImage       *string `json:"audioImage"`
-	PosterImage      *string `json:"posterImage"`
-	AgeLimit         *int    `json:"ageLimit,omitempty"`
-	PlayCount        int     `json:"playCount"`
-	LastPlayed       *string `json:"lastPlayed"`
+	TrackSummary
+	PlayCount  int     `json:"playCount"`
+	LastPlayed *string `json:"lastPlayed"`
+}
+
+type UnavailablePlaybackResult struct {
+	TrackSummary
+	UnavailableAt *time.Time `json:"unavailableAt"`
+}
+
+func trackSummaryScanDest(track *TrackSummary) []any {
+	return []any{
+		&track.ShareKey,
+		&track.Path,
+		&track.Filename,
+		&track.Title,
+		&track.Artist,
+		&track.ParentPath,
+		&track.ParentFolderName,
+		&track.ParentShareKey,
+		&track.AudioImage,
+		&track.PosterImage,
+		&track.AgeLimit,
+	}
 }
 
 type PlaybackService struct {
@@ -30,7 +56,7 @@ func NewPlaybackService(db *Database) *PlaybackService {
 	return &PlaybackService{db: db}
 }
 
-func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID string) error {
+func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID, listeningSessionID, origin string) error {
 	var id int64
 	err := s.db.DB().QueryRow(
 		"SELECT id FROM audio_files WHERE share_key = $1 AND deleted = 0",
@@ -43,7 +69,7 @@ func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID string) error {
 		return err
 	}
 
-	// skip if this session played the same file in the last 5 minutes
+	// Client-supplied listening session IDs group recommendations but never deduplicate plays.
 	var recent int
 	err = s.db.DB().QueryRow(
 		"SELECT COUNT(*) FROM play_events WHERE audio_file_id = $1 AND session_id = $2 AND played_at > NOW() - INTERVAL '5 minutes'",
@@ -56,39 +82,44 @@ func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID string) error {
 		return nil
 	}
 
-	var sessionArg interface{}
-	if sessionID != "" {
-		sessionArg = sessionID
+	var listeningSessionArg interface{}
+	if listeningSessionID != "" {
+		listeningSessionArg = listeningSessionID
 	}
-	_, err = s.db.DB().Exec("INSERT INTO play_events (audio_file_id, session_id) VALUES ($1, $2)", id, sessionArg)
+	_, err = s.db.DB().Exec(`
+		INSERT INTO play_events (audio_file_id, session_id, listening_session_id, origin)
+		VALUES ($1, $2, $3, $4)
+	`, id, sessionID, listeningSessionArg, origin)
 	return err
 }
 
-func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]PlaybackResult, error) {
+func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]TrackSummary, error) {
 	// Co-occurrence normalized by candidate's total session count (TF-IDF style):
 	// score = co_sessions / total_candidate_sessions
 	// This penalizes globally popular tracks that co-occur with everything.
 	rows, err := s.db.DB().Query(`
-		WITH candidate_totals AS (
-			SELECT audio_file_id, COUNT(DISTINCT session_id) AS total_sessions
+		WITH normalized_events AS (
+			SELECT
+				audio_file_id,
+				COALESCE(listening_session_id, session_id) AS recommendation_session_id
 			FROM play_events
-			WHERE session_id IS NOT NULL
+			WHERE COALESCE(listening_session_id, session_id) IS NOT NULL
+		),
+		candidate_totals AS (
+			SELECT audio_file_id, COUNT(DISTINCT recommendation_session_id) AS total_sessions
+			FROM normalized_events
 			GROUP BY audio_file_id
 		),
 		co_occurrences AS (
-			SELECT pe2.audio_file_id, COUNT(DISTINCT pe2.session_id) AS co_count
-			FROM play_events pe1
+			SELECT pe2.audio_file_id, COUNT(DISTINCT pe2.recommendation_session_id) AS co_count
+			FROM normalized_events pe1
 			JOIN audio_files target ON target.share_key = $1
-			JOIN play_events pe2 ON pe2.session_id = pe1.session_id
+			JOIN normalized_events pe2 ON pe2.recommendation_session_id = pe1.recommendation_session_id
 				AND pe2.audio_file_id != target.id
-				AND pe2.session_id IS NOT NULL
 			WHERE pe1.audio_file_id = target.id
-				AND pe1.session_id IS NOT NULL
 			GROUP BY pe2.audio_file_id
 		)
-		SELECT
-			af.share_key, af.path, af.filename, af.title, af.meta_artist,
-			af.parent_path, f.name, f.share_key, af.thumbnail, f.poster_image
+		SELECT `+trackSummaryColumns+`
 		FROM co_occurrences co
 		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
 		LEFT JOIN folders f ON f.path = af.parent_path
@@ -104,16 +135,13 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 	}
 	defer rows.Close()
 
-	var results []PlaybackResult
+	var results []TrackSummary
 	for rows.Next() {
-		var r PlaybackResult
-		if err := rows.Scan(
-			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
-		); err != nil {
+		var track TrackSummary
+		if err := rows.Scan(trackSummaryScanDest(&track)...); err != nil {
 			return nil, err
 		}
-		results = append(results, r)
+		results = append(results, track)
 	}
 
 	// Fill remainder with random tracks
@@ -121,8 +149,8 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 		needed := limit - len(results)
 		excludeKeys := make([]interface{}, 0, len(results)+1)
 		excludeKeys = append(excludeKeys, shareKey)
-		for _, r := range results {
-			excludeKeys = append(excludeKeys, r.ShareKey)
+		for _, track := range results {
+			excludeKeys = append(excludeKeys, track.ShareKey)
 		}
 
 		placeholders := make([]string, len(excludeKeys))
@@ -132,17 +160,7 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 		excludeKeys = append(excludeKeys, needed)
 
 		query := fmt.Sprintf(`
-			SELECT
-				af.share_key,
-				af.path,
-				af.filename,
-				af.title,
-				af.meta_artist,
-				af.parent_path,
-				f.name,
-				f.share_key,
-				af.thumbnail,
-				f.poster_image
+			SELECT %s
 			FROM audio_files af
 			LEFT JOIN folders f ON f.path = af.parent_path
 			WHERE af.deleted = 0
@@ -150,7 +168,7 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 				AND COALESCE(af.age_limit, 0) < 18
 			ORDER BY RANDOM()
 			LIMIT $%d
-		`, strings.Join(placeholders, ", "), len(excludeKeys))
+		`, trackSummaryColumns, strings.Join(placeholders, ", "), len(excludeKeys))
 
 		fillRows, err := s.db.DB().Query(query, excludeKeys...)
 		if err != nil {
@@ -159,36 +177,23 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Play
 		defer fillRows.Close()
 
 		for fillRows.Next() {
-			var r PlaybackResult
-			if err := fillRows.Scan(
-				&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
-				&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
-			); err != nil {
+			var track TrackSummary
+			if err := fillRows.Scan(trackSummaryScanDest(&track)...); err != nil {
 				return results, nil
 			}
-			results = append(results, r)
+			results = append(results, track)
 		}
 	}
 
 	if results == nil {
-		results = []PlaybackResult{}
+		results = []TrackSummary{}
 	}
 	return results, nil
 }
 
 func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT
-			af.share_key,
-			af.path,
-			af.filename,
-			af.title,
-			af.meta_artist,
-			af.parent_path,
-			f.name,
-			f.share_key,
-			af.thumbnail,
-			f.poster_image,
+		SELECT `+trackSummaryColumns+`,
 			COUNT(*) as play_count,
 			MAX(pe.played_at) as last_played
 		FROM play_events pe
@@ -207,11 +212,8 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 	var results []PlaybackResult
 	for rows.Next() {
 		var r PlaybackResult
-		if err := rows.Scan(
-			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
-			&r.PlayCount, &r.LastPlayed,
-		); err != nil {
+		dest := append(trackSummaryScanDest(&r.TrackSummary), &r.PlayCount, &r.LastPlayed)
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -240,17 +242,7 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 			GROUP BY audio_file_id
 			HAVING COUNT(*) FILTER (WHERE played_at >= NOW() - INTERVAL '7 days') > 0
 		)
-		SELECT
-			af.share_key,
-			af.path,
-			af.filename,
-			af.title,
-			af.meta_artist,
-			af.parent_path,
-			f.name,
-			f.share_key,
-			af.thumbnail,
-			f.poster_image,
+		SELECT `+trackSummaryColumns+`,
 			pw.recent_7d AS play_count,
 			MAX(pe.played_at) AS last_played
 		FROM play_windows pw
@@ -269,11 +261,8 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 	var results []PlaybackResult
 	for rows.Next() {
 		var r PlaybackResult
-		if err := rows.Scan(
-			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
-			&r.PlayCount, &r.LastPlayed,
-		); err != nil {
+		dest := append(trackSummaryScanDest(&r.TrackSummary), &r.PlayCount, &r.LastPlayed)
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -285,19 +274,9 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 	return results, nil
 }
 
-func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) {
+func (s *PlaybackService) GetRecentlyAdded(limit int) ([]TrackSummary, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT
-			af.share_key,
-			af.path,
-			af.filename,
-			af.title,
-			af.meta_artist,
-			af.parent_path,
-			f.name,
-			f.share_key,
-			af.thumbnail,
-			f.poster_image
+		SELECT `+trackSummaryColumns+`
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
@@ -309,37 +288,25 @@ func (s *PlaybackService) GetRecentlyAdded(limit int) ([]PlaybackResult, error) 
 	}
 	defer rows.Close()
 
-	var results []PlaybackResult
+	var results []TrackSummary
 	for rows.Next() {
-		var r PlaybackResult
-		if err := rows.Scan(
-			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
-		); err != nil {
+		var track TrackSummary
+		if err := rows.Scan(trackSummaryScanDest(&track)...); err != nil {
 			return nil, err
 		}
-		results = append(results, r)
+		results = append(results, track)
 	}
 
 	if results == nil {
-		results = []PlaybackResult{}
+		results = []TrackSummary{}
 	}
 	return results, nil
 }
 
-func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]PlaybackResult, error) {
+func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]UnavailablePlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT
-			af.share_key,
-			af.path,
-			af.filename,
-			af.title,
-			af.meta_artist,
-			af.parent_path,
-			f.name,
-			f.share_key,
-			af.thumbnail,
-			f.poster_image
+		SELECT `+trackSummaryColumns+`,
+			af.unavailable_at
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
@@ -351,20 +318,18 @@ func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]PlaybackResult, e
 	}
 	defer rows.Close()
 
-	var results []PlaybackResult
+	var results []UnavailablePlaybackResult
 	for rows.Next() {
-		var r PlaybackResult
-		if err := rows.Scan(
-			&r.ShareKey, &r.Path, &r.Filename, &r.Title, &r.Artist,
-			&r.ParentPath, &r.ParentFolderName, &r.ParentShareKey, &r.AudioImage, &r.PosterImage,
-		); err != nil {
+		var result UnavailablePlaybackResult
+		dest := append(trackSummaryScanDest(&result.TrackSummary), &result.UnavailableAt)
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
-		results = append(results, r)
+		results = append(results, result)
 	}
 
 	if results == nil {
-		results = []PlaybackResult{}
+		results = []UnavailablePlaybackResult{}
 	}
 	return results, nil
 }

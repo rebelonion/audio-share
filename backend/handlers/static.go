@@ -126,7 +126,7 @@ func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
 				if artist.Valid && artist.String != "" {
 					t = t + " by " + artist.String
 				}
-				desc := h.config.DefaultDescription + " — " + t
+				desc := h.config.DefaultDescription + " · " + t
 				imageURL := ""
 				if thumbnail.Valid && thumbnail.String != "" {
 					imageURL = origin + "/api/audio/key/" + key + "/thumbnail"
@@ -152,7 +152,7 @@ func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
 		}
 		return pageMeta{
 			title:       folderName + " - " + h.config.DefaultTitle,
-			description: h.config.DefaultDescription + " — Browse " + folderName,
+			description: h.config.DefaultDescription + " · Browse " + folderName,
 			h1:          folderName,
 		}
 	}
@@ -171,6 +171,10 @@ func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
 		return pageMeta{title: "Search - " + h.config.DefaultTitle, description: h.config.DefaultDescription, h1: "Search"}
 	case "/requests":
 		return pageMeta{title: "Requests - " + h.config.DefaultTitle, description: h.config.DefaultDescription, h1: "Requests"}
+	case "/likes":
+		return pageMeta{title: "Likes - " + h.config.DefaultTitle, description: h.config.DefaultDescription + " · Your liked tracks", h1: "Your likes"}
+	case "/recover":
+		return pageMeta{title: "Recover Likes - " + h.config.DefaultTitle, description: h.config.DefaultDescription + " · Recover your likes", h1: "Recover your likes"}
 	}
 
 	// Unknown route — return 404

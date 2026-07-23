@@ -75,7 +75,7 @@ export default function Contact() {
             const data = await response.json();
 
             if (response.ok) {
-                setSubmitMessage({ type: 'success', text: 'Message sent successfully! Thank you for contacting us.' });
+                setSubmitMessage({ type: 'success', text: 'Message sent. Thanks for getting in touch.' });
                 track('contact-form-submit', { topic });
                 setTopic('');
                 setEmail('');
@@ -99,12 +99,12 @@ export default function Contact() {
         <>
             <Helmet>
                 <title>{DEFAULT_TITLE} - Contact</title>
-                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Contact`} />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} · Contact`} />
             </Helmet>
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold mb-2 text-[var(--foreground)]">Contact Us</h1>
-                    <p className="text-[var(--muted-foreground)]">If you have a comment or question feel free to drop it here.</p>
+                    <h1 className="text-3xl font-bold mb-2 text-[var(--foreground)]">Contact us</h1>
+                    <p className="text-[var(--muted-foreground)]">Send us a comment, question, or report.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -206,7 +206,7 @@ export default function Contact() {
                             disabled={isSubmitting}
                             className="flex-1 px-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors text-white"
                         >
-                            {isSubmitting ? 'Sending...' : 'Send Message'}
+                            {isSubmitting ? 'Sending…' : 'Send message'}
                         </button>
                         <button
                             type="button"

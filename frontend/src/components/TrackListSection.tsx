@@ -1,54 +1,47 @@
-import { useRef, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
-import { Music, ChevronLeft, ChevronRight } from 'lucide-react';
-import { PlaybackTrack, API_BASE } from '@/lib/api';
-import { useState } from 'react';
-import { useRybbit } from '@/hooks/useRybbit';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {Link} from 'react-router';
+import {ChevronLeft, ChevronRight, Music, Play} from 'lucide-react';
+import type {TrackSummary} from '@/lib/api';
+import {useRybbit} from '@/hooks/useRybbit';
+import {useAudioPlayerCommands} from '@/contexts/AudioPlayerContext';
+import {playbackToPlayerTrack, trackArtworkUrl} from '@/lib/tracks';
+import TrackQuickActions from '@/components/TrackQuickActions';
 
 interface TrackListSectionProps {
     title: string;
-    tracks: PlaybackTrack[];
+    tracks: TrackSummary[];
+    source?: 'home' | 'share';
 }
 
-function TrackPoster({ track }: { track: PlaybackTrack }) {
+function TrackPoster({track}: {track: TrackSummary}) {
     const [imageError, setImageError] = useState(false);
-
-    // Use key-based thumbnail; fall back to key-based folder poster
-    const thumbnailUrl = track.shareKey && track.audioImage
-        ? `${API_BASE}/api/audio/key/${track.shareKey}/thumbnail`
-        : null;
-    const posterUrl = !thumbnailUrl && track.parentShareKey && track.posterImage
-        ? `${API_BASE}/api/folder/key/${track.parentShareKey}/poster`
-        : null;
-
-    const imageUrl = imageError ? null : (thumbnailUrl || posterUrl);
+    const imageUrl = imageError ? null : trackArtworkUrl(track);
 
     if (!imageUrl) {
         const bars = [14, 22, 18, 28, 20, 32, 24, 16, 26, 20, 12, 28, 22, 18, 30];
         return (
             <div
                 className="w-full h-24 md:h-28 flex items-center justify-center relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--secondary) 100%)' }}
+                style={{background: 'linear-gradient(135deg, var(--card) 0%, var(--secondary) 100%)'}}
             >
                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 120 56" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                    {bars.map((h, i) => (
+                    {bars.map((height, index) => (
                         <rect
-                            key={i}
-                            x={i * 8 + 4}
-                            y={(56 - h) / 2}
+                            key={index}
+                            x={index * 8 + 4}
+                            y={(56 - height) / 2}
                             width={3}
-                            height={h}
+                            height={height}
                             rx={1.5}
                             fill="var(--primary)"
                             opacity={0.12}
                         />
                     ))}
                 </svg>
-                <Music className="h-7 w-7 relative z-10" style={{ color: 'var(--muted-foreground)', opacity: 0.45 }} />
+                <Music className="h-7 w-7 relative z-10 text-[var(--muted-foreground)] opacity-50" />
             </div>
         );
     }
-
     return (
         <img
             src={imageUrl}
@@ -60,26 +53,21 @@ function TrackPoster({ track }: { track: PlaybackTrack }) {
     );
 }
 
-function getShareUrl(track: PlaybackTrack): string {
-    return `/share/${track.shareKey}`;
-}
-
-export default function TrackListSection({ title, tracks }: TrackListSectionProps) {
-    const { track: trackEvent } = useRybbit();
+export default function TrackListSection({title, tracks, source = 'home'}: TrackListSectionProps) {
+    const {track: trackEvent} = useRybbit();
+    const {playTrack} = useAudioPlayerCommands();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
     const [needsScroll, setNeedsScroll] = useState(false);
 
-    if (tracks.length === 0) return null;
-
     const updateScrollState = useCallback(() => {
-        const el = scrollRef.current;
-        if (!el) return;
-        const scrollable = el.scrollWidth > el.clientWidth + 1;
+        const element = scrollRef.current;
+        if (!element) return;
+        const scrollable = element.scrollWidth > element.clientWidth + 1;
         setNeedsScroll(scrollable);
-        setCanScrollLeft(el.scrollLeft > 0);
-        setCanScrollRight(scrollable && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+        setCanScrollLeft(element.scrollLeft > 0);
+        setCanScrollRight(scrollable && element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
     }, []);
 
     useEffect(() => {
@@ -88,39 +76,49 @@ export default function TrackListSection({ title, tracks }: TrackListSectionProp
         return () => window.removeEventListener('resize', updateScrollState);
     }, [tracks, updateScrollState]);
 
+    if (tracks.length === 0) return null;
+
     const scroll = (direction: 'left' | 'right') => {
-        const el = scrollRef.current;
-        if (!el) return;
-        const scrollAmount = el.clientWidth * 0.75;
-        el.scrollBy({
-            left: direction === 'left' ? -scrollAmount : scrollAmount,
+        const element = scrollRef.current;
+        if (!element) return;
+        element.scrollBy({
+            left: (direction === 'left' ? -1 : 1) * element.clientWidth * 0.75,
             behavior: 'smooth',
         });
+    };
+
+    const play = (track: TrackSummary) => {
+        playTrack(playbackToPlayerTrack(track, source));
+        trackEvent('carousel-play', {section: title, path: track.path, title: track.title || track.filename});
     };
 
     return (
         <div>
             <div className="flex items-center justify-between mb-3">
-                <h2 className="flex items-center gap-3 text-2xl font-bold italic tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-                    <span className="inline-block w-1 h-6 bg-[var(--primary)] rounded-sm flex-shrink-0 not-italic" style={{ opacity: 0.85 }} />
+                <h2 className="flex items-center gap-3 text-2xl font-bold italic tracking-tight">
+                    <span className="inline-block w-1 h-6 bg-[var(--primary)] rounded-sm flex-shrink-0 not-italic opacity-85" />
                     {title}
                 </h2>
-                {needsScroll && <div className="flex gap-1">
-                    <button
-                        onClick={() => scroll('left')}
-                        disabled={!canScrollLeft}
-                        className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
-                        onClick={() => scroll('right')}
-                        disabled={!canScrollRight}
-                        className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                        <ChevronRight className="h-4 w-4" />
-                    </button>
-                </div>}
+                {needsScroll && (
+                    <div className="flex gap-1">
+                        <button
+                            onClick={() => scroll('left')}
+                            disabled={!canScrollLeft}
+                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] disabled:opacity-30"
+                            aria-label={`Scroll ${title} left`}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={() => scroll('right')}
+                            disabled={!canScrollRight}
+                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] disabled:opacity-30"
+                            aria-label={`Scroll ${title} right`}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div
@@ -129,25 +127,39 @@ export default function TrackListSection({ title, tracks }: TrackListSectionProp
                 className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory"
             >
                 {tracks.map((track, index) => (
-                    <Link
-                        key={track.shareKey || track.path}
-                        to={getShareUrl(track)}
-                        onClick={() => trackEvent('carousel-click', { section: title, path: track.path, title: track.title || track.filename })}
-                        className="flex-shrink-0 w-36 md:w-44 snap-start group animate-fadeIn"
-                        style={{ animationDelay: `${index * 35}ms`, animationFillMode: 'both' }}
-                    >
-                        <div className="rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-all duration-200">
-                            <TrackPoster track={track} />
-                            <div className="p-2.5">
-                                <div className="font-medium text-sm line-clamp-2 group-hover:text-[var(--primary)] transition-colors">
-                                    {track.title || track.filename}
+                        <div
+                            key={track.shareKey || track.path}
+                            className="flex-shrink-0 w-36 md:w-44 snap-start group animate-fadeIn"
+                            style={{animationDelay: `${index * 35}ms`, animationFillMode: 'both'}}
+                        >
+                            <div className="relative rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-all duration-200">
+                                <Link
+                                    to={`/share/${track.shareKey}`}
+                                    onClick={() => trackEvent('carousel-details', {section: title, path: track.path})}
+                                    className="absolute inset-0 z-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
+                                    aria-label={`Open ${track.title || track.filename}`}
+                                />
+                                <div className="relative pointer-events-none">
+                                    <TrackPoster track={track} />
                                 </div>
-                                <div className="text-xs text-[var(--muted-foreground)] truncate mt-1">
-                                    {track.artist || track.parentFolderName || '\u00A0'}
+                                <div className="relative pointer-events-none p-2.5">
+                                    <div className="font-medium text-sm line-clamp-2 text-left group-hover:text-[var(--primary)] transition-colors">{track.title || track.filename}</div>
+                                    <div className="text-xs text-[var(--muted-foreground)] truncate mt-1">{track.artist || track.parentFolderName || '\u00A0'}</div>
+                                    <div className="relative z-10 mt-2 flex items-center justify-between pointer-events-auto">
+                                        <TrackQuickActions track={playbackToPlayerTrack(track, source)} compact />
+                                        <button
+                                            type="button"
+                                            onClick={() => play(track)}
+                                            className="rounded-full bg-[var(--secondary)] p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--primary)]"
+                                            title="Play"
+                                            aria-label={`Play ${track.title || track.filename}`}
+                                        >
+                                            <Play className="h-3.5 w-3.5 fill-current" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </Link>
                 ))}
             </div>
         </div>

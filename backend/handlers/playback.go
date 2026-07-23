@@ -21,7 +21,9 @@ func NewPlaybackHandler(playbackService *services.PlaybackService, sessionSecret
 }
 
 type recordRequest struct {
-	ShareKey string `json:"shareKey"`
+	ShareKey           string `json:"shareKey"`
+	ListeningSessionID string `json:"listeningSessionId"`
+	Origin             string `json:"origin"`
 }
 
 func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
@@ -31,16 +33,24 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
 		var req recordRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 			return
 		}
 
+		req.ShareKey = strings.TrimSpace(req.ShareKey)
+		req.ListeningSessionID = strings.TrimSpace(req.ListeningSessionID)
 		if req.ShareKey == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shareKey is required"})
 			return
 		}
+		if len(req.ShareKey) > 128 || len(req.ListeningSessionID) > 128 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid playback identifiers"})
+			return
+		}
+		req.Origin = normalizePlaybackOrigin(req.Origin)
 
 		sessionID, ok := resolveSessionID(r, h.sessionSecret)
 		if !ok {
@@ -49,12 +59,22 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 		}
 		setSessionCookie(w, r, h.sessionSecret, sessionID)
 
-		if err := h.playbackService.RecordPlayEvent(req.ShareKey, sessionID); err != nil {
+		if err := h.playbackService.RecordPlayEvent(req.ShareKey, sessionID, req.ListeningSessionID, req.Origin); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record play event"})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "sessionId": sessionID})
+		writeJSON(w, http.StatusOK, map[string]string{"sessionId": sessionID})
+	}
+}
+
+func normalizePlaybackOrigin(origin string) string {
+	origin = strings.TrimSpace(origin)
+	switch origin {
+	case "browse", "share", "home", "search", "likes", "manual", "autoplay":
+		return origin
+	default:
+		return "unknown"
 	}
 }
 

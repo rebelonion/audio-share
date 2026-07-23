@@ -1,4 +1,4 @@
-import {useState, useRef, useCallback} from 'react';
+import {useState, useRef, useEffect, type MouseEvent} from 'react';
 import {
     Play,
     Pause,
@@ -11,17 +11,28 @@ import {
     ChevronsUp,
     MinusCircle,
     Expand,
-    Loader2
+    Loader2,
+    Heart,
+    ListMusic,
+    SkipBack,
+    SkipForward,
+    X
 } from 'lucide-react';
 import WaveformDisplay from '@/components/WaveformDisplay';
-import MatureContentDialog from '@/components/MatureContentDialog';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 import {useAudioPlayerKeybinds} from '@/hooks/useAudioPlayerKeybinds';
+import QueuePanel from '@/components/QueuePanel';
+import {useLikes} from '@/contexts/LikesContext';
+
+function formatTime(time: number): string {
+    const safe = Number.isFinite(time) ? time : 0;
+    return `${Math.floor(safe / 60)}:${Math.floor(safe % 60).toString().padStart(2, '0')}`;
+}
 
 export default function AudioPlayer() {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-    const [showMatureDialog, setShowMatureDialog] = useState(false);
+    const [showQueue, setShowQueue] = useState(false);
     const progressRef = useRef<HTMLDivElement>(null);
 
     const {
@@ -39,35 +50,49 @@ export default function AudioPlayer() {
         artist,
         track,
         waveformPeaks,
+        upcoming,
+        skipNext,
+        skipPrevious,
+        closePlayer,
         togglePlay,
         toggleMute,
-        handleVolumeChange,
-        handleProgressClick,
-        formatTime
+        seekTo,
+        setVolume,
     } = useGlobalAudioPlayer();
+    const {isLiked, isLikePending, isLoading: likesLoading, isReady: likesReady, toggleLike} = useLikes();
+    const liked = isLiked(currentTrack?.shareKey);
+    const likePending = isLikePending(currentTrack?.shareKey);
 
-    const isMature = !!metadata?.isMature;
+    const isMature = !!metadata?.isMature || (typeof currentTrack?.ageLimit === 'number' && currentTrack.ageLimit >= 18);
     const canShowMatureDetails = !isMature || !!metadata?.showMature;
 
-    const continuePlay = useCallback(() => {
-        togglePlay();
-    }, [togglePlay]);
+    useAudioPlayerKeybinds({onTogglePlay: togglePlay});
 
-    const handlePlay = useCallback(() => {
-        if (!isPlaying && isMature && !metadata?.showMature && sessionStorage.getItem('mature-warning-ack') !== 'true') {
-            setShowMatureDialog(true);
-            return;
+    useEffect(() => {
+        const mobile = window.matchMedia('(max-width: 639px)');
+        const applyResponsiveDefault = () => setIsMinimized(mobile.matches);
+        applyResponsiveDefault();
+        mobile.addEventListener('change', applyResponsiveDefault);
+        return () => mobile.removeEventListener('change', applyResponsiveDefault);
+    }, []);
+
+    useEffect(() => {
+        if (currentTrack?.source === 'share' && window.matchMedia('(max-width: 639px)').matches) {
+            setIsMinimized(true);
         }
-        continuePlay();
-    }, [continuePlay, isPlaying, isMature, metadata?.showMature]);
+        setIsDescriptionExpanded(false);
+    }, [currentTrack?.source, currentTrack?.src]);
 
-    useAudioPlayerKeybinds({onTogglePlay: handlePlay});
-
-    const confirmMaturePlayback = useCallback(() => {
-        sessionStorage.setItem('mature-warning-ack', 'true');
-        setShowMatureDialog(false);
-        continuePlay();
-    }, [continuePlay]);
+    useEffect(() => {
+        if (currentTrack) {
+            document.body.dataset.audioPlayer = 'visible';
+        } else {
+            delete document.body.dataset.audioPlayer;
+        }
+        return () => {
+            delete document.body.dataset.audioPlayer;
+        };
+    }, [currentTrack]);
 
     const toggleMinimize = () => {
         setIsMinimized(!isMinimized);
@@ -77,38 +102,33 @@ export default function AudioPlayer() {
         setIsDescriptionExpanded(!isDescriptionExpanded);
     };
 
-    if (!currentTrack) {
-        return null;
-    }
+    const handleClosePlayer = () => {
+        setShowQueue(false);
+        closePlayer();
+    };
+
+    const handleProgressClick = (event: MouseEvent<HTMLDivElement>) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        seekTo(((event.clientX - bounds.left) / bounds.width) * duration);
+    };
+
+    if (!currentTrack) return null;
 
     return (
         <>
         <div
-            className={`fixed bottom-4 right-4 z-50 ${isMinimized ? 'w-52' : 'w-80'} rounded-lg overflow-hidden transition-all duration-300`}
+            className={`fixed bottom-4 z-50 overflow-x-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] transition-[width] duration-200 ease-out max-sm:bottom-[calc(1rem+env(safe-area-inset-bottom))] max-sm:left-4 max-sm:right-4 max-sm:w-auto sm:right-4 ${isMinimized ? 'sm:w-96' : 'sm:w-80 max-sm:max-h-[calc(100dvh-2rem-env(safe-area-inset-bottom))] max-sm:overflow-y-auto max-sm:overscroll-contain'}`}
             style={{
-                background: 'rgba(19, 17, 9, 0.92)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderWidth: '1px',
-                borderStyle: 'solid',
-                borderColor: isPlaying ? 'rgba(196,136,42,0.4)' : 'var(--border)',
-                boxShadow: isPlaying
-                    ? '0 20px 60px rgba(0,0,0,0.55), 0 0 40px rgba(196,136,42,0.07)'
-                    : '0 20px 50px rgba(0,0,0,0.45)',
+                contain: 'layout paint style',
+                isolation: 'isolate',
             }}
         >
             {isMinimized ? (
-                <div className="flex items-center gap-2 px-2 py-2">
+                <div className="flex items-center gap-2 px-2.5 py-2.5">
                     <div className="relative flex-shrink-0">
-                        {isPlaying && (
-                            <span className="absolute inset-0 rounded-full bg-[var(--primary)] animate-ping opacity-20 pointer-events-none" />
-                        )}
                         <button
-                            onClick={handlePlay}
-                            className="relative p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-200 focus:outline-none"
-                            style={{
-                                boxShadow: isPlaying ? '0 0 0 3px rgba(196,136,42,0.25), 0 0 18px rgba(196,136,42,0.3)' : undefined,
-                            }}
+                            onClick={togglePlay}
+                            className="relative p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors duration-200 focus:outline-none"
                             aria-label={isPlaying ? "Pause" : "Play"}
                         >
                             {isLoading ? (
@@ -120,13 +140,34 @@ export default function AudioPlayer() {
                             )}
                         </button>
                     </div>
-                    <div className="flex-1 min-w-0 text-xs text-[var(--foreground)] truncate leading-tight">
-                        {metadata?.title || track}
-                    </div>
+                    <button type="button" onClick={toggleMinimize} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label="Open full player">
+                        <span className="flex h-10 w-14 flex-shrink-0 overflow-hidden rounded bg-[var(--secondary)]">
+                            {thumbnail ? (
+                                <img src={thumbnail} alt="" width={56} height={40} className="h-full w-full object-cover" />
+                            ) : (
+                                <span className="flex h-full w-full items-center justify-center"><ListMusic className="h-4 w-4 text-[var(--muted-foreground)]" /></span>
+                            )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm text-[var(--foreground)]">{metadata?.title || track}</span>
+                            <span className="block truncate text-xs text-[var(--muted-foreground)]">{metadata?.artist || artist}</span>
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowQueue(value => !value)}
+                        className="flex flex-shrink-0 items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                        aria-label={`Open queue, ${upcoming.length} ${upcoming.length === 1 ? 'track' : 'tracks'} upcoming`}
+                        title="Open queue"
+                    >
+                        <ListMusic className="h-3.5 w-3.5" />
+                        <span className="min-w-3 text-center text-[10px] font-medium tabular-nums text-[var(--foreground)]">{upcoming.length > 99 ? '99+' : upcoming.length}</span>
+                    </button>
                     <button
                         onClick={toggleMinimize}
                         className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex-shrink-0"
                         aria-label="Expand player"
+                        title="Expand player"
                     >
                         <Expand className="h-3.5 w-3.5"/>
                     </button>
@@ -134,41 +175,51 @@ export default function AudioPlayer() {
             ) : (
                 <>
                 <div className="flex items-center justify-between p-2.5 border-b border-[var(--border)]">
-                    <div className="flex-grow text-center truncate px-2">
-                        <div className="text-sm font-medium truncate">
-                            {metadata?.title || track}
-                        </div>
-                        {isMature && (
-                            <div className="mt-1 text-[10px] font-semibold text-amber-400">18+</div>
-                        )}
-                    </div>
                     <button
-                        onClick={toggleMinimize}
-                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex-shrink-0"
-                        aria-label="Minimize player"
+                        onClick={() => void toggleLike(currentTrack.shareKey)}
+                        disabled={!likesReady || likesLoading || likePending}
+                        className={`p-1 text-[var(--muted-foreground)] hover:text-[var(--primary)] ${liked ? 'text-[var(--primary)]' : ''}`}
+                        aria-label={liked ? 'Unlike track' : 'Like track'}
+                        title={liked ? 'Unlike track' : 'Like track'}
                     >
-                        <MinusCircle className="h-4 w-4"/>
+                        <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />
                     </button>
+                    <div className="flex items-center gap-1">
+                        <button onClick={() => setShowQueue(value => !value)} className="relative p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Open queue" title="Open queue">
+                            <ListMusic className="h-4 w-4" />
+                            {upcoming.length > 0 && <span className="absolute -right-1 -top-1 min-w-3 h-3 px-0.5 rounded-full bg-[var(--primary)] text-white text-[8px] flex items-center justify-center">{Math.min(99, upcoming.length)}</span>}
+                        </button>
+                        <button onClick={toggleMinimize} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Minimize player" title="Minimize player"><MinusCircle className="h-4 w-4"/></button>
+                        <button onClick={handleClosePlayer} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--error-text)]" aria-label="Close and clear queue" title="Close and clear queue"><X className="h-4 w-4"/></button>
+                    </div>
                 </div>
 
                 <div className="p-3">
                     <div className="flex flex-col mb-3">
-                        {thumbnail && (
-                            <div className="mx-auto mb-3 transition-all duration-300 transform hover:scale-105">
+                        <div className="mx-auto mb-3 h-28 w-48 overflow-hidden rounded-md bg-[var(--secondary)]">
+                            {thumbnail ? (
                                 <img
                                     src={thumbnail}
                                     alt={`${metadata?.title || track} thumbnail`}
                                     width={192}
-                                    height={192}
-                                    loading="lazy"
-                                    className="object-cover rounded-md shadow-sm w-full h-auto max-h-48"
+                                    height={112}
+                                    loading="eager"
+                                    decoding="async"
+                                    className="h-full w-full object-cover"
                                 />
-                            </div>
-                        )}
+                            ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[var(--muted-foreground)]">
+                                    <ListMusic className="h-7 w-7 opacity-40" />
+                                </div>
+                            )}
+                        </div>
 
                         <div className="text-center">
-                            <div className="font-medium text-[var(--foreground)] line-clamp-3">
-                                {metadata?.title || track}
+                            <div className="flex items-start justify-center gap-2">
+                                <div className="font-medium text-[var(--foreground)] line-clamp-3">
+                                    {metadata?.title || track}
+                                </div>
+                                {isMature && <span className="mt-0.5 flex-shrink-0 text-[10px] font-semibold text-amber-400">18+</span>}
                             </div>
                             <div className="text-sm text-[var(--muted-foreground)] truncate">
                                 {metadata?.artist || artist}
@@ -177,7 +228,7 @@ export default function AudioPlayer() {
                     </div>
 
                     {error && (
-                        <div className="mb-3 p-2 bg-red-900/20 text-red-400 rounded flex items-start animate-fadeIn">
+                        <div className="mb-3 flex items-start rounded border border-[var(--error-border)] bg-[var(--error-bg)] p-2 text-[var(--error-text)] animate-fadeIn">
                             <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
                             <span className="text-xs">{error}</span>
                         </div>
@@ -196,16 +247,20 @@ export default function AudioPlayer() {
                         ) : (
                             <div
                                 ref={progressRef}
-                                className="w-full h-2 bg-[var(--muted)] rounded-full overflow-hidden cursor-pointer transition-height duration-200 hover:h-3 mb-2"
+                                className="group flex h-8 w-full cursor-pointer items-center mb-2"
                                 onClick={handleProgressClick}
                             >
                                 <div
-                                    className="h-full bg-[var(--primary)] rounded-full transition-all duration-100"
-                                    style={{
-                                        width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
-                                        opacity: audioLoaded ? 1 : 0.7
-                                    }}
-                                ></div>
+                                    className="h-2 w-full overflow-hidden rounded-full bg-[var(--muted)] transition-[height] duration-150 group-hover:h-3"
+                                >
+                                    <div
+                                        className="h-full bg-[var(--primary)] rounded-full"
+                                        style={{
+                                            width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
+                                            opacity: audioLoaded ? 1 : 0.7
+                                        }}
+                                    />
+                                </div>
                             </div>
                         )}
 
@@ -214,24 +269,23 @@ export default function AudioPlayer() {
                                 {isPlaying || currentTime > 0 ? formatTime(currentTime) : "0:00"}
                             </span>
 
-                            <button
-                                onClick={handlePlay}
-                                className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all duration-300 mx-2 focus:outline-none"
-                                style={{
-                                    boxShadow: isPlaying
-                                        ? '0 0 0 3px rgba(196,136,42,0.25), 0 0 24px rgba(196,136,42,0.4)'
-                                        : '0 0 0 0 rgba(196,136,42,0)',
-                                }}
-                                aria-label={isPlaying ? "Pause" : "Play"}
-                            >
-                                {isLoading ? (
-                                    <Loader2 className="h-6 w-6 animate-spin"/>
-                                ) : isPlaying ? (
-                                    <Pause className="h-6 w-6"/>
-                                ) : (
-                                    <Play className="h-6 w-6"/>
-                                )}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button onClick={skipPrevious} className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Previous track" title="Previous track"><SkipBack className="h-4 w-4 fill-current" /></button>
+                                <button
+                                    onClick={togglePlay}
+                                    className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors duration-200 focus:outline-none"
+                                    aria-label={isPlaying ? "Pause" : "Play"}
+                                >
+                                    {isLoading ? (
+                                        <Loader2 className="h-6 w-6 animate-spin"/>
+                                    ) : isPlaying ? (
+                                        <Pause className="h-6 w-6"/>
+                                    ) : (
+                                        <Play className="h-6 w-6"/>
+                                    )}
+                                </button>
+                                <button onClick={skipNext} className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Next track" title="Next track"><SkipForward className="h-4 w-4 fill-current" /></button>
+                            </div>
 
                             <span className="text-xs text-[var(--muted-foreground)] tabular-nums">
                                 {formatTime(duration || (metadata?.duration || 0))}
@@ -254,57 +308,58 @@ export default function AudioPlayer() {
                             max="1"
                             step="0.01"
                             value={volume}
-                            onChange={handleVolumeChange}
-                            className="flex-grow transition-all duration-200"
+                            onChange={event => setVolume(Number.parseFloat(event.target.value))}
+                            className="flex-grow"
                             aria-label="Volume"
                         />
                     </div>
 
                     <div>
-                        {metadata?.uploadDate && (
-                            <div className="text-xs text-[var(--muted-foreground)] flex items-center mt-2">
-                                <Calendar className="h-3 w-3 mr-1"/>
-                                <span>{`${metadata.uploadDate.substring(0, 4)}-${metadata.uploadDate.substring(4, 6)}-${metadata.uploadDate.substring(6, 8)}`}</span>
-                            </div>
-                        )}
+                        {(metadata?.uploadDate || metadata?.webpageUrl) && (
+                            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
+                                {metadata?.uploadDate && (
+                                    <div className="flex min-w-0 items-center">
+                                        <Calendar className="h-3 w-3 mr-1"/>
+                                        <span>{`${metadata.uploadDate.substring(0, 4)}-${metadata.uploadDate.substring(4, 6)}-${metadata.uploadDate.substring(6, 8)}`}</span>
+                                    </div>
+                                )}
 
-                        {metadata?.webpageUrl && (
-                            <div className="text-xs text-[var(--muted-foreground)] flex items-center mt-2">
-                                <a
-                                    href={metadata.webpageUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center hover:text-[var(--primary)] transition-colors"
-                                >
-                                    <ExternalLink className="h-3 w-3 mr-1"/>
-                                    <span className="truncate">Original Source</span>
-                                </a>
+                                {metadata?.webpageUrl && (
+                                    <a
+                                        href={metadata.webpageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-auto flex min-w-0 items-center hover:text-[var(--primary)] transition-colors"
+                                    >
+                                        <ExternalLink className="h-3 w-3 mr-1"/>
+                                        <span className="truncate">Original source</span>
+                                    </a>
+                                )}
                             </div>
                         )}
 
                         {metadata?.description && canShowMatureDetails && (
                             <div className="mt-3 text-xs text-[var(--muted-foreground)]">
-                                <div className="flex justify-between items-center mb-1">
-                                    <div className="font-medium text-xs">Description</div>
-                                    <button
-                                        onClick={toggleDescriptionExpand}
-                                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                                        aria-label={isDescriptionExpanded ? "Collapse description" : "Expand description"}
-                                    >
+                                <button
+                                    onClick={toggleDescriptionExpand}
+                                    className="flex w-full items-center justify-between rounded px-1 py-1.5 text-left font-medium hover:bg-[var(--card-hover-subtle)] hover:text-[var(--foreground)] transition-colors"
+                                    aria-expanded={isDescriptionExpanded}
+                                >
+                                    <span>Description</span>
+                                    <span className="p-0.5" aria-hidden="true">
                                         {isDescriptionExpanded ? <ChevronsUp className="h-3 w-3"/> :
                                             <ChevronsDown className="h-3 w-3"/>}
-                                    </button>
-                                </div>
-                                <div
-                                    className={`${isDescriptionExpanded ? 'max-h-40 overflow-y-auto custom-scrollbar' : 'line-clamp-2'} whitespace-pre-line rounded bg-[var(--card-hover)]/20 p-2`}
-                                    onClick={isDescriptionExpanded ? undefined : toggleDescriptionExpand}
-                                >
-                                    {metadata.description}
-                                </div>
+                                    </span>
+                                </button>
+                                {isDescriptionExpanded && (
+                                    <div className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line rounded bg-[var(--card-hover-subtle)] p-2 custom-scrollbar animate-fadeIn">
+                                        {metadata.description}
+                                    </div>
+                                )}
                             </div>
                         )}
                         {metadata?.description && !canShowMatureDetails && (
-                            <div className="mt-3 text-xs text-[var(--muted-foreground)] rounded bg-[var(--card-hover)]/20 p-2">
+                            <div className="mt-3 text-xs text-[var(--muted-foreground)] rounded bg-[var(--card-hover-subtle)] p-2">
                                 Description hidden for mature content.
                             </div>
                         )}
@@ -313,11 +368,7 @@ export default function AudioPlayer() {
             </>
             )}
         </div>
-        <MatureContentDialog
-            open={showMatureDialog}
-            onCancel={() => setShowMatureDialog(false)}
-            onConfirm={confirmMaturePlayback}
-        />
+        {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
         </>
     );
 }

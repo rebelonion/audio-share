@@ -48,7 +48,7 @@ export default function About() {
         <>
             <Helmet>
                 <title>{DEFAULT_TITLE} - About</title>
-                <meta name="description" content={`${DEFAULT_DESCRIPTION} — About`} />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} · About`} />
             </Helmet>
             <div className="max-w-4xl mx-auto animate-slideUp">
                 {error && (

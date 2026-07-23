@@ -11,11 +11,12 @@ import MatureContentDialog from "@/components/MatureContentDialog";
 import {reverseIf} from "@/lib/utils";
 import {useSearchParams} from "react-router";
 import {useRybbit} from "@/hooks/useRybbit";
-import {recordPlayEvent} from "@/lib/api";
-import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
+import {useAudioPlayerCommands} from '@/contexts/AudioPlayerContext';
+import {audioFileToPlayerTrack} from '@/lib/tracks';
 
 interface FolderViewProps {
     items: FileSystemItem[];
+    currentPath?: string;
 }
 
 type SortMethod = 'alpha' | 'modified' | 'size' | 'duration';
@@ -32,7 +33,7 @@ type DisplayEntry =
 const DESKTOP_LETTER_HEIGHT = 33;
 const DESKTOP_ITEM_HEIGHT = 65;
 const MOBILE_LETTER_HEIGHT = 40; // h-8 + mb-2
-const MOBILE_ITEM_HEIGHT = 102; // h-[90px] + mb-3
+const MOBILE_ITEM_HEIGHT = 122; // h-[110px] + mb-3
 
 function getIsDesktop() {
     return typeof window === 'undefined'
@@ -165,9 +166,9 @@ function useWindowedEntries(entries: DisplayEntry[], isDesktop: boolean) {
     };
 }
 
-export default function FolderView({items}: FolderViewProps) {
+export default function FolderView({items, currentPath = ''}: FolderViewProps) {
     const {track} = useRybbit();
-    const {selectTrack, setSurface} = useGlobalAudioPlayer();
+    const {playContext} = useAudioPlayerCommands();
     const [searchParams] = useSearchParams();
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
     const [sortMethod, setSortMethod] = useState<SortMethod>('alpha');
@@ -365,7 +366,7 @@ export default function FolderView({items}: FolderViewProps) {
         return items.some(item => item.type === 'audio');
     }, [items]);
 
-    const nameColumnWidth = showDurationColumn ? '45%' : '55%';
+    const nameColumnWidth = showDurationColumn ? '35%' : '45%';
     const sizeColumnWidth = showDurationColumn ? '17%' : '20%';
 
     useEffect(() => {
@@ -397,22 +398,20 @@ export default function FolderView({items}: FolderViewProps) {
 
             const key = item.shareKey || '';
             if (key) {
-                selectTrack({
-                    src: `/audio/key/${key}`,
-                    shareKey: key,
-                    name: item.title || item.name,
-                    unavailable: !!item.unavailableAt,
-                    source: 'browse',
-                    onFirstPlay: () => recordPlayEvent(key).catch(() => {}),
-                });
-                setSurface('floating');
+                const audioItems = sortedItems.filter((candidate): candidate is Extract<FileSystemItem, {type: 'audio'}> => candidate.type === 'audio');
+                const selectedIndex = audioItems.findIndex(candidate => candidate.shareKey === key);
+                playContext(
+                    audioItems.map(candidate => audioFileToPlayerTrack(candidate, 'browse')),
+                    selectedIndex,
+                    currentPath ? currentPath.split('/').pop() || 'Folder' : 'Audio folder',
+                );
             }
             track('audio-player-open', { path: item.path, name: item.name });
             setTimeout(() => {
                 setIsAudioSelectionLocked(false);
             }, 300);
         }
-    }, [isAudioSelectionLocked, selectTrack, setSurface, track]);
+    }, [currentPath, isAudioSelectionLocked, playContext, sortedItems, track]);
 
     const scrollToLetter = useCallback((letter: string) => {
         scrollToLetterOffset(letter);
@@ -563,8 +562,8 @@ export default function FolderView({items}: FolderViewProps) {
                         <div className="flex items-start gap-2">
                             <div
                                 className="flex-1 min-w-0 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
-                                <div className="overflow-x-auto scrollbar-hide" id="table-container">
-                                    <table className="w-full table-fixed border-collapse">
+                                <div className="overflow-x-auto custom-scrollbar" id="table-container">
+                                    <table className="w-full min-w-[70rem] table-fixed border-collapse">
                                         <thead className="bg-[var(--secondary)] sticky top-0 z-20">
                                         <tr>
                                             <th scope="col"
@@ -599,7 +598,7 @@ export default function FolderView({items}: FolderViewProps) {
                                             </th>
                                             <th scope="col"
                                                 className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
-                                                style={{width: '10%'}}>
+                                                style={{width: '20%'}}>
                                                 Actions
                                             </th>
                                         </tr>
@@ -676,7 +675,7 @@ export default function FolderView({items}: FolderViewProps) {
                                 ) : (
                                                     <div
                                                         key={`mobile-${entry.key}`}
-                                                        className={`h-[90px] border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
+                                                        className={`h-[110px] border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
                                                             entry.item.type === 'audio' ? 'cursor-pointer' : ''
                                                         } ${entry.item.type === 'audio' && entry.item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
                                                         title={entry.item.type === 'audio' && entry.item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}

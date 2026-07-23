@@ -11,11 +11,22 @@
         --card-foreground: #ece7de;
         --primary: #c4882a;
         --primary-hover: #d49940;
+        --primary-wash: rgba(196, 136, 42, 0.05);
+        --primary-tint: rgba(196, 136, 42, 0.1);
+        --primary-soft: rgba(196, 136, 42, 0.2);
+        --primary-soft-hover: rgba(196, 136, 42, 0.3);
+        --primary-border: rgba(196, 136, 42, 0.4);
+        --primary-border-hover: rgba(196, 136, 42, 0.5);
         --secondary: #251f15;
         --secondary-hover: #1b1712;
+        --secondary-translucent: rgba(37, 31, 21, 0.7);
         --muted: #352d1e;
         --muted-foreground: #9a8c7a;
         --border: #2d2518;
+        --border-subtle: rgba(45, 37, 24, 0.5);
+        --border-strong: rgba(45, 37, 24, 0.7);
+        --card-translucent: rgba(19, 17, 9, 0.4);
+        --card-hover-subtle: rgba(27, 23, 18, 0.25);
 
         --error-bg: rgba(100, 35, 15, 0.88);
         --error-border: rgba(170, 70, 35, 0.55);
@@ -60,6 +71,11 @@
         isolation: isolate;
     }
 
+    :where(a, button, input, textarea, select):focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 3px;
+    }
+
     body::before {
         content: '';
         position: fixed;
@@ -70,6 +86,47 @@
         background-size: 200px 200px;
         opacity: 0.035;
         pointer-events: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+        scroll-behavior: auto;
+    }
+
+    .animate-fadeIn,
+    .animate-slideUp,
+    .animate-spin,
+    .animate-pulse,
+    .animate-ping,
+    .skeleton {
+        animation: none !important;
+    }
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+    }
+}
+
+@media (max-width: 639px) {
+    body[data-audio-player='visible'] .floating-action-button {
+        position: fixed;
+        bottom: calc(6.25rem + env(safe-area-inset-bottom));
+        left: 1.5rem;
+        margin: 0;
+    }
+
+    body[data-audio-player='visible'] .floating-action-button.footer-is-near {
+        bottom: var(--footer-clearance);
+    }
+
+    body[data-audio-player='visible'] footer {
+        margin-top: 4.5rem;
+        padding-bottom: calc(4rem + env(safe-area-inset-bottom));
     }
 }
 
@@ -168,7 +225,6 @@
         transition-duration: 150ms;
     }
 
-    /* Scrollbars */
     .custom-scrollbar {
         scrollbar-width: thin;
         scrollbar-color: var(--primary) rgba(0, 0, 0, 0.15);
@@ -176,6 +232,7 @@
 
     .custom-scrollbar::-webkit-scrollbar {
         width: 4px;
+        height: 4px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {

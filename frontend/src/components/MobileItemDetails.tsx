@@ -4,6 +4,8 @@ import React from "react";
 import {formatDate, formatDuration, formatFileSize} from "@/lib/utils";
 import {useRybbit} from "@/hooks/useRybbit";
 import {API_BASE, isMatureAge} from "@/lib/api";
+import TrackQuickActions from '@/components/TrackQuickActions';
+import {audioFileToPlayerTrack} from '@/lib/tracks';
 
 interface MobileItemDetailsProps {
     item: FileSystemItem;
@@ -37,6 +39,7 @@ function MobileItemDetails({ item, notification, copyToClipboard, onMatureDownlo
 
             {item.type === 'audio' && (
                 <div className="flex gap-2">
+                    <TrackQuickActions track={audioFileToPlayerTrack(item)} compact />
                     <a
                         href={item.type === 'audio' && item.shareKey ? `/share/${item.shareKey}` : '#'}
                         target="_blank"

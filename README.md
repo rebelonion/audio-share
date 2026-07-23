@@ -1,6 +1,6 @@
 # Audio Share
 
-A modern web application for browsing, playing, and sharing audio files from your local collection.
+Browse, play, and share audio files from a collection you host.
 
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Go](https://img.shields.io/badge/Go-1.24-00ADD8)
@@ -11,14 +11,15 @@ A modern web application for browsing, playing, and sharing audio files from you
 ## Features
 
 - Browse your audio library with folder-based navigation (including from external directories)
-- **Global search** across the entire library by name, artist, title, or description
+- Search the entire library by name, artist, title, or description
 - Stream audio files directly in the browser
-- Fully-featured audio player with playback controls, volume adjustment, and waveform visualizer
+- Use a persistent queue, folder playlists, autoplay, playback controls, and a waveform visualizer
+- Save likes without an account and recover them with a text key or QR code
 - Display metadata for audio files including title, artist, and album art
 - Share links to specific audio files
-- Responsive design that works on all devices
+- Use the responsive layout on desktop and mobile
 - Request new artists/channels to be added via ntfy notifications
-- Enhanced folder presentation with custom names, item counts, and source links
+- Add custom folder names, item counts, and source links
 
 ## Installation
 
@@ -94,7 +95,7 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `DOWNLOAD_BYTES_PER_SECOND` | Per-request download speed limit in bytes per second (`0` disables) | `0` |
 | `STREAM_FILE_LIMIT` | Per-IP stream request limit per `RATE_LIMIT_WINDOW` | `10` |
 | `DOWNLOAD_FILE_LIMIT` | Per-IP download request limit per `RATE_LIMIT_WINDOW` | `10` |
-| `CONTENT_DIR` | Directory for about.md and stats JSON | `./content` |
+| `CONTENT_DIR` | Directory for `about.md` | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
 | `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
 | `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
@@ -120,7 +121,7 @@ Organize your audio files in your configured audio directory. The application wi
 2. Show properly formatted artist and track names based on directory structure
 3. Support common audio formats: MP3, WAV, OGG, FLAC, AAC, M4A, OPUS
 
-### Enhanced Metadata
+### File Metadata
 
 For each audio file, you can add optional metadata:
 
@@ -147,7 +148,7 @@ The `epoch` field (Unix timestamp of when the file was downloaded) is used to ge
 
 ### Folder Metadata
 
-You can add enhanced metadata for directories by adding a `folder.json` file in the parent directory:
+You can add metadata for directories with a `folder.json` file in the parent directory:
 
 ```json
 [
@@ -169,7 +170,7 @@ The `content/` directory holds customizable content:
 
 ## Stats
 
-The stats page (`/stats`) is generated directly from the search index database — no external scripts or static JSON files needed. It tracks:
+The stats page (`/stats`) reads from the search index database. It does not need external scripts or static JSON files. It tracks:
 
 - **Audio by day**: Number of audio files downloaded per day, based on the `epoch` field in `.info.json` files
 - **Sources by day**: New sources (channels) discovered per day, based on the first download date of files in each source folder
@@ -178,7 +179,7 @@ A folder is considered a "source" if it has an `original_url` in its `folder.jso
 
 ## Search Index
 
-The application uses a SQLite database to index your audio library. All browsing and search is served from the database, so the index must be built before the application is useful.
+The application indexes your audio library in SQLite. Build the index before browsing or searching the library.
 
 ### Building the Index
 
@@ -202,7 +203,7 @@ INDEX_SCHEDULE="0 */6 * * *" go run .  # Reindex every 6 hours
 INDEX_SCHEDULE="0 0 * * *" go run .    # Reindex daily at midnight
 ```
 
-If not set, the index is only rebuilt when you manually run the `reindex` command. Concurrent reindex attempts (e.g., a manual `reindex` while the scheduler is running) are prevented via a file lock — the second caller skips gracefully.
+If not set, the index is only rebuilt when you manually run the `reindex` command. A file lock prevents concurrent reindex attempts. If a scheduled reindex is already running, a manual reindex exits without doing any work.
 
 ## Waveform Visualization
 

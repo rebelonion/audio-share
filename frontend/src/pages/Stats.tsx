@@ -137,7 +137,7 @@ export default function Stats() {
         <>
             <Helmet>
                 <title>{DEFAULT_TITLE} - Stats</title>
-                <meta name="description" content={`${DEFAULT_DESCRIPTION} — Stats`} />
+                <meta name="description" content={`${DEFAULT_DESCRIPTION} · Stats`} />
             </Helmet>
             <div className="max-w-7xl mx-auto animate-slideUp">
                 <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Statistics</h1>
@@ -170,7 +170,7 @@ export default function Stats() {
                             <AudioChart data={audioData} />
                         ) : (
                             <p className="text-[var(--muted-foreground)]">
-                                No data available. Please create <code className="bg-[var(--background)] px-2 py-1 rounded text-[var(--primary)]">content/audio_by_day.json</code>
+                                No audio data available.
                             </p>
                         )}
                     </div>

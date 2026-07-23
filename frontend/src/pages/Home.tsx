@@ -4,13 +4,21 @@ import BrowseClient from '@/components/BrowseClient';
 import TrackListSection from '@/components/TrackListSection';
 import UnavailableBanner from '@/components/UnavailableBanner';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
-import { PlaybackTrack, getRecentlyPlayed, getPopularTracks, getRecentlyAdded, getRecentlyUnavailable } from '@/lib/api';
+import {
+    getPopularTracks,
+    getRecentlyAdded,
+    getRecentlyPlayed,
+    getRecentlyUnavailable,
+    type PlaybackStatsTrack,
+    type TrackSummary,
+    type UnavailableTrack,
+} from '@/lib/api';
 
 export default function Home() {
-    const [recentTracks, setRecentTracks] = useState<PlaybackTrack[]>([]);
-    const [popularTracks, setPopularTracks] = useState<PlaybackTrack[]>([]);
-    const [newTracks, setNewTracks] = useState<PlaybackTrack[]>([]);
-    const [unavailableTracks, setUnavailableTracks] = useState<PlaybackTrack[]>([]);
+    const [recentTracks, setRecentTracks] = useState<PlaybackStatsTrack[]>([]);
+    const [popularTracks, setPopularTracks] = useState<PlaybackStatsTrack[]>([]);
+    const [newTracks, setNewTracks] = useState<TrackSummary[]>([]);
+    const [unavailableTracks, setUnavailableTracks] = useState<UnavailableTrack[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
