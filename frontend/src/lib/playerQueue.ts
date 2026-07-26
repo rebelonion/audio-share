@@ -1,4 +1,5 @@
 export type TrackSource = 'browse' | 'share' | 'home' | 'search' | 'likes' | 'manual' | 'autoplay';
+export type QueuePlacement = 'next' | 'end';
 
 export interface PlayerTrack {
     id: string;
@@ -9,6 +10,7 @@ export interface PlayerTrack {
     deleted?: boolean;
     ageLimit?: number;
     source: TrackSource;
+    queuePlacement?: QueuePlacement;
 }
 
 export interface QueueState {
@@ -92,9 +94,14 @@ export function startSingleton(state: QueueState, track: PlayerTrack): QueueStat
 }
 
 export function enqueue(state: QueueState, track: PlayerTrack, next = false): QueueState {
+    const queuePlacement: QueuePlacement = next ? 'next' : 'end';
+    const queuedTrack = {
+        ...track,
+        queuePlacement,
+    };
     return {
         ...state,
-        manual: next ? [track, ...state.manual] : [...state.manual, track],
+        manual: next ? [queuedTrack, ...state.manual] : [...state.manual, queuedTrack],
     };
 }
 
@@ -186,6 +193,12 @@ function restoreTrack(value: unknown): PlayerTrack | null {
         ...('artist' in value && typeof value.artist === 'string' ? {artist: value.artist} : {}),
         ...('deleted' in value && typeof value.deleted === 'boolean' ? {deleted: value.deleted} : {}),
         ...('ageLimit' in value && typeof value.ageLimit === 'number' ? {ageLimit: value.ageLimit} : {}),
+        ...(
+            'queuePlacement' in value
+            && (value.queuePlacement === 'next' || value.queuePlacement === 'end')
+                ? {queuePlacement: value.queuePlacement}
+                : {}
+        ),
     };
 }
 

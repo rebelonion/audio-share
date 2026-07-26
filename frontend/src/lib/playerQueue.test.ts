@@ -41,6 +41,8 @@ describe('player queue', () => {
     it('prioritizes play-next and manual queue entries over context', () => {
         const base = startContext(EMPTY_QUEUE, [track('a'), track('b')], 0, 'Folder');
         const withQueued = enqueue(enqueue(base, track('later')), track('next'), true);
+        expect(withQueued.manual[0]).toMatchObject({source: 'browse', queuePlacement: 'next'});
+        expect(withQueued.manual[1]).toMatchObject({source: 'browse', queuePlacement: 'end'});
         const first = advance(withQueued);
         expect(first.current?.shareKey).toBe('next');
         expect(advance(first).current?.shareKey).toBe('later');

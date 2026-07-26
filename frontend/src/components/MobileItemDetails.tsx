@@ -45,7 +45,14 @@ function MobileItemDetails({ item, notification, copyToClipboard, onMatureDownlo
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            track('share-page-open', {
+                                path: item.path,
+                                name: item.name,
+                                source: 'browse',
+                            });
+                        }}
                         title="Open share page"
                     >
                         <ExternalLink className="h-3 w-3"/>

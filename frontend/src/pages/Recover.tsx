@@ -7,8 +7,10 @@ import {useLikes} from '@/contexts/LikesContext';
 import {DEFAULT_TITLE} from '@/lib/config';
 import {resetMatureContentClientState} from '@/lib/matureContentPreference';
 import {syncRybbitIdentity} from '@/lib/rybbitIdentity';
+import {useRybbit} from '@/hooks/useRybbit';
 
 export default function Recover() {
+    const {track} = useRybbit();
     const navigate = useNavigate();
     const {isLoading: isProfileLoading, refreshLikesAfterRecovery} = useLikes();
     const [key, setKey] = useState('');
@@ -31,6 +33,7 @@ export default function Recover() {
         try {
             const profileId = await recoverBrowserProfile(key.trim());
             syncRybbitIdentity(profileId);
+            track('profile-recovered');
             resetMatureContentClientState();
             await refreshLikesAfterRecovery();
             navigate('/likes', {replace: true});

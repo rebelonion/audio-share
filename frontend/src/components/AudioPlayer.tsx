@@ -176,7 +176,7 @@ export default function AudioPlayer() {
                 <>
                 <div className="flex items-center justify-between p-2.5 border-b border-[var(--border)]">
                     <button
-                        onClick={() => void toggleLike(currentTrack.shareKey)}
+                        onClick={() => void toggleLike(currentTrack.shareKey, currentTrack.source)}
                         disabled={!likesReady || likesLoading || likePending}
                         className={`p-1 text-[var(--muted-foreground)] hover:text-[var(--primary)] ${liked ? 'text-[var(--primary)]' : ''}`}
                         aria-label={liked ? 'Unlike track' : 'Like track'}

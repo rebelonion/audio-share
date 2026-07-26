@@ -52,7 +52,7 @@ export default function TrackQuickActions({track, compact = false, className = '
                     stop(event);
                     if (!track.shareKey || likePending) return;
                     const willLike = !liked;
-                    const succeeded = await toggleLike(track.shareKey);
+                    const succeeded = await toggleLike(track.shareKey, track.source);
                     showFeedback({
                         action: 'like',
                         message: succeeded ? (willLike ? 'Added to likes' : 'Removed from likes') : 'Could not update like',

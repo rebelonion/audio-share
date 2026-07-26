@@ -164,7 +164,12 @@ export function useAudioEngine({
                 setIsPlaying(true);
                 setIsLoading(false);
                 setError(null);
-                trackEvent('audio-play', {title: metadataRef.current?.title || selectedTrack.name});
+                trackEvent('audio-play', {
+                    title: metadataRef.current?.title || selectedTrack.name,
+                    shareKey: selectedTrack.shareKey,
+                    source: selectedTrack.source,
+                    resumed: audio.currentTime > 0,
+                });
             }).catch((playError: DOMException) => {
                 if (audioRef.current !== audio || playbackAttemptRef.current !== playbackAttempt) return;
                 setIsPlaying(false);

@@ -135,7 +135,11 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                             <div className="relative rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-all duration-200">
                                 <Link
                                     to={`/share/${track.shareKey}`}
-                                    onClick={() => trackEvent('carousel-details', {section: title, path: track.path})}
+                                    onClick={() => trackEvent('carousel-click', {
+                                        section: title,
+                                        path: track.path,
+                                        title: track.title || track.filename,
+                                    })}
                                     className="absolute inset-0 z-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                                     aria-label={`Open ${track.title || track.filename}`}
                                 />

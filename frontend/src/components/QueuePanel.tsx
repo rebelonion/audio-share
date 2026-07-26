@@ -95,7 +95,7 @@ export default function QueuePanel({onClose}: {onClose: () => void}) {
                                 <span className="w-5 text-center text-[10px] text-[var(--muted-foreground)] tabular-nums">{index + 1}</span>
                                 <div className="min-w-0 flex-1">
                                     <div className="text-sm truncate">{track.name}</div>
-                                    <div className="text-[11px] text-[var(--muted-foreground)] truncate">{track.source === 'manual' ? 'Added to queue' : track.artist || contextLabel || 'Up next'}</div>
+                                    <div className="text-[11px] text-[var(--muted-foreground)] truncate">{track.queuePlacement ? 'Added to queue' : track.artist || contextLabel || 'Up next'}</div>
                                 </div>
                                 <button onClick={() => removeFromQueue(track.id)} className="flex h-8 w-8 items-center justify-center rounded-md opacity-70 text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--error-text)] sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-opacity" aria-label={`Remove ${track.name} from queue`}><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>

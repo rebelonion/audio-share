@@ -15,6 +15,8 @@ import {
     isTrackLiked,
     likesReducer,
 } from '@/contexts/likesState';
+import {useRybbit} from '@/hooks/useRybbit';
+import type {TrackSource} from '@/lib/playerQueue';
 
 interface LikesContextValue {
     hasRecoveryKey: boolean;
@@ -24,7 +26,7 @@ interface LikesContextValue {
     committedMutationRevision: number;
     isLiked: (shareKey?: string) => boolean;
     isLikePending: (shareKey?: string) => boolean;
-    toggleLike: (shareKey: string) => Promise<boolean>;
+    toggleLike: (shareKey: string, source?: TrackSource) => Promise<boolean>;
     refreshLikes: () => Promise<void>;
     refreshLikesAfterRecovery: () => Promise<void>;
     markRecoveryKeyCreated: () => void;
@@ -33,6 +35,7 @@ interface LikesContextValue {
 const LikesContext = createContext<LikesContextValue | null>(null);
 
 export function LikesProvider({children}: {children: ReactNode}) {
+    const {track: trackEvent} = useRybbit();
     const [state, dispatch] = useReducer(likesReducer, INITIAL_LIKES_STATE);
     const stateRef = useRef(state);
     const loadControllerRef = useRef<AbortController | null>(null);
@@ -83,7 +86,7 @@ export function LikesProvider({children}: {children: ReactNode}) {
         };
     }, [refreshLikes]);
 
-    const toggleLike = useCallback(async (shareKey: string) => {
+    const toggleLike = useCallback(async (shareKey: string, source?: TrackSource) => {
         const current = stateRef.current;
         if (!current.isReady || mutationControllersRef.current.has(shareKey)) return false;
 
@@ -95,6 +98,11 @@ export function LikesProvider({children}: {children: ReactNode}) {
             await setTrackLiked(shareKey, liked, controller.signal);
             if (controller.signal.aborted) return false;
             dispatch({type: 'toggle-succeeded', shareKey});
+            trackEvent('audio-like-change', {
+                liked,
+                shareKey,
+                source: source || 'manual',
+            });
             return true;
         } catch (updateError) {
             if (controller.signal.aborted) return false;
@@ -109,7 +117,7 @@ export function LikesProvider({children}: {children: ReactNode}) {
                 mutationControllersRef.current.delete(shareKey);
             }
         }
-    }, []);
+    }, [trackEvent]);
 
     const value = useMemo<LikesContextValue>(() => ({
         hasRecoveryKey: state.hasRecoveryKey,

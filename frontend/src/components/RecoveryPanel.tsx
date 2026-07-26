@@ -3,6 +3,7 @@ import {Check, Clipboard, Download, KeyRound, RefreshCw, ShieldCheck} from 'luci
 import {Link} from 'react-router';
 import {createRecoveryKey} from '@/lib/api';
 import {useLikes} from '@/contexts/LikesContext';
+import {useRybbit} from '@/hooks/useRybbit';
 
 type RecoveryErrorSource = 'create' | 'copy-key' | 'copy-link';
 
@@ -12,6 +13,7 @@ interface RecoveryError {
 }
 
 export default function RecoveryPanel() {
+    const {track} = useRybbit();
     const {hasRecoveryKey, isLoading: isProfileLoading, isReady: isProfileReady, markRecoveryKeyCreated} = useLikes();
     const [recoveryKey, setRecoveryKey] = useState('');
     const [qrDataUrl, setQrDataUrl] = useState('');
@@ -59,6 +61,7 @@ export default function RecoveryPanel() {
             setRecoveryKey(key);
             markRecoveryKeyCreated();
             setConfirmRotation(false);
+            track('recovery-key-created', {rotated: hasRecoveryKey});
 
             try {
                 const url = `${window.location.origin}/recover#key=${encodeURIComponent(key)}`;

@@ -44,6 +44,7 @@ import {
     usePlayerMetadata,
     type PlayerMetadata,
 } from '@/hooks/usePlayerMetadata';
+import {useRybbit} from '@/hooks/useRybbit';
 
 export interface AudioPlayerTrack {
     id?: string;
@@ -135,6 +136,7 @@ function maturePlaybackAcknowledged(): boolean {
 }
 
 export function AudioPlayerProvider({children}: {children: ReactNode}) {
+    const {track: trackEvent} = useRybbit();
     const {queue, queueRef, updateQueue} = usePersistentPlayerQueue();
     const currentTrack = queue.current;
     const currentTrackRef = useRef(currentTrack);
@@ -240,27 +242,45 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
 
     const addToQueue = useCallback((track: AudioPlayerTrack): QueueActionResult => {
         if (track.deleted) return 'ignored';
-        const normalized = normalizeTrack({...track, source: 'manual'});
+        const normalized = normalizeTrack(track);
+        let result: QueueActionResult;
         if (!queueRef.current.current) {
             transitionQueue(startSingleton(queueRef.current, normalized));
-            return 'ready';
+            result = 'ready';
+        } else {
+            transitionQueue(enqueue(queueRef.current, normalized));
+            result = 'queued';
         }
-        transitionQueue(enqueue(queueRef.current, normalized));
-        return 'queued';
-    }, [queueRef, transitionQueue]);
+        trackEvent('queue-add', {
+            position: 'end',
+            shareKey: normalized.shareKey,
+            source: normalized.source,
+            result,
+        });
+        return result;
+    }, [queueRef, trackEvent, transitionQueue]);
 
     const playNext = useCallback((track: AudioPlayerTrack): QueueActionResult => {
         if (track.deleted) return 'ignored';
-        const normalized = normalizeTrack({...track, source: 'manual'});
+        const normalized = normalizeTrack(track);
+        let result: QueueActionResult;
         if (!queueRef.current.current || audioRef.current?.ended) {
             transitionQueue(startSingleton(queueRef.current, normalized), true);
-            return needsMaturePlaybackConfirmation(normalized, null, maturePlaybackAcknowledged())
+            result = needsMaturePlaybackConfirmation(normalized, null, maturePlaybackAcknowledged())
                 ? 'ready'
                 : 'playing';
+        } else {
+            transitionQueue(enqueue(queueRef.current, normalized, true));
+            result = 'queued';
         }
-        transitionQueue(enqueue(queueRef.current, normalized, true));
-        return 'queued';
-    }, [audioRef, queueRef, transitionQueue]);
+        trackEvent('queue-add', {
+            position: 'next',
+            shareKey: normalized.shareKey,
+            source: normalized.source,
+            result,
+        });
+        return result;
+    }, [audioRef, queueRef, trackEvent, transitionQueue]);
 
     const removeFromQueue = useCallback((id: string) => {
         transitionQueue(removeQueued(queueRef.current, id));
@@ -406,8 +426,10 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
     }, [queueRef, transitionQueue]);
 
     const toggleAutoplay = useCallback(() => {
-        updateQueue({...queueRef.current, autoplay: !queueRef.current.autoplay});
-    }, [queueRef, updateQueue]);
+        const enabled = !queueRef.current.autoplay;
+        updateQueue({...queueRef.current, autoplay: enabled});
+        trackEvent('autoplay-toggle', {enabled});
+    }, [queueRef, trackEvent, updateQueue]);
 
     useEffect(() => {
         if (!('mediaSession' in navigator) || !currentTrack) return;

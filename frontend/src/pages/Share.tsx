@@ -280,6 +280,14 @@ export default function Share() {
                                                 href={meta.webpageUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
+                                                onClick={() => track(
+                                                    meta.unavailableAt ? 'external-link-broken-click' : 'external-link-click',
+                                                    {
+                                                        url: meta.webpageUrl,
+                                                        track: displayTitle,
+                                                        source: 'share-page',
+                                                    },
+                                                )}
                                                 className={meta.unavailableAt
                                                     ? 'flex items-center gap-2 text-amber-400 transition-colors hover:text-amber-300'
                                                     : 'flex items-center gap-2 transition-colors hover:text-[var(--primary)]'
