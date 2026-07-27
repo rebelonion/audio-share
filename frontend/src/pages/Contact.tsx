@@ -1,29 +1,22 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
+import { contactTopicFromSearch, contactTopicOptions } from '@/lib/contact';
 import CustomSelect from '@/components/CustomSelect';
 
 export default function Contact() {
     const { track } = useRybbit();
-    const [topic, setTopic] = useState('');
+    const { search } = useLocation();
+    const [topic, setTopic] = useState(() => contactTopicFromSearch(search));
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');
     const [image, setImage] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const navigate = useNavigate();
-
-    const topicOptions = [
-        { value: 'general', label: 'General Question' },
-        { value: 'bug', label: 'Bug Report' },
-        { value: 'feature', label: 'Feature Request' },
-        { value: 'content', label: 'Content Issue' },
-        { value: 'abuse', label: 'Abuse' },
-        { value: 'other', label: 'Other' }
-    ];
 
     const isAbuseReport = topic === 'abuse';
 
@@ -125,7 +118,7 @@ export default function Contact() {
                             triggerClassName="px-4 py-3 bg-[var(--card)] rounded-lg focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
                             options={[
                                 { value: '', label: 'Select a topic...' },
-                                ...topicOptions,
+                                ...contactTopicOptions,
                             ]}
                         />
                     </div>
