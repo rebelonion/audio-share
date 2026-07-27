@@ -17,6 +17,7 @@ type FrontendConfig struct {
 	BannerVariant      string `json:"bannerVariant,omitempty"`
 	BannerLinkText     string `json:"bannerLinkText,omitempty"`
 	BannerLinkURL      string `json:"bannerLinkUrl,omitempty"`
+	CapPublicEndpoint  string `json:"capPublicEndpoint,omitempty"`
 }
 
 type SPAHandler struct {

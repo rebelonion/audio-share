@@ -39,5 +39,32 @@ services:
       timeout: 10s
       retries: 3
 
+  cap:
+    image: tiago2/cap:3.1.8
+    profiles: ["cap"]
+    restart: unless-stopped
+    depends_on:
+      cap-valkey:
+        condition: service_healthy
+    ports:
+      - "${CAP_PORT:-3000}:3000"
+    environment:
+      ADMIN_KEY: ${ADMIN_KEY}
+      REDIS_URL: redis://cap-valkey:6379
+
+  cap-valkey:
+    image: valkey/valkey:9-alpine
+    profiles: ["cap"]
+    restart: unless-stopped
+    command: valkey-server --save 60 1 --loglevel warning --maxmemory-policy noeviction
+    volumes:
+      - cap_valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   postgres_data:
+  cap_valkey_data:

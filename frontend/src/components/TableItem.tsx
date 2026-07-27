@@ -2,7 +2,7 @@ import {Folder, Music, Unlink} from "lucide-react";
 import {formatDate, formatDuration, formatFileSize} from "@/lib/utils";
 import DesktopItemActions from "@/components/DesktopItemActions";
 import React from "react";
-import {FileSystemItem, Notification} from "@/types";
+import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
 
@@ -10,12 +10,13 @@ interface TableItemProps {
     item: FileSystemItem;
     showDurationColumn: boolean;
     handleAudioSelect: (item: FileSystemItem) => void;
-    notification: Notification;
+    copiedShareKey: string | null;
     copyToClipboard: (path: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
-    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
+    onDownloadRequest: (item: FileSystemItem) => void;
+    onMatureDownloadRequest: (item: FileSystemItem) => void;
 }
 
-function TableItem({ item, showDurationColumn, handleAudioSelect, notification, copyToClipboard, onMatureDownloadRequest }: TableItemProps) {
+function TableItem({ item, showDurationColumn, handleAudioSelect, copiedShareKey, copyToClipboard, onDownloadRequest, onMatureDownloadRequest }: TableItemProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
     const nameColumnWidth = showDurationColumn ? '35%' : '45%';
     const sizeColumnWidth = showDurationColumn ? '17%' : '20%';
@@ -80,8 +81,9 @@ function TableItem({ item, showDurationColumn, handleAudioSelect, notification, 
             </td>
             <DesktopItemActions
                 item={item}
-                notification={notification}
+                copiedShareKey={copiedShareKey}
                 copyToClipboard={copyToClipboard}
+                onDownloadRequest={onDownloadRequest}
                 onMatureDownloadRequest={onMatureDownloadRequest}
             />
         </tr>

@@ -3,8 +3,16 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
+)
+
+const (
+	playbackClaimCleanupInterval = 15 * time.Minute
+	playbackClaimCleanupGrace    = 15 * time.Minute
+	playbackClaimCleanupBatch    = 10_000
+	playbackClaimCleanupBatches  = 10
 )
 
 const trackSummaryColumns = `
@@ -49,14 +57,94 @@ func trackSummaryScanDest(track *TrackSummary) []any {
 }
 
 type PlaybackService struct {
-	db *Database
+	db                 *Database
+	legacyAccessKeyTTL time.Duration
 }
 
-func NewPlaybackService(db *Database) *PlaybackService {
-	return &PlaybackService{db: db}
+func NewPlaybackService(db *Database, legacyAccessKeyTTL time.Duration) *PlaybackService {
+	return &PlaybackService{
+		db:                 db,
+		legacyAccessKeyTTL: legacyAccessKeyTTL,
+	}
 }
 
-func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID, listeningSessionID, origin string) error {
+func (s *PlaybackService) StartAccessKeyClaimCleanup() {
+	cleanup := func() {
+		var total int64
+		for range playbackClaimCleanupBatches {
+			deleted, err := s.cleanupExpiredAccessKeyClaims(playbackClaimCleanupBatch)
+			if err != nil {
+				log.Printf("Error cleaning expired playback access-key claims: %v", err)
+				return
+			}
+			total += deleted
+			if deleted < playbackClaimCleanupBatch {
+				break
+			}
+		}
+		if total > 0 {
+			log.Printf("Removed %d expired playback access-key claims", total)
+		}
+	}
+
+	cleanup()
+	go func() {
+		ticker := time.NewTicker(playbackClaimCleanupInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanup()
+		}
+	}()
+}
+
+func (s *PlaybackService) cleanupExpiredAccessKeyClaims(batchSize int) (int64, error) {
+	tx, err := s.db.DB().Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+		UPDATE playback_access_keys
+		SET expires_at = NOW() + ($1 * INTERVAL '1 millisecond')
+		WHERE expires_at IS NULL
+	`, s.legacyAccessKeyTTL.Milliseconds()); err != nil {
+		return 0, err
+	}
+	result, err := tx.Exec(`
+		WITH expired AS (
+			SELECT access_key_nonce
+			FROM playback_access_keys
+			WHERE expires_at <= NOW() - ($1 * INTERVAL '1 millisecond')
+			ORDER BY expires_at
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		DELETE FROM playback_access_keys AS claim
+		USING expired
+		WHERE claim.access_key_nonce = expired.access_key_nonce
+	`, playbackClaimCleanupGrace.Milliseconds(), batchSize)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
+
+func (s *PlaybackService) RecordPlayEvent(
+	shareKey,
+	sessionID,
+	listeningSessionID,
+	origin,
+	accessKeyNonce string,
+	accessKeyExpiresAt time.Time,
+) error {
 	var id int64
 	err := s.db.DB().QueryRow(
 		"SELECT id FROM audio_files WHERE share_key = $1 AND deleted = 0",
@@ -69,9 +157,37 @@ func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID, listeningSessionI
 		return err
 	}
 
-	// Client-supplied listening session IDs group recommendations but never deduplicate plays.
+	tx, err := s.db.DB().Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(
+		"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+		fmt.Sprintf("%d:%s", id, sessionID),
+	); err != nil {
+		return err
+	}
+
+	claim, err := tx.Exec(`
+		INSERT INTO playback_access_keys (access_key_nonce, expires_at)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, accessKeyNonce, accessKeyExpiresAt)
+	if err != nil {
+		return err
+	}
+	claimed, err := claim.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		return tx.Commit()
+	}
+
 	var recent int
-	err = s.db.DB().QueryRow(
+	err = tx.QueryRow(
 		"SELECT COUNT(*) FROM play_events WHERE audio_file_id = $1 AND session_id = $2 AND played_at > NOW() - INTERVAL '5 minutes'",
 		id, sessionID,
 	).Scan(&recent)
@@ -79,18 +195,24 @@ func (s *PlaybackService) RecordPlayEvent(shareKey, sessionID, listeningSessionI
 		return err
 	}
 	if recent > 0 {
-		return nil
+		return tx.Commit()
 	}
 
 	var listeningSessionArg interface{}
 	if listeningSessionID != "" {
 		listeningSessionArg = listeningSessionID
 	}
-	_, err = s.db.DB().Exec(`
-		INSERT INTO play_events (audio_file_id, session_id, listening_session_id, origin)
-		VALUES ($1, $2, $3, $4)
-	`, id, sessionID, listeningSessionArg, origin)
-	return err
+	_, err = tx.Exec(`
+		INSERT INTO play_events (
+			audio_file_id, session_id, listening_session_id, origin, access_key_nonce
+		)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT DO NOTHING
+	`, id, sessionID, listeningSessionArg, origin, accessKeyNonce)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]TrackSummary, error) {

@@ -58,8 +58,27 @@ type Config struct {
 
 	AudioDir string
 
-	StreamBytesPerSecond   int64
-	DownloadBytesPerSecond int64
+	StreamBytesPerSecond     int64
+	DownloadBytesPerSecond   int64
+	StreamIPBytesPerSecond   int64
+	DownloadIPBytesPerSecond int64
+	StreamIPBurstBytes       int64
+	DownloadIPBurstBytes     int64
+
+	StreamKeyLimits       string
+	DownloadKeyLimits     string
+	StreamKeyTTL          string
+	DownloadKeyTTL        string
+	DownloadSessionMinAge string
+
+	CapEnforcement            string
+	CapPublicEndpoint         string
+	CapVerifyEndpoint         string
+	CapSecretKey              string
+	CapVerifyTimeout          string
+	StreamCaptchaLimits       string
+	StreamCaptchaClearanceTTL string
+	DownloadCaptchaMode       string
 
 	ContentDir string
 
@@ -73,8 +92,6 @@ type Config struct {
 
 	RateLimitWindow      int // milliseconds
 	MaxRequestsPerWindow int
-	StreamFileLimit      int
-	DownloadFileLimit    int
 	ShareRequestLimit    int
 	ShareLimitWindow     int // milliseconds
 	ContactRequestLimit  int
@@ -108,12 +125,29 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:                   getEnv("PORT", "8080"),
-		AudioDir:               getEnv("AUDIO_DIR", ""),
-		StreamBytesPerSecond:   getEnvInt64("STREAM_BYTES_PER_SECOND", 0),
-		DownloadBytesPerSecond: getEnvInt64("DOWNLOAD_BYTES_PER_SECOND", 0),
-		ContentDir:             getEnv("CONTENT_DIR", "./content"),
-		StaticDir:              getEnv("STATIC_DIR", "./static"),
+		Port:                      getEnv("PORT", "8080"),
+		AudioDir:                  getEnv("AUDIO_DIR", ""),
+		StreamBytesPerSecond:      getEnvInt64("STREAM_BYTES_PER_SECOND", 0),
+		DownloadBytesPerSecond:    getEnvInt64("DOWNLOAD_BYTES_PER_SECOND", 0),
+		StreamIPBytesPerSecond:    getEnvInt64("STREAM_IP_BYTES_PER_SECOND", 0),
+		DownloadIPBytesPerSecond:  getEnvInt64("DOWNLOAD_IP_BYTES_PER_SECOND", 0),
+		StreamIPBurstBytes:        getEnvInt64("STREAM_IP_BURST_BYTES", 0),
+		DownloadIPBurstBytes:      getEnvInt64("DOWNLOAD_IP_BURST_BYTES", 0),
+		StreamKeyLimits:           getEnv("STREAM_KEY_LIMITS", "10/1m"),
+		DownloadKeyLimits:         getEnv("DOWNLOAD_KEY_LIMITS", "10/1m"),
+		StreamKeyTTL:              getEnv("STREAM_KEY_TTL", "30m"),
+		DownloadKeyTTL:            getEnv("DOWNLOAD_KEY_TTL", "10m"),
+		DownloadSessionMinAge:     getEnv("DOWNLOAD_SESSION_MIN_AGE", "0s"),
+		CapEnforcement:            getEnv("CAP_ENFORCEMENT", "off"),
+		CapPublicEndpoint:         getEnv("CAP_PUBLIC_ENDPOINT", ""),
+		CapVerifyEndpoint:         getEnv("CAP_VERIFY_ENDPOINT", ""),
+		CapSecretKey:              getEnv("CAP_SECRET_KEY", ""),
+		CapVerifyTimeout:          getEnv("CAP_VERIFY_TIMEOUT", "3s"),
+		StreamCaptchaLimits:       getEnv("STREAM_CAPTCHA_LIMITS", ""),
+		StreamCaptchaClearanceTTL: getEnv("STREAM_CAPTCHA_CLEARANCE_TTL", "15m"),
+		DownloadCaptchaMode:       getEnv("DOWNLOAD_CAPTCHA_MODE", "always"),
+		ContentDir:                getEnv("CONTENT_DIR", "./content"),
+		StaticDir:                 getEnv("STATIC_DIR", "./static"),
 
 		NtfyURL:       getEnv("NTFY_URL", "https://ntfy.sh"),
 		NtfyTopic:     getEnv("NTFY_TOPIC", ""),
@@ -123,8 +157,6 @@ func Load() *Config {
 
 		RateLimitWindow:      getEnvInt("RATE_LIMIT_WINDOW", 60000),
 		MaxRequestsPerWindow: getEnvInt("MAX_REQUESTS_PER_WINDOW", 100),
-		StreamFileLimit:      getEnvInt("STREAM_FILE_LIMIT", 10),
-		DownloadFileLimit:    getEnvInt("DOWNLOAD_FILE_LIMIT", 10),
 		ShareRequestLimit:    getEnvInt("SHARE_REQUEST_LIMIT", 3),
 		ShareLimitWindow:     getEnvInt("SHARE_LIMIT_WINDOW", 86400000),
 		ContactRequestLimit:  getEnvInt("CONTACT_REQUEST_LIMIT", 5),

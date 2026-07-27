@@ -13,14 +13,13 @@ import (
 )
 
 type rateLimitData struct {
-	apiCount         int
-	streamCount      int
-	downloadCount    int
-	shareCount       int
-	shareTimestamp   int64
-	contactCount     int
-	contactTimestamp int64
-	timestamp        int64
+	apiCount           int
+	accessFailureCount int
+	shareCount         int
+	shareTimestamp     int64
+	contactCount       int
+	contactTimestamp   int64
+	timestamp          int64
 }
 
 type RateLimiter struct {
@@ -33,6 +32,53 @@ func NewRateLimiter(cfg *config.Config) *RateLimiter {
 	return &RateLimiter{
 		limits: make(map[string]*rateLimitData),
 		cfg:    cfg,
+	}
+}
+
+func (rl *RateLimiter) AllowAccessAttempt(clientIP string) (bool, int) {
+	now := time.Now().UnixMilli()
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	data := rl.dataLocked(clientIP, now)
+	rl.resetGeneralWindowLocked(data, now)
+	if data.accessFailureCount < rl.cfg.MaxRequestsPerWindow {
+		return true, 0
+	}
+
+	remainingMillis := int64(rl.cfg.RateLimitWindow) - (now - data.timestamp)
+	retryAfter := max(1, int((remainingMillis+999)/1000))
+	return false, retryAfter
+}
+
+func (rl *RateLimiter) RecordAccessFailure(clientIP string) {
+	now := time.Now().UnixMilli()
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	data := rl.dataLocked(clientIP, now)
+	rl.resetGeneralWindowLocked(data, now)
+	data.accessFailureCount++
+}
+
+func (rl *RateLimiter) dataLocked(ip string, now int64) *rateLimitData {
+	data, exists := rl.limits[ip]
+	if !exists {
+		data = &rateLimitData{
+			shareTimestamp:   now,
+			contactTimestamp: now,
+			timestamp:        now,
+		}
+		rl.limits[ip] = data
+	}
+	return data
+}
+
+func (rl *RateLimiter) resetGeneralWindowLocked(data *rateLimitData, now int64) {
+	if now-data.timestamp > int64(rl.cfg.RateLimitWindow) {
+		data.apiCount = 0
+		data.accessFailureCount = 0
+		data.timestamp = now
 	}
 }
 
@@ -56,17 +102,16 @@ func (rl *RateLimiter) getClientIP(r *http.Request) string {
 	return addr
 }
 
-func (rl *RateLimiter) isAudioRequest(path string) bool {
+func (rl *RateLimiter) isProtectedAudioRequest(path string) bool {
+	path = strings.TrimRight(path, "/")
 	if !strings.HasPrefix(path, "/api/audio/key/") {
 		return false
 	}
-	return !strings.HasSuffix(path, "/thumbnail") &&
-		!strings.HasSuffix(path, "/meta") &&
-		!strings.HasSuffix(path, "/waveform")
-}
-
-func (rl *RateLimiter) isDownloadRequest(path string) bool {
-	return strings.HasPrefix(path, "/api/audio/key/") && strings.HasSuffix(path, "/download")
+	return strings.HasSuffix(path, "/download") ||
+		(!strings.HasSuffix(path, "/thumbnail") &&
+			!strings.HasSuffix(path, "/access") &&
+			!strings.HasSuffix(path, "/meta") &&
+			!strings.HasSuffix(path, "/waveform"))
 }
 
 func (rl *RateLimiter) isImageRequest(path string) bool {
@@ -80,37 +125,18 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		now := time.Now().UnixMilli()
 		path := r.URL.Path
 
-		if strings.HasPrefix(path, "/api/admin/") {
+		if strings.HasPrefix(path, "/api/admin/") || rl.isProtectedAudioRequest(path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		isAudio := rl.isAudioRequest(path)
-		isDownload := rl.isDownloadRequest(path)
-		isStream := isAudio && !isDownload
 		isImage := rl.isImageRequest(path)
 		isShare := path == "/api/share" && r.Method == "POST"
 		isContact := path == "/api/contact" && r.Method == "POST"
-		rangeHeader := r.Header.Get("Range")
-		isSeekRequest := isStream && rangeHeader != "" && !strings.HasPrefix(rangeHeader, "bytes=0-")
 
 		rl.mu.Lock()
-		data, exists := rl.limits[ip]
-		if !exists {
-			data = &rateLimitData{
-				shareTimestamp:   now,
-				contactTimestamp: now,
-				timestamp:        now,
-			}
-			rl.limits[ip] = data
-		}
-
-		if now-data.timestamp > int64(rl.cfg.RateLimitWindow) {
-			data.streamCount = 0
-			data.downloadCount = 0
-			data.apiCount = 0
-			data.timestamp = now
-		}
+		data := rl.dataLocked(ip, now)
+		rl.resetGeneralWindowLocked(data, now)
 		if now-data.shareTimestamp > int64(rl.cfg.ShareLimitWindow) {
 			data.shareCount = 0
 			data.shareTimestamp = now
@@ -124,14 +150,8 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			data.shareCount++
 		} else if isContact {
 			data.contactCount++
-		} else if !isImage && !isSeekRequest {
-			if isDownload {
-				data.downloadCount++
-			} else if isStream {
-				data.streamCount++
-			} else {
-				data.apiCount++
-			}
+		} else if !isImage {
+			data.apiCount++
 		}
 
 		if rand.Float64() < 0.01 {
@@ -158,16 +178,6 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			current = data.contactCount
 			limitWindow = rl.cfg.ContactLimitWindow
 			limitType = "contact"
-		} else if isDownload {
-			limit = rl.cfg.DownloadFileLimit
-			current = data.downloadCount
-			limitWindow = rl.cfg.RateLimitWindow
-			limitType = "download"
-		} else if isStream {
-			limit = rl.cfg.StreamFileLimit
-			current = data.streamCount
-			limitWindow = rl.cfg.RateLimitWindow
-			limitType = "stream"
 		} else {
 			limit = rl.cfg.MaxRequestsPerWindow
 			current = data.apiCount

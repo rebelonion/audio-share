@@ -11,12 +11,18 @@ import (
 type PlaybackHandler struct {
 	playbackService *services.PlaybackService
 	sessionSecret   []byte
+	accessKeys      *services.AccessKeyManager
 }
 
-func NewPlaybackHandler(playbackService *services.PlaybackService, sessionSecret string) *PlaybackHandler {
+func NewPlaybackHandler(
+	playbackService *services.PlaybackService,
+	sessionSecret string,
+	accessKeys *services.AccessKeyManager,
+) *PlaybackHandler {
 	return &PlaybackHandler{
 		playbackService: playbackService,
 		sessionSecret:   []byte(sessionSecret),
+		accessKeys:      accessKeys,
 	}
 }
 
@@ -24,6 +30,7 @@ type recordRequest struct {
 	ShareKey           string `json:"shareKey"`
 	ListeningSessionID string `json:"listeningSessionId"`
 	Origin             string `json:"origin"`
+	AccessKey          string `json:"accessKey"`
 }
 
 func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
@@ -46,20 +53,40 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shareKey is required"})
 			return
 		}
-		if len(req.ShareKey) > 128 || len(req.ListeningSessionID) > 128 {
+		if len(req.ShareKey) > 128 || len(req.ListeningSessionID) > 128 || len(req.AccessKey) > 4096 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid playback identifiers"})
 			return
 		}
 		req.Origin = normalizePlaybackOrigin(req.Origin)
 
-		sessionID, ok := resolveSessionID(r, h.sessionSecret)
+		sessionID, ok := currentSessionID(r, h.sessionSecret)
 		if !ok {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "Invalid session"})
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Invalid session"})
 			return
 		}
-		setSessionCookie(w, r, h.sessionSecret, sessionID)
+		if h.accessKeys == nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Playback authorization unavailable"})
+			return
+		}
+		verifiedAccess, err := h.accessKeys.VerifyAndExtract(
+			req.AccessKey,
+			sessionID,
+			req.ShareKey,
+			services.MediaPurposeStream,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "Invalid access key"})
+			return
+		}
 
-		if err := h.playbackService.RecordPlayEvent(req.ShareKey, sessionID, req.ListeningSessionID, req.Origin); err != nil {
+		if err := h.playbackService.RecordPlayEvent(
+			req.ShareKey,
+			sessionID,
+			req.ListeningSessionID,
+			req.Origin,
+			verifiedAccess.Nonce,
+			verifiedAccess.ExpiresAt,
+		); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record play event"})
 			return
 		}

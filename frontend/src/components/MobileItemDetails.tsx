@@ -1,23 +1,22 @@
-import {FileSystemItem, Notification} from "@/types";
+import {FileSystemItem} from "@/types";
 import {Check, Download, ExternalLink, Unlink, Share2} from "lucide-react";
 import React from "react";
 import {formatDate, formatDuration, formatFileSize} from "@/lib/utils";
 import {useRybbit} from "@/hooks/useRybbit";
-import {API_BASE, isMatureAge} from "@/lib/api";
+import {isMatureAge} from "@/lib/api";
 import TrackQuickActions from '@/components/TrackQuickActions';
 import {audioFileToPlayerTrack} from '@/lib/tracks';
 
 interface MobileItemDetailsProps {
     item: FileSystemItem;
-    notification: Notification,
+    copiedShareKey: string | null,
     copyToClipboard: (shareKey: string, e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
-    onMatureDownloadRequest: (download: { item: FileSystemItem; url: string }) => void;
+    onDownloadRequest: (item: FileSystemItem) => void;
+    onMatureDownloadRequest: (item: FileSystemItem) => void;
 }
 
-function MobileItemDetails({ item, notification, copyToClipboard, onMatureDownloadRequest }: MobileItemDetailsProps) {
+function MobileItemDetails({ item, copiedShareKey, copyToClipboard, onDownloadRequest, onMatureDownloadRequest }: MobileItemDetailsProps) {
     const {track} = useRybbit();
-
-    const downloadUrl = item.type === 'audio' && item.shareKey ? `${API_BASE}/api/audio/key/${item.shareKey}/download` : '#';
 
     return (
         <div className="px-3 pb-3 flex justify-between">
@@ -66,29 +65,26 @@ function MobileItemDetails({ item, notification, copyToClipboard, onMatureDownlo
                         }}
                         title="Copy share link"
                     >
-                        {notification.visible && notification.path === (item.type === 'audio' ? item.shareKey : '') && !notification.isError ?
+                        {copiedShareKey === (item.type === 'audio' ? item.shareKey : '') ?
                             <Check className="h-3 w-3"/> :
                             <Share2 className="h-3 w-3"/>
                         }
                     </button>
-                    <a
-                        href={downloadUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    <button
+                        type="button"
                         className="inline-flex items-center justify-center bg-[var(--primary)] text-white p-1 rounded-full hover:bg-[var(--primary-hover)]"
                         onClick={(e) => {
                             e.stopPropagation();
                             if (item.type === 'audio' && isMatureAge(item.ageLimit) && sessionStorage.getItem('mature-download-warning-ack') !== 'true') {
-                                e.preventDefault();
-                                onMatureDownloadRequest({ item, url: downloadUrl });
+                                onMatureDownloadRequest(item);
                                 return;
                             }
-                            track('audio-download', { path: item.path, name: item.name });
+                            onDownloadRequest(item);
                         }}
                         title="Download"
                     >
                         <Download className="h-3 w-3"/>
-                    </a>
+                    </button>
                 </div>
             )}
             {item.type === 'folder' && item.metadata?.original_url && (

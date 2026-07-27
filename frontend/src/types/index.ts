@@ -33,13 +33,6 @@ export interface Folder {
     shareKey?: string;
 }
 
-export type Notification = {
-    path: string;
-    message: string;
-    isError: boolean;
-    visible: boolean;
-}
-
 export type FileSystemItem = AudioFile | Folder;
 
 export interface Tag {

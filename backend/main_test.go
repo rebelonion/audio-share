@@ -22,4 +22,10 @@ func TestCORSMiddlewareAllowsPut(t *testing.T) {
 	if !strings.Contains(allowed, http.MethodPut) {
 		t.Fatalf("PUT missing from Access-Control-Allow-Methods: %q", allowed)
 	}
+	exposed := recorder.Header().Get("Access-Control-Expose-Headers")
+	for _, header := range []string{"Date", "Retry-After"} {
+		if !strings.Contains(exposed, header) {
+			t.Fatalf("%s missing from Access-Control-Expose-Headers: %q", header, exposed)
+		}
+	}
 }

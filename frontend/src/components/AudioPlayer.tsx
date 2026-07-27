@@ -5,6 +5,7 @@ import {
     Volume2,
     VolumeX,
     AlertCircle,
+    Info,
     ExternalLink,
     Calendar,
     ChevronsDown,
@@ -14,6 +15,7 @@ import {
     Loader2,
     Heart,
     ListMusic,
+    Share2,
     SkipBack,
     SkipForward,
     X
@@ -23,6 +25,8 @@ import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 import {useAudioPlayerKeybinds} from '@/hooks/useAudioPlayerKeybinds';
 import QueuePanel from '@/components/QueuePanel';
 import {useLikes} from '@/contexts/LikesContext';
+import {useToast} from '@/contexts/ToastContext';
+import {audioShareUrl} from '@/lib/share';
 
 function formatTime(time: number): string {
     const safe = Number.isFinite(time) ? time : 0;
@@ -43,6 +47,7 @@ export default function AudioPlayer() {
         volume,
         isMuted,
         error,
+        notice,
         thumbnail,
         metadata,
         audioLoaded,
@@ -59,6 +64,7 @@ export default function AudioPlayer() {
         seekTo,
         setVolume,
     } = useGlobalAudioPlayer();
+    const toast = useToast();
     const {isLiked, isLikePending, isLoading: likesLoading, isReady: likesReady, toggleLike} = useLikes();
     const liked = isLiked(currentTrack?.shareKey);
     const likePending = isLikePending(currentTrack?.shareKey);
@@ -114,6 +120,20 @@ export default function AudioPlayer() {
 
     if (!currentTrack) return null;
 
+    const copyShareLink = async () => {
+        if (!navigator.clipboard) {
+            toast.error('Copy feature not supported in this browser');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(audioShareUrl(currentTrack.shareKey));
+            toast.success('Share link copied to clipboard!');
+        } catch {
+            toast.error('Failed to copy to clipboard');
+        }
+    };
+
     return (
         <>
         <div
@@ -150,7 +170,12 @@ export default function AudioPlayer() {
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm text-[var(--foreground)]">{metadata?.title || track}</span>
-                            <span className="block truncate text-xs text-[var(--muted-foreground)]">{metadata?.artist || artist}</span>
+                            <span
+                                className="block truncate text-xs text-[var(--muted-foreground)]"
+                                role={notice ? 'status' : undefined}
+                            >
+                                {notice || metadata?.artist || artist}
+                            </span>
                         </span>
                     </button>
                     <button
@@ -164,6 +189,7 @@ export default function AudioPlayer() {
                         <span className="min-w-3 text-center text-[10px] font-medium tabular-nums text-[var(--foreground)]">{upcoming.length > 99 ? '99+' : upcoming.length}</span>
                     </button>
                     <button
+                        type="button"
                         onClick={toggleMinimize}
                         className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex-shrink-0"
                         aria-label="Expand player"
@@ -185,6 +211,9 @@ export default function AudioPlayer() {
                         <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />
                     </button>
                     <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => void copyShareLink()} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Copy share link" title="Copy share link">
+                            <Share2 className="h-4 w-4" />
+                        </button>
                         <button onClick={() => setShowQueue(value => !value)} className="relative p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Open queue" title="Open queue">
                             <ListMusic className="h-4 w-4" />
                             {upcoming.length > 0 && <span className="absolute -right-1 -top-1 min-w-3 h-3 px-0.5 rounded-full bg-[var(--primary)] text-white text-[8px] flex items-center justify-center">{Math.min(99, upcoming.length)}</span>}
@@ -229,8 +258,17 @@ export default function AudioPlayer() {
 
                     {error && (
                         <div className="mb-3 flex items-start rounded border border-[var(--error-border)] bg-[var(--error-bg)] p-2 text-[var(--error-text)] animate-fadeIn">
-                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
+                            <Info className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
                             <span className="text-xs">{error}</span>
+                        </div>
+                    )}
+                    {notice && (
+                        <div
+                            className="mb-3 flex items-start rounded border border-[var(--border)] bg-[var(--secondary)] p-2 text-[var(--foreground)] animate-fadeIn"
+                            role="status"
+                        >
+                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
+                            <span className="text-xs">{notice}</span>
                         </div>
                     )}
 

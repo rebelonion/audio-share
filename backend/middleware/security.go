@@ -7,16 +7,25 @@ import (
 
 type SecurityHeaders struct {
 	rybbitDomain string
+	capDomain    string
 }
 
-func NewSecurityHeaders(rybbitURL string) *SecurityHeaders {
-	var rybbitDomain string
-	if rybbitURL != "" {
-		if parsed, err := url.Parse(rybbitURL); err == nil {
-			rybbitDomain = parsed.Scheme + "://" + parsed.Host
-		}
+func NewSecurityHeaders(rybbitURL, capURL string) *SecurityHeaders {
+	return &SecurityHeaders{
+		rybbitDomain: origin(rybbitURL),
+		capDomain:    origin(capURL),
 	}
-	return &SecurityHeaders{rybbitDomain: rybbitDomain}
+}
+
+func origin(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
@@ -28,6 +37,9 @@ func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
 			scriptSrc += " " + s.rybbitDomain
 			connectSrc += " " + s.rybbitDomain
 		}
+		if s.capDomain != "" && s.capDomain != s.rybbitDomain {
+			connectSrc += " " + s.capDomain
+		}
 
 		csp := "default-src 'self'; " +
 			"script-src " + scriptSrc + "; " +
@@ -36,6 +48,7 @@ func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
 			"media-src 'self' blob:; " +
 			"connect-src " + connectSrc + "; " +
 			"font-src 'self' https://fonts.gstatic.com; " +
+			"worker-src 'self' blob:; " +
 			"object-src 'none'; " +
 			"base-uri 'self'; " +
 			"form-action 'self'; " +
