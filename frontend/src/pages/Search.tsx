@@ -333,68 +333,79 @@ export default function Search() {
                                     }`}
                                     title={result.type === 'audio' && result.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
                                 >
-                                    <Link
-                                        to={getResultPath(result)}
-                                        onClick={() => track('search-result-click', { query, resultPath: result.path, resultType: result.type })}
-                                        className="flex items-start gap-3 flex-1 min-w-0 no-underline"
-                                    >
-                                        <div className="flex-shrink-0 mt-1">
-                                            {result.type === 'folder' ? (
-                                                <Folder className="h-5 w-5 text-[var(--primary)]" />
-                                            ) : (
-                                                <div className="relative">
-                                                    <Music className="h-5 w-5 text-[var(--primary)]" />
-                                                    {result.unavailableAt && (
-                                                        <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
+                                    <div className="flex-1 min-w-0">
+                                        <Link
+                                            to={getResultPath(result)}
+                                            onClick={() => track('search-result-click', { query, resultPath: result.path, resultType: result.type })}
+                                            className="flex items-start gap-3 min-w-0 no-underline"
+                                        >
+                                            <div className="flex-shrink-0 mt-1">
+                                                {result.type === 'folder' ? (
+                                                    <Folder className="h-5 w-5 text-[var(--primary)]" />
+                                                ) : (
+                                                    <div className="relative">
+                                                        <Music className="h-5 w-5 text-[var(--primary)]" />
+                                                        {result.unavailableAt && (
+                                                            <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-grow min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-medium text-[var(--foreground)] truncate group-hover:text-[var(--primary)] transition-colors">
+                                                        {result.title || result.name}
+                                                    </h3>
+                                                    {result.type === 'audio' && isMatureAge(result.ageLimit) && (
+                                                        <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
+                                                            18+
+                                                        </span>
                                                     )}
+                                                    <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                                                 </div>
-                                            )}
-                                        </div>
 
-                                        <div className="flex-grow min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-medium text-[var(--foreground)] truncate group-hover:text-[var(--primary)] transition-colors">
-                                                    {result.title || result.name}
-                                                </h3>
-                                                {result.type === 'audio' && isMatureAge(result.ageLimit) && (
-                                                    <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
-                                                        18+
-                                                    </span>
+                                                {result.artist && (
+                                                    <p className="text-sm text-[var(--muted-foreground)] truncate">
+                                                        {result.artist}
+                                                    </p>
                                                 )}
-                                                <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+
+                                                {result.description && (!isMatureAge(result.ageLimit) || maturePreference.enabled) && (
+                                                    <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mt-1">
+                                                        {result.description}
+                                                    </p>
+                                                )}
                                             </div>
+                                        </Link>
 
-                                            {result.artist && (
-                                                <p className="text-sm text-[var(--muted-foreground)] truncate">
-                                                    {result.artist}
-                                                </p>
-                                            )}
-
-                                            {result.description && (!isMatureAge(result.ageLimit) || maturePreference.enabled) && (
-                                                <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mt-1">
-                                                    {result.description}
-                                                </p>
-                                            )}
-
-                                            <div className="flex items-center gap-2 mt-2 text-xs text-[var(--muted-foreground)]">
-                                                <span className="px-2 py-0.5 bg-[var(--secondary)] rounded">
-                                                    {result.type}
+                                        <div className="flex items-center gap-2 mt-2 ml-8 text-xs text-[var(--muted-foreground)]">
+                                            <span className="px-2 py-0.5 bg-[var(--secondary)] rounded">
+                                                {result.type}
+                                            </span>
+                                            {result.modifiedAt && (
+                                                <span className="flex items-center gap-1 flex-shrink-0">
+                                                    <Calendar className="h-3 w-3" />
+                                                    {formatDate(result.modifiedAt)}
                                                 </span>
-                                                {result.modifiedAt && (
-                                                    <span className="flex items-center gap-1 flex-shrink-0">
-                                                        <Calendar className="h-3 w-3" />
-                                                        {formatDate(result.modifiedAt)}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            )}
+                                            {result.parentPath && (
+                                                <Link
+                                                    to={getParentLink(result) || '/browse'}
+                                                    className="hidden min-w-0 max-w-32 truncate text-[var(--primary)] hover:underline sm:inline-block"
+                                                    title={`Browse ${getParentName(result)}`}
+                                                >
+                                                    in {getParentName(result)}
+                                                </Link>
+                                            )}
                                         </div>
-                                    </Link>
+                                    </div>
                                     {(result.parentPath || playerTrack) && (
                                         <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:contents">
                                             {result.parentPath && (
                                                 <Link
                                                     to={getParentLink(result) || '/browse'}
-                                                    className="min-w-0 flex-1 truncate text-xs text-[var(--primary)] hover:underline sm:max-w-32 sm:flex-none sm:shrink-0 sm:self-center"
+                                                    className="min-w-0 flex-1 truncate text-xs text-[var(--primary)] hover:underline sm:hidden"
                                                     title={`Browse ${getParentName(result)}`}
                                                 >
                                                     in {getParentName(result)}
