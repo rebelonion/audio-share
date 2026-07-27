@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -10,7 +11,9 @@ import (
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
+	"io"
 	"log"
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -27,17 +30,45 @@ type AudioHandler struct {
 	db                     *sql.DB
 	streamBytesPerSecond   int64
 	downloadBytesPerSecond int64
+	downloadSessionMinAge  time.Duration
 	sessionSecret          []byte
+	accessKeys             *services.AccessKeyManager
+	accessFailureLimiter   AccessFailureLimiter
+	streamIPLimiter        *services.IPBandwidthLimiter
+	downloadIPLimiter      *services.IPBandwidthLimiter
+	now                    func() time.Time
 	mimeTypes              map[string]string
 }
 
-func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, streamBytesPerSecond, downloadBytesPerSecond int64, sessionSecret string) *AudioHandler {
+type AccessFailureLimiter interface {
+	AllowAccessAttempt(clientIP string) (allowed bool, retryAfter int)
+	RecordAccessFailure(clientIP string)
+}
+
+type AudioHandlerOptions struct {
+	StreamBytesPerSecond   int64
+	DownloadBytesPerSecond int64
+	DownloadSessionMinAge  time.Duration
+	SessionSecret          string
+	AccessKeys             *services.AccessKeyManager
+	AccessFailureLimiter   AccessFailureLimiter
+	StreamIPLimiter        *services.IPBandwidthLimiter
+	DownloadIPLimiter      *services.IPBandwidthLimiter
+}
+
+func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, options AudioHandlerOptions) *AudioHandler {
 	return &AudioHandler{
 		fs:                     fs,
 		db:                     db,
-		streamBytesPerSecond:   streamBytesPerSecond,
-		downloadBytesPerSecond: downloadBytesPerSecond,
-		sessionSecret:          []byte(sessionSecret),
+		streamBytesPerSecond:   options.StreamBytesPerSecond,
+		downloadBytesPerSecond: options.DownloadBytesPerSecond,
+		downloadSessionMinAge:  options.DownloadSessionMinAge,
+		sessionSecret:          []byte(options.SessionSecret),
+		accessKeys:             options.AccessKeys,
+		accessFailureLimiter:   options.AccessFailureLimiter,
+		streamIPLimiter:        options.StreamIPLimiter,
+		downloadIPLimiter:      options.DownloadIPLimiter,
+		now:                    time.Now,
 		mimeTypes: map[string]string{
 			".mp3":  "audio/mpeg",
 			".wav":  "audio/wav",
@@ -58,12 +89,15 @@ func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, streamBytesPerS
 func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
 
-	// Path format: /api/audio/key/{key}[/thumbnail|/meta|/waveform|/download]
+	// Path format: /api/audio/key/{key}[/thumbnail|/meta|/waveform|/download|/access]
 	path := strings.TrimPrefix(r.URL.Path, "/api/audio/key/")
 	path = strings.Trim(path, "/")
 
 	var key, action string
-	if strings.HasSuffix(path, "/thumbnail") {
+	if strings.HasSuffix(path, "/access") {
+		key = strings.TrimSuffix(path, "/access")
+		action = "access"
+	} else if strings.HasSuffix(path, "/thumbnail") {
 		key = strings.TrimSuffix(path, "/thumbnail")
 		action = "thumbnail"
 	} else if strings.HasSuffix(path, "/meta") {
@@ -86,6 +120,8 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch action {
+	case "access":
+		h.handleAccessKey(w, r, key)
 	case "stream":
 		h.handleStream(w, r, key, false)
 	case "download":
@@ -99,6 +135,98 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
+}
+
+type accessKeyRequest struct {
+	Purpose services.MediaPurpose `json:"purpose"`
+}
+
+func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, key string) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
+		return
+	}
+	sessionID, ok := currentSessionID(r, h.sessionSecret)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_session"})
+		return
+	}
+	if h.accessKeys == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "access_keys_unavailable"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	var request accessKeyRequest
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		return
+	}
+	if request.Purpose != services.MediaPurposeStream && request.Purpose != services.MediaPurposeDownload {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_purpose"})
+		return
+	}
+	if request.Purpose == services.MediaPurposeDownload && h.downloadSessionMinAge > 0 {
+		createdAt, ok := sessionCreatedAt(r, h.sessionSecret, sessionID)
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_session"})
+			return
+		}
+		remaining := h.downloadSessionMinAge - h.now().Sub(createdAt)
+		if remaining > 0 {
+			retryAfter := max(1, int(math.Ceil(remaining.Seconds())))
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+				"error":      "session_too_new",
+				"purpose":    request.Purpose,
+				"retryAfter": retryAfter,
+			})
+			return
+		}
+	}
+
+	row, err := h.lookupByKey(key)
+	if err == sql.ErrNoRows || (err == nil && row.deleted) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "audio_not_found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		return
+	}
+
+	issued, err := h.accessKeys.Issue(sessionID, clientIP(r), key, request.Purpose)
+	if err != nil {
+		var limited *services.KeyLimitExceededError
+		if errors.As(err, &limited) {
+			retryAfter := max(1, int(math.Ceil(limited.RetryAfter.Seconds())))
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+				"error":      "key_limit_exceeded",
+				"purpose":    request.Purpose,
+				"scope":      limited.Scope,
+				"limit":      limited.Limit.Count,
+				"window":     limited.Limit.Window.String(),
+				"retryAfter": retryAfter,
+			})
+			return
+		}
+		log.Printf("Error issuing %s access key for share_key=%s: %v", request.Purpose, key, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		return
+	}
+
+	expiresIn := max(time.Duration(0), issued.ExpiresAt.Sub(h.now()))
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"accessKey":   issued.AccessKey,
+		"expiresAt":   issued.ExpiresAt.UTC().Format(time.RFC3339Nano),
+		"expiresInMs": expiresIn.Milliseconds(),
+	})
 }
 
 type audioRow struct {
@@ -147,8 +275,49 @@ func (h *AudioHandler) resolveFullPath(virtualPath string) (string, bool) {
 }
 
 func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key string, download bool) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
+		return
+	}
 	if download && isBotLikeUserAgent(r.UserAgent()) {
-		http.Error(w, "Bot downloads are not allowed", http.StatusForbidden)
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "bot_download_forbidden"})
+		return
+	}
+	clientAddress := clientIP(r)
+	if h.accessFailureLimiter != nil {
+		allowed, retryAfter := h.accessFailureLimiter.AllowAccessAttempt(clientAddress)
+		if !allowed {
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too_many_invalid_access_attempts"})
+			return
+		}
+	}
+	sessionID, ok := currentSessionID(r, h.sessionSecret)
+	if !ok {
+		if h.accessFailureLimiter != nil {
+			h.accessFailureLimiter.RecordAccessFailure(clientAddress)
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_session"})
+		return
+	}
+	if h.accessKeys == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "access_keys_unavailable"})
+		return
+	}
+	purpose := services.MediaPurposeStream
+	if download {
+		purpose = services.MediaPurposeDownload
+	}
+	err := h.accessKeys.Verify(r.URL.Query().Get("access_key"), sessionID, key, purpose)
+	if err != nil {
+		if h.accessFailureLimiter != nil {
+			h.accessFailureLimiter.RecordAccessFailure(clientAddress)
+		}
+		errorCode := "invalid_access_key"
+		if errors.Is(err, services.ErrExpiredAccessKey) {
+			errorCode = "expired_access_key"
+		}
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": errorCode})
 		return
 	}
 
@@ -192,7 +361,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	defer file.Close()
 
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Accept-Ranges", "bytes")
 	if download {
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
@@ -207,7 +376,12 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		h.recordMediaEvent(r, row.id, key, eventType, info.Size())
 	}
 
-	reader := newThrottledReadSeeker(file, h.bytesPerSecond(download))
+	reader := newThrottledReadSeeker(
+		file,
+		h.bytesPerSecond(download),
+		h.ipLimiter(download),
+		clientAddress,
+	)
 	http.ServeContent(w, r, info.Name(), info.ModTime(), reader)
 }
 
@@ -216,6 +390,13 @@ func (h *AudioHandler) bytesPerSecond(download bool) int64 {
 		return h.downloadBytesPerSecond
 	}
 	return h.streamBytesPerSecond
+}
+
+func (h *AudioHandler) ipLimiter(download bool) *services.IPBandwidthLimiter {
+	if download {
+		return h.downloadIPLimiter
+	}
+	return h.streamIPLimiter
 }
 
 func isInitialStreamRequest(r *http.Request) bool {

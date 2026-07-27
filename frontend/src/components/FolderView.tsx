@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Calendar, Check, Clock, SortAsc} from 'lucide-react';
-import {FileSystemItem, Notification} from '@/types';
+import {Calendar, Clock, SortAsc} from 'lucide-react';
+import {FileSystemItem} from '@/types';
 import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
 import MobileItemDetails from "@/components/MobileItemDetails";
@@ -13,6 +13,9 @@ import {useSearchParams} from "react-router";
 import {useRybbit} from "@/hooks/useRybbit";
 import {useAudioPlayerCommands} from '@/contexts/AudioPlayerContext';
 import {audioFileToPlayerTrack} from '@/lib/tracks';
+import {mediaAccessErrorMessage, startAudioDownload} from '@/lib/mediaAccess';
+import {useToast} from '@/contexts/ToastContext';
+import {audioShareUrl} from '@/lib/share';
 
 interface FolderViewProps {
     items: FileSystemItem[];
@@ -168,6 +171,7 @@ function useWindowedEntries(entries: DisplayEntry[], isDesktop: boolean) {
 
 export default function FolderView({items, currentPath = ''}: FolderViewProps) {
     const {track} = useRybbit();
+    const toast = useToast();
     const {playContext} = useAudioPlayerCommands();
     const [searchParams] = useSearchParams();
     const [isAudioSelectionLocked, setIsAudioSelectionLocked] = useState(false);
@@ -175,13 +179,8 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">('asc');
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isDesktop, setIsDesktop] = useState(getIsDesktop);
-    const [pendingDownload, setPendingDownload] = useState<{ item: FileSystemItem; url: string } | null>(null);
-    const [notification, setNotification] = useState<Notification>({
-        path: '',
-        message: '',
-        isError: false,
-        visible: false,
-    });
+    const [pendingDownload, setPendingDownload] = useState<FileSystemItem | null>(null);
+    const [copiedShareKey, setCopiedShareKey] = useState<string | null>(null);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(min-width: 768px)');
@@ -384,13 +383,10 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
     }, [showDurationColumn, sortMethod]);
 
     useEffect(() => {
-        if (notification.visible) {
-            const timer = setTimeout(() => {
-                setNotification({...notification, visible: false});
-            }, 2000);
-            return () => clearTimeout(timer);
-        }
-    }, [notification]);
+        if (!copiedShareKey) return;
+        const timer = window.setTimeout(() => setCopiedShareKey(null), 2_000);
+        return () => window.clearTimeout(timer);
+    }, [copiedShareKey]);
 
     const handleAudioSelect = useCallback((item: FileSystemItem) => {
         if (item.type === 'audio' && !isAudioSelectionLocked) {
@@ -419,53 +415,43 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
 
     const copyToClipboard = useCallback((shareKey: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        const url = `${window.location.origin}/share/${shareKey}`;
+        const url = audioShareUrl(shareKey);
 
         try {
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => {
-                    setNotification({
-                        path: shareKey,
-                        message: 'Share link copied to clipboard!',
-                        isError: false,
-                        visible: true
-                    });
-                });
+                void navigator.clipboard.writeText(url)
+                    .then(() => {
+                        setCopiedShareKey(shareKey);
+                        toast.success('Share link copied to clipboard!');
+                    })
+                    .catch(() => toast.error('Failed to copy to clipboard'));
             } else {
                 console.error('Clipboard API not available');
-                setNotification({
-                    path: shareKey,
-                    message: 'Copy feature not supported in this browser',
-                    isError: true,
-                    visible: true
-                });
+                toast.error('Copy feature not supported in this browser');
             }
         } catch (err) {
             console.error('Clipboard API failed:', err);
-            setNotification({
-                path: shareKey,
-                message: 'Failed to copy to clipboard',
-                isError: true,
-                visible: true
-            });
+            toast.error('Failed to copy to clipboard');
         }
-    }, []);
+    }, [toast]);
 
-    const openDownload = useCallback((url: string) => {
-        window.open(url, '_blank', 'noopener,noreferrer');
-    }, []);
+    const openDownload = useCallback(async (item: FileSystemItem) => {
+        if (item.type !== 'audio' || !item.shareKey) return;
+        try {
+            await startAudioDownload(item.shareKey);
+            track('audio-download', {path: item.path, name: item.name});
+        } catch (error) {
+            toast.error(mediaAccessErrorMessage(error, 'download'));
+        }
+    }, [toast, track]);
 
     const confirmMatureDownload = useCallback(() => {
         if (!pendingDownload) return;
 
         sessionStorage.setItem('mature-download-warning-ack', 'true');
         setPendingDownload(null);
-        track('audio-download', {
-            path: pendingDownload.item.path,
-            name: pendingDownload.item.name,
-        });
-        openDownload(pendingDownload.url);
-    }, [pendingDownload, track, openDownload]);
+        void openDownload(pendingDownload);
+    }, [pendingDownload, openDownload]);
 
     return (
         <div className="relative">
@@ -480,26 +466,6 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                 />,
                 document.body
             )}
-
-            {/* Floating notification */}
-            <div
-                className={`fixed bottom-4 right-4 px-4 py-2 rounded-md shadow-lg transform transition-all duration-300 flex items-center gap-2 ${
-                    notification.visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
-                }`}
-                style={notification.isError ? {
-                    background: 'var(--error-bg)',
-                    border: '1px solid var(--error-border)',
-                    color: 'var(--error-text)',
-                } : {
-                    background: 'var(--primary)',
-                    color: '#fff',
-                }}
-            >
-                {notification.isError ? null : (
-                    <Check className="h-4 w-4"/>
-                )}
-                <span>{notification.message || 'Link copied to clipboard!'}</span>
-            </div>
 
             {items.length === 0 ? (
                 <div className="text-center py-8 text-[var(--muted-foreground)]">
@@ -632,8 +598,9 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                                             ) : (
                                                 <TableItem item={entry.item}
                                                     showDurationColumn={showDurationColumn}
-                                                    handleAudioSelect={handleAudioSelect} notification={notification}
+                                                    handleAudioSelect={handleAudioSelect} copiedShareKey={copiedShareKey}
                                                     copyToClipboard={copyToClipboard}
+                                                    onDownloadRequest={(item) => void openDownload(item)}
                                                     onMatureDownloadRequest={setPendingDownload}
                                                     key={`desktop-${entry.key}`}/>
                                             )
@@ -683,8 +650,9 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                                                     >
                                                         <MobileItemName item={entry.item}/>
 
-                                                        <MobileItemDetails item={entry.item} notification={notification}
+                                                        <MobileItemDetails item={entry.item} copiedShareKey={copiedShareKey}
                                                                   copyToClipboard={copyToClipboard}
+                                                                  onDownloadRequest={(item) => void openDownload(item)}
                                                                   onMatureDownloadRequest={setPendingDownload}/>
                                                     </div>
                                 )

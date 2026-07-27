@@ -39,6 +39,7 @@ docker run -p 8080:8080 \
   -v /path/to/your/audio:/audio:ro \
   -v /path/to/your/content:/app/content:ro \
   -e AUDIO_DIR=/audio:Audio \
+  -e SESSION_SECRET=replace-with-a-long-random-value \
   audio-share
 ```
 
@@ -54,6 +55,7 @@ services:
       - "8080:8080"
     environment:
       - AUDIO_DIR=/audio:Audio
+      - SESSION_SECRET=replace-with-a-long-random-value
     volumes:
       - /path/to/your/audio:/audio:ro
       - /path/to/your/content:/app/content:ro
@@ -91,10 +93,18 @@ All configuration is done via environment variables on the Go server. Frontend c
 |----------|-------------|---------|
 | `PORT` | Server port | `8080` |
 | `AUDIO_DIR` | Audio directories (format: `/path:Name,/path2:Name2`) | - |
+| `SESSION_SECRET` | Required secret used to sign anonymous sessions and media access keys | - |
+| `STREAM_KEY_LIMITS` | Rolling per-session and per-IP stream-key limits in `count/duration` format, comma-separated | `10/1m` |
+| `DOWNLOAD_KEY_LIMITS` | Rolling per-session and per-IP download-key limits in `count/duration` format, comma-separated | `10/1m` |
+| `STREAM_KEY_TTL` | Lifetime of a stream access key | `30m` |
+| `DOWNLOAD_KEY_TTL` | Lifetime of a download access key | `10m` |
+| `DOWNLOAD_SESSION_MIN_AGE` | Minimum age of a signed anonymous session before it may request download keys (`0s` disables) | `0s` |
 | `STREAM_BYTES_PER_SECOND` | Per-request audio streaming speed limit in bytes per second (`0` disables) | `0` |
 | `DOWNLOAD_BYTES_PER_SECOND` | Per-request download speed limit in bytes per second (`0` disables) | `0` |
-| `STREAM_FILE_LIMIT` | Per-IP stream request limit per `RATE_LIMIT_WINDOW` | `10` |
-| `DOWNLOAD_FILE_LIMIT` | Per-IP download request limit per `RATE_LIMIT_WINDOW` | `10` |
+| `STREAM_IP_BYTES_PER_SECOND` | Aggregate streaming bandwidth per client IP across concurrent responses (`0` disables) | `0` |
+| `DOWNLOAD_IP_BYTES_PER_SECOND` | Aggregate download bandwidth per client IP across concurrent responses (`0` disables) | `0` |
+| `STREAM_IP_BURST_BYTES` | Burst capacity for the aggregate stream limiter (`0` derives one second of capacity) | `0` |
+| `DOWNLOAD_IP_BURST_BYTES` | Burst capacity for the aggregate download limiter (`0` derives one second of capacity) | `0` |
 | `CONTENT_DIR` | Directory for `about.md` | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
 | `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
@@ -113,6 +123,17 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `WAVEFORM_CRON` | Cron expression for waveform generation (e.g., `0 3 * * *`) | - (disabled) |
 | `WAVEFORM_MAX_DURATION` | Max time to spend generating waveforms per run (e.g., `2h`, `30m`) | `2h` |
 
+Key limits are evaluated as rolling windows, and every configured window must allow an issuance. For example:
+
+```env
+STREAM_KEY_LIMITS=2/1m,10/1h,20/24h
+DOWNLOAD_KEY_LIMITS=1/1m,5/1h,10/24h
+DOWNLOAD_SESSION_MIN_AGE=5m
+```
+
+Each rolling policy is enforced independently for the signed session and the resolved client IP, so replacing a browser session does not reset the IP allowance. When `DOWNLOAD_SESSION_MIN_AGE` is enabled, its delay begins when the server signs the session's creation-time cookie. Legacy sessions receive that cookie on their next session bootstrap.
+
+One key is issued for a logical playback or download. Browser Range requests made with that key do not consume additional key allowances. Limit state and aggregate IP bandwidth state are held in memory and are not shared between application replicas.
 ## Audio Files Organization
 
 Organize your audio files in your configured audio directory. The application will automatically:

@@ -1,8 +1,14 @@
 import {useCallback, useEffect, useRef, useState, type MutableRefObject} from 'react';
-import {API_BASE, recordPlayEvent} from '@/lib/api';
+import {recordPlayEvent} from '@/lib/api';
 import {useRybbit} from '@/hooks/useRybbit';
 import type {PlayerMetadata} from '@/hooks/usePlayerMetadata';
 import type {PlayerTrack} from '@/lib/playerQueue';
+import {
+    mediaAccessErrorMessage,
+    mediaAccessURL,
+    requestMediaAccess,
+    type MediaAccessGrant,
+} from '@/lib/mediaAccess';
 import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
 
 export const POSITION_STORAGE_KEY = 'audio-share:position';
@@ -37,10 +43,22 @@ export function useAudioEngine({
     const [isLoading, setIsLoading] = useState(false);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const volumeRef = useRef(volume);
+    const isMutedRef = useRef(isMuted);
     const resumableTrackRef = useRef(currentTrackRef.current?.shareKey || null);
     const recordedPlaySrcRef = useRef<string | null>(null);
     const persistedPositionRef = useRef(0);
     const playbackAttemptRef = useRef(0);
+    const blockedPlaybackRef = useRef<HTMLAudioElement | null>(null);
+    const loadAttemptRef = useRef(0);
+    const activeGrantRef = useRef<MediaAccessGrant | null>(null);
+    const accessRequestRef = useRef<{
+        shareKey: string;
+        controller: AbortController;
+        promise: Promise<MediaAccessGrant>;
+    } | null>(null);
+    const recoveredExpiredKeyRef = useRef<string | null>(null);
+    const recoverExpiredAccessRef = useRef<(audio: HTMLAudioElement, track: PlayerTrack) => void>(() => {});
 
     useEffect(() => {
         if (waveformDuration > 0) setDuration(waveformDuration);
@@ -59,19 +77,32 @@ export function useAudioEngine({
         const audio = audioRef.current;
         if (!audio) return;
         audioRef.current = null;
+        if (blockedPlaybackRef.current === audio) {
+            blockedPlaybackRef.current = null;
+        }
         audio.pause();
         audio.removeAttribute('src');
         audio.load();
     }, []);
 
-    useEffect(() => () => destroyAudio(), [destroyAudio]);
+    useEffect(() => () => {
+        accessRequestRef.current?.controller.abort();
+        loadAttemptRef.current += 1;
+        destroyAudio();
+    }, [destroyAudio]);
 
     const resetForTrack = useCallback(() => {
+        accessRequestRef.current?.controller.abort();
+        accessRequestRef.current = null;
         destroyAudio();
         resetPlaybackState();
         resumableTrackRef.current = null;
         recordedPlaySrcRef.current = null;
         persistedPositionRef.current = 0;
+        activeGrantRef.current = null;
+        blockedPlaybackRef.current = null;
+        recoveredExpiredKeyRef.current = null;
+        loadAttemptRef.current += 1;
         playbackAttemptRef.current += 1;
     }, [destroyAudio, resetPlaybackState]);
 
@@ -101,10 +132,14 @@ export function useAudioEngine({
         resumableTrackRef.current = null;
     }, [currentTrackRef]);
 
-    const createAudio = useCallback((loadedTrack: PlayerTrack) => {
+    const createAudio = useCallback((
+        loadedTrack: PlayerTrack,
+        grant: MediaAccessGrant,
+        resumeAt?: number,
+    ) => {
         const audio = new Audio();
         audio.preload = 'metadata';
-        audio.src = loadedTrack.src.replace(/^\/audio\/key\//, `${API_BASE}/api/audio/key/`);
+        audio.src = mediaAccessURL(loadedTrack.shareKey, 'stream', grant.accessKey);
 
         audio.addEventListener('timeupdate', () => {
             if (audioRef.current !== audio) return;
@@ -129,7 +164,13 @@ export function useAudioEngine({
         });
         audio.addEventListener('play', () => audioRef.current === audio && setIsPlaying(true));
         audio.addEventListener('pause', () => audioRef.current === audio && setIsPlaying(false));
-        audio.addEventListener('loadedmetadata', () => applyLoadedAudioMetadata(audio, loadedTrack));
+        audio.addEventListener('loadedmetadata', () => {
+            applyLoadedAudioMetadata(audio, loadedTrack);
+            if (resumeAt && resumeAt < audio.duration) {
+                audio.currentTime = resumeAt;
+                persistedPositionRef.current = resumeAt;
+            }
+        });
         audio.addEventListener('ended', () => {
             if (audioRef.current !== audio) return;
             setIsPlaying(false);
@@ -137,6 +178,17 @@ export function useAudioEngine({
         });
         audio.addEventListener('error', () => {
             if (audioRef.current !== audio) return;
+            if (blockedPlaybackRef.current === audio) {
+                blockedPlaybackRef.current = null;
+            }
+            if (
+                Date.now() >= grant.expiresAt
+                && recoveredExpiredKeyRef.current !== grant.accessKey
+            ) {
+                recoveredExpiredKeyRef.current = grant.accessKey;
+                recoverExpiredAccessRef.current(audio, loadedTrack);
+                return;
+            }
             setIsLoading(false);
             setIsPlaying(false);
             setAudioLoaded(false);
@@ -146,69 +198,144 @@ export function useAudioEngine({
         return audio;
     }, [applyLoadedAudioMetadata, currentTrackRef, onEndedRef]);
 
+    const requestStreamAccess = useCallback((track: PlayerTrack): Promise<MediaAccessGrant> => {
+        const pending = accessRequestRef.current;
+        if (pending?.shareKey === track.shareKey) return pending.promise;
+        pending?.controller.abort();
+
+        const controller = new AbortController();
+        const request = requestMediaAccess(track.shareKey, 'stream', controller.signal);
+        accessRequestRef.current = {
+            shareKey: track.shareKey,
+            controller,
+            promise: request,
+        };
+        const clearPendingRequest = () => {
+            if (accessRequestRef.current?.promise === request) {
+                accessRequestRef.current = null;
+            }
+        };
+        void request.then(clearPendingRequest, clearPendingRequest);
+        return request;
+    }, []);
+
+    const playAudio = useCallback((audio: HTMLAudioElement, selectedTrack: PlayerTrack) => {
+        const playbackAttempt = ++playbackAttemptRef.current;
+        setIsLoading(true);
+        audio.play().then(() => {
+            if (
+                audioRef.current !== audio
+                || currentTrackRef.current?.id !== selectedTrack.id
+                || playbackAttemptRef.current !== playbackAttempt
+            ) return;
+            setIsPlaying(true);
+            setIsLoading(false);
+            setError(null);
+            if (blockedPlaybackRef.current === audio) {
+                blockedPlaybackRef.current = null;
+            }
+            trackEvent('audio-play', {
+                title: metadataRef.current?.title || selectedTrack.name,
+                shareKey: selectedTrack.shareKey,
+                source: selectedTrack.source,
+                resumed: audio.currentTime > 0,
+            });
+        }).catch((playError: DOMException) => {
+            if (audioRef.current !== audio || playbackAttemptRef.current !== playbackAttempt) return;
+            setIsPlaying(false);
+            setIsLoading(false);
+            if (playError.name === 'AbortError' && audio.paused) return;
+            if (playError.name === 'NotAllowedError') {
+                blockedPlaybackRef.current = audio;
+                setError('Playback was blocked. Press play to continue.');
+            } else {
+                blockedPlaybackRef.current = null;
+                setError('Could not play this audio. Try the next track or try again.');
+            }
+        });
+    }, [currentTrackRef, metadataRef, trackEvent]);
+
+    const loadAuthorizedAudio = useCallback(async (selectedTrack: PlayerTrack, resumeAt?: number) => {
+        const loadAttempt = ++loadAttemptRef.current;
+        setIsLoading(true);
+        setError(null);
+        setAudioLoaded(false);
+        try {
+            const grant = await requestStreamAccess(selectedTrack);
+            if (
+                loadAttemptRef.current !== loadAttempt
+                || currentTrackRef.current?.id !== selectedTrack.id
+            ) return;
+
+            destroyAudio();
+            const audio = createAudio(selectedTrack, grant, resumeAt);
+            audio.volume = volumeRef.current;
+            audio.muted = isMutedRef.current;
+            activeGrantRef.current = grant;
+            recoveredExpiredKeyRef.current = null;
+            audioRef.current = audio;
+            if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+                applyLoadedAudioMetadata(audio, selectedTrack);
+                if (resumeAt && resumeAt < audio.duration) {
+                    audio.currentTime = resumeAt;
+                    persistedPositionRef.current = resumeAt;
+                }
+            }
+            playAudio(audio, selectedTrack);
+        } catch (accessError) {
+            if (
+                loadAttemptRef.current !== loadAttempt
+                || currentTrackRef.current?.id !== selectedTrack.id
+                || (accessError instanceof DOMException && accessError.name === 'AbortError')
+            ) return;
+            setIsPlaying(false);
+            setIsLoading(false);
+            setAudioLoaded(false);
+            setError(mediaAccessErrorMessage(accessError, 'play'));
+        }
+    }, [
+        applyLoadedAudioMetadata,
+        createAudio,
+        currentTrackRef,
+        destroyAudio,
+        playAudio,
+        requestStreamAccess,
+    ]);
+
+    recoverExpiredAccessRef.current = (audio, track) => {
+        const resumeAt = audio.currentTime;
+        void loadAuthorizedAudio(track, resumeAt);
+    };
+
     const play = useCallback(() => {
         const selectedTrack = currentTrackRef.current;
         if (!selectedTrack) return;
         const existingAudio = audioRef.current;
         if (existingAudio && !existingAudio.paused) return;
 
-        const playAudio = (audio: HTMLAudioElement) => {
-            const playbackAttempt = ++playbackAttemptRef.current;
-            setIsLoading(true);
-            audio.play().then(() => {
-                if (
-                    audioRef.current !== audio
-                    || currentTrackRef.current?.id !== selectedTrack.id
-                    || playbackAttemptRef.current !== playbackAttempt
-                ) return;
-                setIsPlaying(true);
-                setIsLoading(false);
-                setError(null);
-                trackEvent('audio-play', {
-                    title: metadataRef.current?.title || selectedTrack.name,
-                    shareKey: selectedTrack.shareKey,
-                    source: selectedTrack.source,
-                    resumed: audio.currentTime > 0,
-                });
-            }).catch((playError: DOMException) => {
-                if (audioRef.current !== audio || playbackAttemptRef.current !== playbackAttempt) return;
-                setIsPlaying(false);
-                setIsLoading(false);
-                if (playError.name === 'AbortError' && audio.paused) return;
-                setError(playError.name === 'NotAllowedError'
-                    ? 'Playback was blocked. Press play to continue.'
-                    : 'Could not play this audio. Try the next track or try again.');
-            });
-        };
-
-        if (existingAudio && audioLoaded && !error) {
-            playAudio(existingAudio);
+        const grant = activeGrantRef.current;
+        const hasValidGrant = grant && Date.now() < grant.expiresAt;
+        if (
+            existingAudio
+            && !existingAudio.ended
+            && hasValidGrant
+            && (
+                blockedPlaybackRef.current === existingAudio
+                || (audioLoaded && !error)
+            )
+        ) {
+            playAudio(existingAudio, selectedTrack);
             return;
         }
 
-        destroyAudio();
-        setIsLoading(true);
-        setError(null);
-        setAudioLoaded(false);
-        const audio = createAudio(selectedTrack);
-        audio.volume = volume;
-        audio.muted = isMuted;
-        audioRef.current = audio;
-        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
-            applyLoadedAudioMetadata(audio, selectedTrack);
-        }
-        playAudio(audio);
+        const resumeAt = existingAudio && !existingAudio.ended ? existingAudio.currentTime : undefined;
+        void loadAuthorizedAudio(selectedTrack, resumeAt);
     }, [
-        applyLoadedAudioMetadata,
         audioLoaded,
-        createAudio,
         currentTrackRef,
-        destroyAudio,
         error,
-        isMuted,
-        metadataRef,
-        trackEvent,
-        volume,
+        loadAuthorizedAudio,
+        playAudio,
     ]);
 
     const pause = useCallback(() => {
@@ -222,11 +349,12 @@ export function useAudioEngine({
     }, [trackEvent]);
 
     const toggleMute = useCallback(() => {
-        const muted = !isMuted;
+        const muted = !isMutedRef.current;
+        isMutedRef.current = muted;
         setIsMuted(muted);
         if (audioRef.current) audioRef.current.muted = muted;
         trackEvent('audio-mute', {muted});
-    }, [isMuted, trackEvent]);
+    }, [trackEvent]);
 
     const reportError = useCallback((message: string) => {
         setError(message);
@@ -235,6 +363,8 @@ export function useAudioEngine({
     const setPlayerVolume = useCallback((value: number) => {
         const clamped = Math.min(1, Math.max(0, value));
         const muted = clamped === 0;
+        volumeRef.current = clamped;
+        isMutedRef.current = muted;
         setVolume(clamped);
         setIsMuted(muted);
         writeLocalStorage(VOLUME_STORAGE_KEY, String(clamped));

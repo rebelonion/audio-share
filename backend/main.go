@@ -55,13 +55,52 @@ func main() {
 	if cfg.SessionSecret == "" {
 		log.Fatal("SESSION_SECRET is required but not set")
 	}
+	streamKeyTTL, err := time.ParseDuration(cfg.StreamKeyTTL)
+	if err != nil || streamKeyTTL <= 0 {
+		log.Fatalf("Invalid STREAM_KEY_TTL %q", cfg.StreamKeyTTL)
+	}
+	downloadKeyTTL, err := time.ParseDuration(cfg.DownloadKeyTTL)
+	if err != nil || downloadKeyTTL <= 0 {
+		log.Fatalf("Invalid DOWNLOAD_KEY_TTL %q", cfg.DownloadKeyTTL)
+	}
+	downloadSessionMinAge, err := time.ParseDuration(cfg.DownloadSessionMinAge)
+	if err != nil || downloadSessionMinAge < 0 {
+		log.Fatalf("Invalid DOWNLOAD_SESSION_MIN_AGE %q", cfg.DownloadSessionMinAge)
+	}
+	accessKeys, err := services.NewAccessKeyManager(
+		cfg.SessionSecret,
+		cfg.StreamKeyLimits,
+		cfg.DownloadKeyLimits,
+		streamKeyTTL,
+		downloadKeyTTL,
+	)
+	if err != nil {
+		log.Fatalf("Invalid audio access key configuration: %v", err)
+	}
+	var streamIPLimiter, downloadIPLimiter *services.IPBandwidthLimiter
+	if cfg.StreamIPBytesPerSecond > 0 {
+		streamIPLimiter = services.NewIPBandwidthLimiter(cfg.StreamIPBytesPerSecond, cfg.StreamIPBurstBytes)
+	}
+	if cfg.DownloadIPBytesPerSecond > 0 {
+		downloadIPLimiter = services.NewIPBandwidthLimiter(cfg.DownloadIPBytesPerSecond, cfg.DownloadIPBurstBytes)
+	}
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
 	playbackService := services.NewPlaybackService(db)
 	libraryService := services.NewLibraryService(db)
 	requestsService := services.NewRequestsService(db)
+	rateLimiter := middleware.NewRateLimiter(cfg)
 
-	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), cfg.StreamBytesPerSecond, cfg.DownloadBytesPerSecond, cfg.SessionSecret)
+	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), handlers.AudioHandlerOptions{
+		StreamBytesPerSecond:   cfg.StreamBytesPerSecond,
+		DownloadBytesPerSecond: cfg.DownloadBytesPerSecond,
+		DownloadSessionMinAge:  downloadSessionMinAge,
+		SessionSecret:          cfg.SessionSecret,
+		AccessKeys:             accessKeys,
+		AccessFailureLimiter:   rateLimiter,
+		StreamIPLimiter:        streamIPLimiter,
+		DownloadIPLimiter:      downloadIPLimiter,
+	})
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
@@ -84,7 +123,6 @@ func main() {
 	}
 	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, cfg.RybbitURL, cfg.RybbitSiteID, db.DB())
 
-	rateLimiter := middleware.NewRateLimiter(cfg)
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL)
 	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)
 	if cfg.RequestsAPIKey == "" {
@@ -93,6 +131,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	mux.Handle("/api/session", handlers.NewSessionBootstrapHandler(cfg.SessionSecret))
 	mux.Handle("/api/audio/key/", audioHandler)
 	mux.Handle("/api/folder/key/", folderHandler)
 	mux.Handle("/api/browse", browseHandler)
@@ -154,7 +193,7 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range, X-API-Key")
-			w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+			w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length, Date, Retry-After")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 

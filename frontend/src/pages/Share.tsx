@@ -10,6 +10,7 @@ import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import MatureContentDialog from '@/components/MatureContentDialog';
 import { useRybbit } from '@/hooks/useRybbit';
 import TrackQuickActions from '@/components/TrackQuickActions';
+import {mediaAccessErrorMessage, startAudioDownload} from '@/lib/mediaAccess';
 
 interface AudioMeta {
     title: string;
@@ -41,6 +42,8 @@ export default function Share() {
     const [isLoading, setIsLoading] = useState(true);
     const [recommendations, setRecommendations] = useState<TrackSummary[]>([]);
     const [showDownloadDialog, setShowDownloadDialog] = useState(false);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
     const maturePreference = useMatureContentPreference();
 
     useEffect(() => {
@@ -102,8 +105,6 @@ export default function Share() {
         : `${DEFAULT_DESCRIPTION} · ${displayTitle}`;
     const thumbnailView = meta?.isMature && !maturePreference.enabled ? 'blurred' : 'original';
     const thumbnailUrl = `${API_BASE}/api/audio/key/${key}/thumbnail?view=${thumbnailView}`;
-    const downloadUrl = `${API_BASE}/api/audio/key/${key}/download`;
-
     const trackDownload = () => {
         track('audio-download', {
             path: key,
@@ -112,17 +113,26 @@ export default function Share() {
         });
     };
 
-    const openDownload = () => {
-        trackDownload();
-        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+    const openDownload = async () => {
+        if (!key || isDownloading) return;
+        setIsDownloading(true);
+        setDownloadError(null);
+        try {
+            await startAudioDownload(key);
+            trackDownload();
+        } catch (error) {
+            setDownloadError(mediaAccessErrorMessage(error, 'download'));
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
-    const handleDownloadClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    const handleDownloadClick = (event: MouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
         if (!meta?.isMature || meta.showMature || sessionStorage.getItem('mature-download-warning-ack') === 'true') {
-            trackDownload();
+            void openDownload();
             return;
         }
-        event.preventDefault();
         setShowDownloadDialog(true);
     };
 
@@ -247,19 +257,23 @@ export default function Share() {
                                                 source: 'share',
                                             }} />
                                         )}
-                                        <a
-                                            href={downloadUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        <button
+                                            type="button"
+                                            disabled={isDownloading}
                                             onClick={handleDownloadClick}
-                                            className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+                                            className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors disabled:opacity-60"
                                         >
-                                            <Download className="h-4 w-4" /> Download
-                                        </a>
+                                            <Download className="h-4 w-4" /> {isDownloading ? 'Preparing…' : 'Download'}
+                                        </button>
                                         {meta?.parentPath && (
                                             <Link to={folderPath} className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
                                                 <FolderOpen className="h-4 w-4" /> Browse folder
                                             </Link>
+                                        )}
+                                        {downloadError && (
+                                            <span className="basis-full text-sm text-[var(--error-text)]" role="alert">
+                                                {downloadError}
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -331,7 +345,7 @@ export default function Share() {
                 onConfirm={() => {
                     sessionStorage.setItem('mature-download-warning-ack', 'true');
                     setShowDownloadDialog(false);
-                    openDownload();
+                    void openDownload();
                 }}
             />
         </>
