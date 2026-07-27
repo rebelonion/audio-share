@@ -10,7 +10,11 @@ import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import MatureContentDialog from '@/components/MatureContentDialog';
 import { useRybbit } from '@/hooks/useRybbit';
 import TrackQuickActions from '@/components/TrackQuickActions';
-import {mediaAccessErrorMessage, startAudioDownload} from '@/lib/mediaAccess';
+import {
+    mediaAccessErrorMessage,
+    startAudioDownload,
+    type MediaAccessPhase,
+} from '@/lib/mediaAccess';
 
 interface AudioMeta {
     title: string;
@@ -44,6 +48,7 @@ export default function Share() {
     const [showDownloadDialog, setShowDownloadDialog] = useState(false);
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [downloadPhase, setDownloadPhase] = useState<MediaAccessPhase>('requesting');
     const maturePreference = useMatureContentPreference();
 
     useEffect(() => {
@@ -116,9 +121,10 @@ export default function Share() {
     const openDownload = async () => {
         if (!key || isDownloading) return;
         setIsDownloading(true);
+        setDownloadPhase('requesting');
         setDownloadError(null);
         try {
-            await startAudioDownload(key);
+            await startAudioDownload(key, setDownloadPhase);
             trackDownload();
         } catch (error) {
             setDownloadError(mediaAccessErrorMessage(error, 'download'));
@@ -263,7 +269,11 @@ export default function Share() {
                                             onClick={handleDownloadClick}
                                             className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors disabled:opacity-60"
                                         >
-                                            <Download className="h-4 w-4" /> {isDownloading ? 'Preparing…' : 'Download'}
+                                            <Download className="h-4 w-4" /> {
+                                                isDownloading
+                                                    ? downloadPhase === 'verifying' ? 'Verifying…' : 'Preparing…'
+                                                    : 'Download'
+                                            }
                                         </button>
                                         {meta?.parentPath && (
                                             <Link to={folderPath} className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">

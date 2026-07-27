@@ -99,6 +99,14 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `STREAM_KEY_TTL` | Lifetime of a stream access key | `30m` |
 | `DOWNLOAD_KEY_TTL` | Lifetime of a download access key | `10m` |
 | `DOWNLOAD_SESSION_MIN_AGE` | Minimum age of a signed anonymous session before it may request download keys (`0s` disables) | `0s` |
+| `CAP_ENFORCEMENT` | Cap rollout mode: `off`, `observe`, or `enforce` | `off` |
+| `CAP_PUBLIC_ENDPOINT` | Browser-facing Cap endpoint including the site key, ending in `/` | - |
+| `CAP_VERIFY_ENDPOINT` | Server-facing `<site-key>/siteverify` endpoint | - |
+| `CAP_SECRET_KEY` | Secret for the Cap site key (not the dashboard admin key) | - |
+| `CAP_VERIFY_TIMEOUT` | Timeout for server-side token verification | `3s` |
+| `STREAM_CAPTCHA_LIMITS` | Rolling per-session and per-IP thresholds that trigger a stream challenge | - |
+| `STREAM_CAPTCHA_CLEARANCE_TTL` | How long a successful stream challenge clears that signed session | `15m` |
+| `DOWNLOAD_CAPTCHA_MODE` | Download challenge mode: `always` or `off` | `always` |
 | `STREAM_BYTES_PER_SECOND` | Per-request audio streaming speed limit in bytes per second (`0` disables) | `0` |
 | `DOWNLOAD_BYTES_PER_SECOND` | Per-request download speed limit in bytes per second (`0` disables) | `0` |
 | `STREAM_IP_BYTES_PER_SECOND` | Aggregate streaming bandwidth per client IP across concurrent responses (`0` disables) | `0` |
@@ -134,6 +142,28 @@ DOWNLOAD_SESSION_MIN_AGE=5m
 Each rolling policy is enforced independently for the signed session and the resolved client IP, so replacing a browser session does not reset the IP allowance. When `DOWNLOAD_SESSION_MIN_AGE` is enabled, its delay begins when the server signs the session's creation-time cookie. Legacy sessions receive that cookie on their next session bootstrap.
 
 One key is issued for a logical playback or download. Browser Range requests made with that key do not consume additional key allowances. Limit state and aggregate IP bandwidth state are held in memory and are not shared between application replicas.
+
+### Cap CAPTCHA
+
+The optional `cap` Docker Compose profile runs Cap Standalone with a private Valkey instance:
+
+```bash
+cp .env.local.example .env.local
+# Set ADMIN_KEY to at least 32 random characters.
+docker compose --env-file .env.local --profile cap up -d cap
+```
+
+Open `http://localhost:3000`, sign in with `ADMIN_KEY`, and create a site key. Keep instrumentation enabled. Then configure Audio Share:
+
+```env
+CAP_ENFORCEMENT=observe
+CAP_PUBLIC_ENDPOINT=http://localhost:3000/<site-key>/
+CAP_VERIFY_ENDPOINT=http://localhost:3000/<site-key>/siteverify
+CAP_SECRET_KEY=<site-key-secret>
+STREAM_CAPTCHA_LIMITS=3/1m,10/1h
+STREAM_CAPTCHA_CLEARANCE_TTL=15m
+DOWNLOAD_CAPTCHA_MODE=always
+```
 ## Audio Files Organization
 
 Organize your audio files in your configured audio directory. The application will automatically:

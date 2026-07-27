@@ -46,6 +46,10 @@ class FakeAudio {
         this.listeners.set(name, [...(this.listeners.get(name) || []), listener]);
     }
 
+    removeEventListener(name: string, listener: () => void) {
+        this.listeners.set(name, (this.listeners.get(name) || []).filter(candidate => candidate !== listener));
+    }
+
     load() {}
 
     pause() {
@@ -118,14 +122,18 @@ describe('useAudioEngine', () => {
         }));
 
         act(() => result.current.play());
-        await waitFor(() => expect(result.current.error).toBe(
-            'Playback was blocked. Press play to continue.',
+        await waitFor(() => expect(result.current.notice).toBe(
+            'Ready to play — press play to continue.',
         ));
+        expect(result.current.error).toBeNull();
 
         const authorizedAudio = FakeAudio.instances[0];
         act(() => result.current.play());
 
-        await waitFor(() => expect(result.current.isPlaying).toBe(true));
+        await waitFor(() => {
+            expect(result.current.isPlaying).toBe(true);
+            expect(result.current.notice).toBeNull();
+        });
         expect(result.current.error).toBeNull();
         expect(mediaAccess.requestMediaAccess).toHaveBeenCalledOnce();
         expect(FakeAudio.instances).toEqual([authorizedAudio]);

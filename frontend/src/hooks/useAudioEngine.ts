@@ -41,8 +41,10 @@ export function useAudioEngine({
     const [error, setError] = useState<string | null>(null);
     const [audioLoaded, setAudioLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const audioListenersRef = useRef<Array<[string, EventListener]>>([]);
     const volumeRef = useRef(volume);
     const isMutedRef = useRef(isMuted);
     const resumableTrackRef = useRef(currentTrackRef.current?.shareKey || null);
@@ -70,20 +72,33 @@ export function useAudioEngine({
         setDuration(0);
         setAudioLoaded(false);
         setError(null);
+        setNotice(null);
         setIsLoading(false);
     }, []);
 
-    const destroyAudio = useCallback(() => {
+    const removeAudioListeners = useCallback((audio: HTMLAudioElement) => {
+        for (const [name, listener] of audioListenersRef.current) {
+            audio.removeEventListener(name, listener);
+        }
+        audioListenersRef.current = [];
+    }, []);
+
+    const clearAudio = useCallback(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        audioRef.current = null;
+        removeAudioListeners(audio);
         if (blockedPlaybackRef.current === audio) {
             blockedPlaybackRef.current = null;
         }
         audio.pause();
         audio.removeAttribute('src');
         audio.load();
-    }, []);
+    }, [removeAudioListeners]);
+
+    const destroyAudio = useCallback(() => {
+        clearAudio();
+        audioRef.current = null;
+    }, [clearAudio]);
 
     useEffect(() => () => {
         accessRequestRef.current?.controller.abort();
@@ -94,7 +109,7 @@ export function useAudioEngine({
     const resetForTrack = useCallback(() => {
         accessRequestRef.current?.controller.abort();
         accessRequestRef.current = null;
-        destroyAudio();
+        clearAudio();
         resetPlaybackState();
         resumableTrackRef.current = null;
         recordedPlaySrcRef.current = null;
@@ -104,7 +119,7 @@ export function useAudioEngine({
         recoveredExpiredKeyRef.current = null;
         loadAttemptRef.current += 1;
         playbackAttemptRef.current += 1;
-    }, [destroyAudio, resetPlaybackState]);
+    }, [clearAudio, resetPlaybackState]);
 
     const applyLoadedAudioMetadata = useCallback((audio: HTMLAudioElement, loadedTrack: PlayerTrack) => {
         if (audioRef.current !== audio || currentTrackRef.current?.id !== loadedTrack.id) return;
@@ -137,11 +152,18 @@ export function useAudioEngine({
         grant: MediaAccessGrant,
         resumeAt?: number,
     ) => {
-        const audio = new Audio();
+        const audio = audioRef.current || new Audio();
+        removeAudioListeners(audio);
+
+        const listen = (name: string, listener: EventListener) => {
+            audio.addEventListener(name, listener);
+            audioListenersRef.current.push([name, listener]);
+        };
+
         audio.preload = 'metadata';
         audio.src = mediaAccessURL(loadedTrack.shareKey, 'stream', grant.accessKey);
 
-        audio.addEventListener('timeupdate', () => {
+        listen('timeupdate', () => {
             if (audioRef.current !== audio) return;
             setCurrentTime(audio.currentTime);
             const active = currentTrackRef.current;
@@ -159,24 +181,28 @@ export function useAudioEngine({
                 : 10;
             if (audio.currentTime >= threshold && recordedPlaySrcRef.current !== active.src) {
                 recordedPlaySrcRef.current = active.src;
-                recordPlayEvent(active.shareKey, active.source).catch(() => {});
+                recordPlayEvent(active.shareKey, grant.accessKey, active.source).catch(() => {});
             }
         });
-        audio.addEventListener('play', () => audioRef.current === audio && setIsPlaying(true));
-        audio.addEventListener('pause', () => audioRef.current === audio && setIsPlaying(false));
-        audio.addEventListener('loadedmetadata', () => {
+        listen('play', () => {
+            if (audioRef.current === audio) setIsPlaying(true);
+        });
+        listen('pause', () => {
+            if (audioRef.current === audio) setIsPlaying(false);
+        });
+        listen('loadedmetadata', () => {
             applyLoadedAudioMetadata(audio, loadedTrack);
             if (resumeAt && resumeAt < audio.duration) {
                 audio.currentTime = resumeAt;
                 persistedPositionRef.current = resumeAt;
             }
         });
-        audio.addEventListener('ended', () => {
+        listen('ended', () => {
             if (audioRef.current !== audio) return;
             setIsPlaying(false);
             onEndedRef.current();
         });
-        audio.addEventListener('error', () => {
+        listen('error', () => {
             if (audioRef.current !== audio) return;
             if (blockedPlaybackRef.current === audio) {
                 blockedPlaybackRef.current = null;
@@ -192,11 +218,12 @@ export function useAudioEngine({
             setIsLoading(false);
             setIsPlaying(false);
             setAudioLoaded(false);
+            setNotice(null);
             setError('This track could not be loaded. You can skip it from the queue.');
         });
 
         return audio;
-    }, [applyLoadedAudioMetadata, currentTrackRef, onEndedRef]);
+    }, [applyLoadedAudioMetadata, currentTrackRef, onEndedRef, removeAudioListeners]);
 
     const requestStreamAccess = useCallback((track: PlayerTrack): Promise<MediaAccessGrant> => {
         const pending = accessRequestRef.current;
@@ -204,7 +231,13 @@ export function useAudioEngine({
         pending?.controller.abort();
 
         const controller = new AbortController();
-        const request = requestMediaAccess(track.shareKey, 'stream', controller.signal);
+        const request = requestMediaAccess(track.shareKey, 'stream', {
+            signal: controller.signal,
+            onPhase: phase => {
+                if (accessRequestRef.current?.controller !== controller) return;
+                setNotice(phase === 'verifying' ? 'Verifying playback…' : null);
+            },
+        });
         accessRequestRef.current = {
             shareKey: track.shareKey,
             controller,
@@ -231,6 +264,7 @@ export function useAudioEngine({
             setIsPlaying(true);
             setIsLoading(false);
             setError(null);
+            setNotice(null);
             if (blockedPlaybackRef.current === audio) {
                 blockedPlaybackRef.current = null;
             }
@@ -247,9 +281,11 @@ export function useAudioEngine({
             if (playError.name === 'AbortError' && audio.paused) return;
             if (playError.name === 'NotAllowedError') {
                 blockedPlaybackRef.current = audio;
-                setError('Playback was blocked. Press play to continue.');
+                setError(null);
+                setNotice('Ready to play — press play to continue.');
             } else {
                 blockedPlaybackRef.current = null;
+                setNotice(null);
                 setError('Could not play this audio. Try the next track or try again.');
             }
         });
@@ -259,6 +295,7 @@ export function useAudioEngine({
         const loadAttempt = ++loadAttemptRef.current;
         setIsLoading(true);
         setError(null);
+        setNotice(null);
         setAudioLoaded(false);
         try {
             const grant = await requestStreamAccess(selectedTrack);
@@ -267,7 +304,7 @@ export function useAudioEngine({
                 || currentTrackRef.current?.id !== selectedTrack.id
             ) return;
 
-            destroyAudio();
+            clearAudio();
             const audio = createAudio(selectedTrack, grant, resumeAt);
             audio.volume = volumeRef.current;
             audio.muted = isMutedRef.current;
@@ -291,13 +328,14 @@ export function useAudioEngine({
             setIsPlaying(false);
             setIsLoading(false);
             setAudioLoaded(false);
+            setNotice(null);
             setError(mediaAccessErrorMessage(accessError, 'play'));
         }
     }, [
         applyLoadedAudioMetadata,
         createAudio,
         currentTrackRef,
-        destroyAudio,
+        clearAudio,
         playAudio,
         requestStreamAccess,
     ]);
@@ -407,6 +445,7 @@ export function useAudioEngine({
         error,
         audioLoaded,
         isLoading,
+        notice,
         play,
         pause,
         resetForTrack,

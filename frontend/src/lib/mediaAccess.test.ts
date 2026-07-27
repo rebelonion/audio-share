@@ -1,6 +1,13 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
+const solveCaptchaMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/captcha', () => ({
+    solveCaptcha: solveCaptchaMock,
+}));
+
 afterEach(() => {
+    solveCaptchaMock.mockReset();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.resetModules();
@@ -110,6 +117,33 @@ describe('requestMediaAccess', () => {
                 retryAfter: 45,
             }),
         );
+    });
+
+    it('solves a requested captcha and retries with the single-use token', async () => {
+        solveCaptchaMock.mockResolvedValue('cap-token');
+        const phases: string[] = [];
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response(null, {status: 204}))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                error: 'captcha_required',
+            }), {status: 403}))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                accessKey: 'verified-key',
+                expiresAt: '2026-07-26T18:30:00Z',
+            }), {status: 200}));
+        vi.stubGlobal('fetch', fetchMock);
+        const {requestMediaAccess} = await import('./mediaAccess');
+
+        const grant = await requestMediaAccess('track-key', 'download', {
+            onPhase: phase => phases.push(phase),
+        });
+
+        expect(solveCaptchaMock).toHaveBeenCalledOnce();
+        expect(phases).toEqual(['requesting', 'verifying']);
+        expect(grant.accessKey).toBe('verified-key');
+        expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/audio/key/track-key/access', expect.objectContaining({
+            body: JSON.stringify({purpose: 'download', capToken: 'cap-token'}),
+        }));
     });
 
     it('uses the relative lifetime without depending on the client clock or Date header', async () => {

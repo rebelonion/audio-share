@@ -136,12 +136,21 @@ function listeningSessionId(): string {
     return value;
 }
 
-export async function recordPlayEvent(shareKey: string, origin = 'unknown'): Promise<void> {
+export async function recordPlayEvent(
+    shareKey: string,
+    accessKey: string,
+    origin = 'unknown',
+): Promise<void> {
     const response = await fetch(`${API_BASE}/api/playback/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({shareKey, origin, listeningSessionId: listeningSessionId()}),
+        body: JSON.stringify({
+            shareKey,
+            origin,
+            accessKey,
+            listeningSessionId: listeningSessionId(),
+        }),
     });
     if (!response.ok) throw new Error(`Failed to record playback: ${response.status}`);
     const data = await response.json();

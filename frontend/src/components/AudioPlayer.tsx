@@ -5,6 +5,7 @@ import {
     Volume2,
     VolumeX,
     AlertCircle,
+    Info,
     ExternalLink,
     Calendar,
     ChevronsDown,
@@ -46,6 +47,7 @@ export default function AudioPlayer() {
         volume,
         isMuted,
         error,
+        notice,
         thumbnail,
         metadata,
         audioLoaded,
@@ -168,7 +170,12 @@ export default function AudioPlayer() {
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm text-[var(--foreground)]">{metadata?.title || track}</span>
-                            <span className="block truncate text-xs text-[var(--muted-foreground)]">{metadata?.artist || artist}</span>
+                            <span
+                                className="block truncate text-xs text-[var(--muted-foreground)]"
+                                role={notice ? 'status' : undefined}
+                            >
+                                {notice || metadata?.artist || artist}
+                            </span>
                         </span>
                     </button>
                     <button
@@ -251,8 +258,17 @@ export default function AudioPlayer() {
 
                     {error && (
                         <div className="mb-3 flex items-start rounded border border-[var(--error-border)] bg-[var(--error-bg)] p-2 text-[var(--error-text)] animate-fadeIn">
-                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
+                            <Info className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
                             <span className="text-xs">{error}</span>
+                        </div>
+                    )}
+                    {notice && (
+                        <div
+                            className="mb-3 flex items-start rounded border border-[var(--border)] bg-[var(--secondary)] p-2 text-[var(--foreground)] animate-fadeIn"
+                            role="status"
+                        >
+                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
+                            <span className="text-xs">{notice}</span>
                         </div>
                     )}
 

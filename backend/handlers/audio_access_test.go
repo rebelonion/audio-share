@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -253,6 +254,128 @@ func TestDownloadAccessRequiresMinimumSessionAge(t *testing.T) {
 	}
 }
 
+func TestDownloadAccessRequiresAndVerifiesCaptcha(t *testing.T) {
+	manager := newTestHandlerAccessKeyManager(t, "10/1m")
+	handler, mock := newMockAudioHandler(t, nil, manager)
+	verifier := &stubCaptchaVerifier{}
+	handler.captchaEnforcement = "enforce"
+	handler.downloadCaptchaMode = "always"
+	handler.captchaVerifier = verifier
+
+	expectAudioLookup(mock, "track-key", "audio/track.mp3", false)
+	missing := signedAudioRequest(
+		http.MethodPost,
+		"https://example.test/api/audio/key/track-key/access",
+		`{"purpose":"download"}`,
+		"test-secret",
+		"session-one",
+	)
+	missingRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(missingRecorder, missing)
+	if missingRecorder.Code != http.StatusForbidden ||
+		!strings.Contains(missingRecorder.Body.String(), "captcha_required") {
+		t.Fatalf("missing captcha status = %d, body=%s", missingRecorder.Code, missingRecorder.Body.String())
+	}
+
+	expectAudioLookup(mock, "track-key", "audio/track.mp3", false)
+	valid := signedAudioRequest(
+		http.MethodPost,
+		"https://example.test/api/audio/key/track-key/access",
+		`{"purpose":"download","capToken":"valid-token"}`,
+		"test-secret",
+		"session-one",
+	)
+	validRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(validRecorder, valid)
+	if validRecorder.Code != http.StatusOK {
+		t.Fatalf("verified captcha status = %d, body=%s", validRecorder.Code, validRecorder.Body.String())
+	}
+	if len(verifier.tokens) != 1 || verifier.tokens[0] != "valid-token" {
+		t.Fatalf("verified tokens = %#v", verifier.tokens)
+	}
+}
+
+func TestStreamCaptchaThresholdAndSessionClearance(t *testing.T) {
+	manager := newTestHandlerAccessKeyManager(t, "10/1m")
+	if err := manager.SetCaptchaPolicy(services.MediaPurposeStream, "1/1h"); err != nil {
+		t.Fatalf("SetCaptchaPolicy: %v", err)
+	}
+	handler, mock := newMockAudioHandler(t, nil, manager)
+	handler.captchaEnforcement = "enforce"
+	handler.captchaVerifier = &stubCaptchaVerifier{}
+	handler.streamClearanceTTL = 15 * time.Minute
+	handler.now = func() time.Time {
+		return time.Date(2026, time.July, 26, 12, 0, 0, 0, time.UTC)
+	}
+
+	expectAudioLookup(mock, "track-key", "audio/track.mp3", false)
+	first := signedAudioRequest(
+		http.MethodPost,
+		"https://example.test/api/audio/key/track-key/access",
+		`{"purpose":"stream"}`,
+		"test-secret",
+		"session-one",
+	)
+	firstRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(firstRecorder, first)
+	if firstRecorder.Code != http.StatusOK {
+		t.Fatalf("first stream status = %d, body=%s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+
+	expectAudioLookup(mock, "track-key", "audio/track.mp3", false)
+	challenged := signedAudioRequest(
+		http.MethodPost,
+		"https://example.test/api/audio/key/track-key/access",
+		`{"purpose":"stream"}`,
+		"test-secret",
+		"session-one",
+	)
+	challengedRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(challengedRecorder, challenged)
+	if challengedRecorder.Code != http.StatusForbidden {
+		t.Fatalf("threshold status = %d, body=%s", challengedRecorder.Code, challengedRecorder.Body.String())
+	}
+
+	expectAudioLookup(mock, "track-key", "audio/track.mp3", false)
+	verified := signedAudioRequest(
+		http.MethodPost,
+		"https://example.test/api/audio/key/track-key/access",
+		`{"purpose":"stream","capToken":"valid-token"}`,
+		"test-secret",
+		"session-one",
+	)
+	verifiedRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(verifiedRecorder, verified)
+	if verifiedRecorder.Code != http.StatusOK {
+		t.Fatalf("verified stream status = %d, body=%s", verifiedRecorder.Code, verifiedRecorder.Body.String())
+	}
+	var clearance *http.Cookie
+	for _, cookie := range verifiedRecorder.Result().Cookies() {
+		if cookie.Name == streamCaptchaCookieName {
+			clearance = cookie
+			break
+		}
+	}
+	if clearance == nil || clearance.MaxAge != 15*60 {
+		t.Fatalf("unexpected stream captcha clearance cookie: %#v", clearance)
+	}
+
+	expectAudioLookup(mock, "track-key", "audio/track.mp3", false)
+	cleared := signedAudioRequest(
+		http.MethodPost,
+		"https://example.test/api/audio/key/track-key/access",
+		`{"purpose":"stream"}`,
+		"test-secret",
+		"session-one",
+	)
+	cleared.AddCookie(clearance)
+	clearedRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(clearedRecorder, cleared)
+	if clearedRecorder.Code != http.StatusOK {
+		t.Fatalf("cleared stream status = %d, body=%s", clearedRecorder.Code, clearedRecorder.Body.String())
+	}
+}
+
 func newMockAudioHandler(
 	t *testing.T,
 	fs *services.FileSystemService,
@@ -273,6 +396,21 @@ func newMockAudioHandler(
 		SessionSecret: "test-secret",
 		AccessKeys:    manager,
 	}), mock
+}
+
+func newTestHandlerAccessKeyManager(t *testing.T, streamPolicy string) *services.AccessKeyManager {
+	t.Helper()
+	manager, err := services.NewAccessKeyManager(
+		"test-secret",
+		streamPolicy,
+		"10/1m",
+		30*time.Minute,
+		10*time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("NewAccessKeyManager: %v", err)
+	}
+	return manager
 }
 
 func expectAudioLookup(mock sqlmock.Sqlmock, shareKey, path string, deleted bool) {
@@ -305,6 +443,16 @@ type stubAccessFailureLimiter struct {
 	allowed    bool
 	retryAfter int
 	failures   int
+}
+
+type stubCaptchaVerifier struct {
+	tokens []string
+	err    error
+}
+
+func (v *stubCaptchaVerifier) Verify(_ context.Context, token string) error {
+	v.tokens = append(v.tokens, token)
+	return v.err
 }
 
 func (l *stubAccessFailureLimiter) AllowAccessAttempt(string) (bool, int) {

@@ -24,6 +24,7 @@ const (
 var (
 	ErrInvalidAccessKey = errors.New("invalid access key")
 	ErrExpiredAccessKey = errors.New("expired access key")
+	ErrCaptchaRequired  = errors.New("captcha required")
 )
 
 type KeyLimit struct {
@@ -60,6 +61,11 @@ type IssuedAccessKey struct {
 	ExpiresAt time.Time
 }
 
+type VerifiedAccessKey struct {
+	Nonce     string
+	ExpiresAt time.Time
+}
+
 type accessKeyClaims struct {
 	Version        int          `json:"v"`
 	AudioKey       string       `json:"a"`
@@ -71,10 +77,11 @@ type accessKeyClaims struct {
 }
 
 type AccessKeyManager struct {
-	secret   []byte
-	policies map[MediaPurpose][]KeyLimit
-	ttls     map[MediaPurpose]time.Duration
-	now      func() time.Time
+	secret          []byte
+	policies        map[MediaPurpose][]KeyLimit
+	captchaPolicies map[MediaPurpose][]KeyLimit
+	ttls            map[MediaPurpose]time.Duration
+	now             func() time.Time
 
 	mu                    sync.Mutex
 	issuances             map[accessIssuanceKey][]time.Time
@@ -145,9 +152,47 @@ func NewAccessKeyManager(
 			MediaPurposeStream:   streamTTL,
 			MediaPurposeDownload: downloadTTL,
 		},
-		now:       time.Now,
-		issuances: make(map[accessIssuanceKey][]time.Time),
+		captchaPolicies: make(map[MediaPurpose][]KeyLimit),
+		now:             time.Now,
+		issuances:       make(map[accessIssuanceKey][]time.Time),
 	}, nil
+}
+
+func (m *AccessKeyManager) SetCaptchaPolicy(purpose MediaPurpose, raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		delete(m.captchaPolicies, purpose)
+		return nil
+	}
+	limits, err := ParseKeyPolicy(raw)
+	if err != nil {
+		return err
+	}
+	m.captchaPolicies[purpose] = limits
+	return nil
+}
+
+func (m *AccessKeyManager) CheckLimit(
+	sessionID string,
+	clientIP string,
+	purpose MediaPurpose,
+) error {
+	if sessionID == "" || clientIP == "" {
+		return ErrInvalidAccessKey
+	}
+	now := m.now()
+	limits := m.policies[purpose]
+	keys := []accessIssuanceKey{
+		{scope: KeyLimitScopeSession, identity: sessionID, purpose: purpose},
+		{scope: KeyLimitScopeIP, identity: clientIP, purpose: purpose},
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, blocked := m.evaluateLimitsLocked(keys, limits, m.retentionWindow(purpose), now)
+	if blocked == nil {
+		return nil
+	}
+	return blocked
 }
 
 func (m *AccessKeyManager) Issue(
@@ -155,6 +200,25 @@ func (m *AccessKeyManager) Issue(
 	clientIP string,
 	audioKey string,
 	purpose MediaPurpose,
+) (IssuedAccessKey, error) {
+	return m.issue(sessionID, clientIP, audioKey, purpose, false)
+}
+
+func (m *AccessKeyManager) IssueCaptchaCleared(
+	sessionID string,
+	clientIP string,
+	audioKey string,
+	purpose MediaPurpose,
+) (IssuedAccessKey, error) {
+	return m.issue(sessionID, clientIP, audioKey, purpose, true)
+}
+
+func (m *AccessKeyManager) issue(
+	sessionID string,
+	clientIP string,
+	audioKey string,
+	purpose MediaPurpose,
+	captchaCleared bool,
 ) (IssuedAccessKey, error) {
 	ttl, ok := m.ttls[purpose]
 	if !ok || sessionID == "" || clientIP == "" || audioKey == "" {
@@ -180,19 +244,29 @@ func (m *AccessKeyManager) Issue(
 	if err != nil {
 		return IssuedAccessKey{}, err
 	}
-	if err := m.recordIssuance(sessionID, clientIP, purpose, now); err != nil {
+	if err := m.recordIssuance(sessionID, clientIP, purpose, now, captchaCleared); err != nil {
 		return IssuedAccessKey{}, err
 	}
 	return IssuedAccessKey{AccessKey: token, ExpiresAt: expiresAt}, nil
 }
 
 func (m *AccessKeyManager) Verify(token, sessionID, audioKey string, purpose MediaPurpose) error {
+	_, err := m.VerifyAndExtract(token, sessionID, audioKey, purpose)
+	return err
+}
+
+func (m *AccessKeyManager) VerifyAndExtract(
+	token,
+	sessionID,
+	audioKey string,
+	purpose MediaPurpose,
+) (VerifiedAccessKey, error) {
 	if token == "" || sessionID == "" || audioKey == "" {
-		return ErrInvalidAccessKey
+		return VerifiedAccessKey{}, ErrInvalidAccessKey
 	}
 	claims, err := m.verifyClaims(token)
 	if err != nil {
-		return err
+		return VerifiedAccessKey{}, err
 	}
 	if claims.Version != 1 ||
 		claims.AudioKey != audioKey ||
@@ -201,12 +275,16 @@ func (m *AccessKeyManager) Verify(token, sessionID, audioKey string, purpose Med
 		claims.IssuedAt <= 0 ||
 		claims.ExpiresAt <= claims.IssuedAt ||
 		claims.Nonce == "" {
-		return ErrInvalidAccessKey
+		return VerifiedAccessKey{}, ErrInvalidAccessKey
 	}
-	if !m.now().Before(time.UnixMilli(claims.ExpiresAt)) {
-		return ErrExpiredAccessKey
+	expiresAt := time.UnixMilli(claims.ExpiresAt)
+	if !m.now().Before(expiresAt) {
+		return VerifiedAccessKey{}, ErrExpiredAccessKey
 	}
-	return nil
+	return VerifiedAccessKey{
+		Nonce:     claims.Nonce,
+		ExpiresAt: expiresAt,
+	}, nil
 }
 
 func (m *AccessKeyManager) recordIssuance(
@@ -214,6 +292,7 @@ func (m *AccessKeyManager) recordIssuance(
 	clientIP string,
 	purpose MediaPurpose,
 	now time.Time,
+	captchaCleared bool,
 ) error {
 	limits := m.policies[purpose]
 	keys := []accessIssuanceKey{
@@ -224,37 +303,19 @@ func (m *AccessKeyManager) recordIssuance(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	eventsByKey := make(map[accessIssuanceKey][]time.Time, len(keys))
-	var blocked *KeyLimitExceededError
-	for _, key := range keys {
-		events := pruneIssuances(m.issuances[key], now, longestWindow(limits))
-		eventsByKey[key] = events
-		for _, limit := range limits {
-			first := firstWithinWindow(events, now, limit.Window)
-			count := len(events) - first
-			if count < limit.Count {
-				continue
-			}
-			retryAfter := events[first].Add(limit.Window).Sub(now)
-			if blocked == nil || retryAfter > blocked.RetryAfter {
-				blocked = &KeyLimitExceededError{
-					Purpose:    purpose,
-					Scope:      key.scope,
-					Limit:      limit,
-					RetryAfter: retryAfter,
-				}
-			}
-		}
-	}
+	eventsByKey, blocked := m.evaluateLimitsLocked(
+		keys,
+		limits,
+		m.retentionWindow(purpose),
+		now,
+	)
 	if blocked != nil {
-		for key, events := range eventsByKey {
-			if len(events) == 0 {
-				delete(m.issuances, key)
-			} else {
-				m.issuances[key] = events
-			}
-		}
+		m.storeEvaluatedIssuances(eventsByKey)
 		return blocked
+	}
+	if !captchaCleared && captchaRequired(eventsByKey, m.captchaPolicies[purpose], now) {
+		m.storeEvaluatedIssuances(eventsByKey)
+		return ErrCaptchaRequired
 	}
 
 	for key, events := range eventsByKey {
@@ -268,15 +329,80 @@ func (m *AccessKeyManager) recordIssuance(
 	return nil
 }
 
-func (m *AccessKeyManager) cleanupLocked(now time.Time) {
-	for key, events := range m.issuances {
-		events = pruneIssuances(events, now, longestWindow(m.policies[key.purpose]))
+func (m *AccessKeyManager) storeEvaluatedIssuances(eventsByKey map[accessIssuanceKey][]time.Time) {
+	for key, events := range eventsByKey {
 		if len(events) == 0 {
 			delete(m.issuances, key)
 		} else {
 			m.issuances[key] = events
 		}
 	}
+}
+
+func captchaRequired(
+	eventsByKey map[accessIssuanceKey][]time.Time,
+	limits []KeyLimit,
+	now time.Time,
+) bool {
+	for _, events := range eventsByKey {
+		for _, limit := range limits {
+			if len(events)-firstWithinWindow(events, now, limit.Window) >= limit.Count {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m *AccessKeyManager) evaluateLimitsLocked(
+	keys []accessIssuanceKey,
+	limits []KeyLimit,
+	retention time.Duration,
+	now time.Time,
+) (map[accessIssuanceKey][]time.Time, *KeyLimitExceededError) {
+	eventsByKey := make(map[accessIssuanceKey][]time.Time, len(keys))
+	var blocked *KeyLimitExceededError
+	for _, key := range keys {
+		events := pruneIssuances(m.issuances[key], now, retention)
+		eventsByKey[key] = events
+		for _, limit := range limits {
+			first := firstWithinWindow(events, now, limit.Window)
+			count := len(events) - first
+			if count < limit.Count {
+				continue
+			}
+			retryAfter := events[first].Add(limit.Window).Sub(now)
+			if blocked == nil || retryAfter > blocked.RetryAfter {
+				blocked = &KeyLimitExceededError{
+					Purpose:    key.purpose,
+					Scope:      key.scope,
+					Limit:      limit,
+					RetryAfter: retryAfter,
+				}
+			}
+		}
+	}
+	return eventsByKey, blocked
+}
+
+func (m *AccessKeyManager) cleanupLocked(now time.Time) {
+	for key, events := range m.issuances {
+		events = pruneIssuances(events, now, m.retentionWindow(key.purpose))
+		if len(events) == 0 {
+			delete(m.issuances, key)
+		} else {
+			m.issuances[key] = events
+		}
+	}
+}
+
+func (m *AccessKeyManager) retentionWindow(purpose MediaPurpose) time.Duration {
+	hardWindow := longestWindow(m.policies[purpose])
+	captchaWindow := longestWindow(m.captchaPolicies[purpose])
+	if captchaWindow > hardWindow {
+		return captchaWindow
+	}
+	return hardWindow
 }
 
 func pruneIssuances(events []time.Time, now time.Time, window time.Duration) []time.Time {

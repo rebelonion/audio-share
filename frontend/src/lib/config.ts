@@ -6,6 +6,7 @@ interface RuntimeConfig {
     bannerVariant?: string;
     bannerLinkText?: string;
     bannerLinkUrl?: string;
+    capPublicEndpoint?: string;
 }
 
 declare global {
@@ -14,10 +15,13 @@ declare global {
     }
 }
 
-const config = window.__CONFIG__ || {};
+const config = typeof window === 'undefined' ? {} : window.__CONFIG__ || {};
 
 export const DEFAULT_TITLE = config.defaultTitle || 'Audio Archive';
 export const DEFAULT_DESCRIPTION = config.defaultDescription || 'Browse and listen to audio files';
+export const CAP_PUBLIC_ENDPOINT = config.capPublicEndpoint?.trim()
+    || import.meta.env.VITE_CAP_PUBLIC_ENDPOINT?.trim()
+    || '';
 
 export type BannerVariant = 'info' | 'warning' | 'success';
 

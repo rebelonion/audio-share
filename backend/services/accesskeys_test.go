@@ -2,6 +2,8 @@ package services
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -46,6 +48,21 @@ func TestAccessKeyRoundTripAndScope(t *testing.T) {
 	if err := manager.Verify(issued.AccessKey, "session-one", "track-one", MediaPurposeStream); err != nil {
 		t.Fatalf("Verify returned error: %v", err)
 	}
+	verified, err := manager.VerifyAndExtract(
+		issued.AccessKey,
+		"session-one",
+		"track-one",
+		MediaPurposeStream,
+	)
+	if err != nil {
+		t.Fatalf("VerifyAndExtract returned error: %v", err)
+	}
+	if verified.Nonce == "" {
+		t.Fatalf("unexpected verified access key: %#v", verified)
+	}
+	if !verified.ExpiresAt.Equal(issued.ExpiresAt) {
+		t.Fatalf("verified expiry = %v, want %v", verified.ExpiresAt, issued.ExpiresAt)
+	}
 
 	for name, tc := range map[string]struct {
 		sessionID string
@@ -61,6 +78,35 @@ func TestAccessKeyRoundTripAndScope(t *testing.T) {
 				t.Fatalf("Verify error = %v, want ErrInvalidAccessKey", err)
 			}
 		})
+	}
+}
+
+func TestAccessKeyNoncesAreUnique(t *testing.T) {
+	now := time.Date(2026, time.July, 26, 12, 0, 0, 0, time.UTC)
+	manager := newTestAccessKeyManager(t, now)
+
+	first, err := manager.Issue("session-one", "192.0.2.1", "track-one", MediaPurposeStream)
+	if err != nil {
+		t.Fatalf("first Issue returned error: %v", err)
+	}
+	second, err := manager.Issue("session-one", "192.0.2.1", "track-one", MediaPurposeStream)
+	if err != nil {
+		t.Fatalf("second Issue returned error: %v", err)
+	}
+	firstVerified, _ := manager.VerifyAndExtract(
+		first.AccessKey,
+		"session-one",
+		"track-one",
+		MediaPurposeStream,
+	)
+	secondVerified, _ := manager.VerifyAndExtract(
+		second.AccessKey,
+		"session-one",
+		"track-one",
+		MediaPurposeStream,
+	)
+	if firstVerified.Nonce == secondVerified.Nonce {
+		t.Fatal("separate access keys received the same nonce")
 	}
 }
 
@@ -168,6 +214,99 @@ func TestAccessKeyManagerEnforcesIPLimitAcrossSessions(t *testing.T) {
 	}
 	if _, err := manager.Issue("session-two", "192.0.2.2", "track-two", MediaPurposeStream); err != nil {
 		t.Fatalf("different IP and session should have an independent limit: %v", err)
+	}
+}
+
+func TestCaptchaPolicyRetainsEventsBeyondHardLimitWindow(t *testing.T) {
+	current := time.Date(2026, time.July, 26, 12, 0, 0, 0, time.UTC)
+	manager, err := NewAccessKeyManager(
+		"test-secret",
+		"100/1m",
+		"10/1m",
+		30*time.Minute,
+		10*time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("NewAccessKeyManager returned error: %v", err)
+	}
+	if err := manager.SetCaptchaPolicy(MediaPurposeStream, "1/1h"); err != nil {
+		t.Fatalf("SetCaptchaPolicy returned error: %v", err)
+	}
+	manager.now = func() time.Time { return current }
+
+	if _, err := manager.Issue("session-one", "192.0.2.1", "track-one", MediaPurposeStream); err != nil {
+		t.Fatalf("Issue returned error: %v", err)
+	}
+	current = current.Add(2 * time.Minute)
+	if _, err := manager.Issue(
+		"session-one",
+		"192.0.2.1",
+		"track-one",
+		MediaPurposeStream,
+	); !errors.Is(err, ErrCaptchaRequired) {
+		t.Fatalf("Issue error = %v, want ErrCaptchaRequired", err)
+	}
+	current = current.Add(time.Hour)
+	if _, err := manager.Issue("session-one", "192.0.2.1", "track-one", MediaPurposeStream); err != nil {
+		t.Fatalf("Issue after CAPTCHA window returned error: %v", err)
+	}
+}
+
+func TestAccessKeyManagerAtomicallyEnforcesCaptchaThreshold(t *testing.T) {
+	manager, err := NewAccessKeyManager(
+		"test-secret",
+		"100/1h",
+		"10/1m",
+		30*time.Minute,
+		10*time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("NewAccessKeyManager returned error: %v", err)
+	}
+	if err := manager.SetCaptchaPolicy(MediaPurposeStream, "1/1h"); err != nil {
+		t.Fatalf("SetCaptchaPolicy returned error: %v", err)
+	}
+	manager.now = func() time.Time {
+		return time.Date(2026, time.July, 26, 12, 0, 0, 0, time.UTC)
+	}
+
+	const requests = 32
+	start := make(chan struct{})
+	var successes atomic.Int64
+	var challenged atomic.Int64
+	var unexpected atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(requests)
+	for range requests {
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := manager.Issue(
+				"session-one",
+				"192.0.2.1",
+				"track-one",
+				MediaPurposeStream,
+			)
+			switch {
+			case err == nil:
+				successes.Add(1)
+			case errors.Is(err, ErrCaptchaRequired):
+				challenged.Add(1)
+			default:
+				unexpected.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if successes.Load() != 1 || challenged.Load() != requests-1 || unexpected.Load() != 0 {
+		t.Fatalf(
+			"successes=%d challenged=%d unexpected=%d",
+			successes.Load(),
+			challenged.Load(),
+			unexpected.Load(),
+		)
 	}
 }
 

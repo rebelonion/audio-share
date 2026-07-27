@@ -36,6 +36,10 @@ type AudioHandler struct {
 	accessFailureLimiter   AccessFailureLimiter
 	streamIPLimiter        *services.IPBandwidthLimiter
 	downloadIPLimiter      *services.IPBandwidthLimiter
+	captchaVerifier        services.CaptchaVerifier
+	captchaEnforcement     string
+	downloadCaptchaMode    string
+	streamClearanceTTL     time.Duration
 	now                    func() time.Time
 	mimeTypes              map[string]string
 }
@@ -54,6 +58,10 @@ type AudioHandlerOptions struct {
 	AccessFailureLimiter   AccessFailureLimiter
 	StreamIPLimiter        *services.IPBandwidthLimiter
 	DownloadIPLimiter      *services.IPBandwidthLimiter
+	CaptchaVerifier        services.CaptchaVerifier
+	CaptchaEnforcement     string
+	DownloadCaptchaMode    string
+	StreamClearanceTTL     time.Duration
 }
 
 func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, options AudioHandlerOptions) *AudioHandler {
@@ -68,6 +76,10 @@ func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, options AudioHa
 		accessFailureLimiter:   options.AccessFailureLimiter,
 		streamIPLimiter:        options.StreamIPLimiter,
 		downloadIPLimiter:      options.DownloadIPLimiter,
+		captchaVerifier:        options.CaptchaVerifier,
+		captchaEnforcement:     options.CaptchaEnforcement,
+		downloadCaptchaMode:    options.DownloadCaptchaMode,
+		streamClearanceTTL:     options.StreamClearanceTTL,
 		now:                    time.Now,
 		mimeTypes: map[string]string{
 			".mp3":  "audio/mpeg",
@@ -138,7 +150,8 @@ func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type accessKeyRequest struct {
-	Purpose services.MediaPurpose `json:"purpose"`
+	Purpose  services.MediaPurpose `json:"purpose"`
+	CapToken string                `json:"capToken"`
 }
 
 func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, key string) {
@@ -155,8 +168,9 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "access_keys_unavailable"})
 		return
 	}
+	now := h.now()
 
-	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	var request accessKeyRequest
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&request); err != nil {
@@ -171,13 +185,17 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_purpose"})
 		return
 	}
+	if len(request.CapToken) > 4096 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		return
+	}
 	if request.Purpose == services.MediaPurposeDownload && h.downloadSessionMinAge > 0 {
 		createdAt, ok := sessionCreatedAt(r, h.sessionSecret, sessionID)
 		if !ok {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_session"})
 			return
 		}
-		remaining := h.downloadSessionMinAge - h.now().Sub(createdAt)
+		remaining := h.downloadSessionMinAge - now.Sub(createdAt)
 		if remaining > 0 {
 			retryAfter := max(1, int(math.Ceil(remaining.Seconds())))
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
@@ -200,20 +218,75 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 
-	issued, err := h.accessKeys.Issue(sessionID, clientIP(r), key, request.Purpose)
+	clientAddress := clientIP(r)
+	if err := h.accessKeys.CheckLimit(sessionID, clientAddress, request.Purpose); err != nil {
+		if !h.writeKeyLimitError(w, request.Purpose, err) {
+			log.Printf("Error checking %s access key limit: %v", request.Purpose, err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		}
+		return
+	}
+
+	captchaCleared := h.captchaEnforcement == "" || h.captchaEnforcement == "off"
+	if request.Purpose == services.MediaPurposeDownload && h.downloadCaptchaMode != "always" {
+		captchaCleared = true
+	}
+	if request.Purpose == services.MediaPurposeStream &&
+		streamCaptchaClearanceEnabled(r, h.sessionSecret, sessionID, now) {
+		captchaCleared = true
+	}
+
+	var issued services.IssuedAccessKey
+	if captchaCleared {
+		issued, err = h.accessKeys.IssueCaptchaCleared(
+			sessionID,
+			clientAddress,
+			key,
+			request.Purpose,
+		)
+	} else if request.Purpose == services.MediaPurposeStream {
+		issued, err = h.accessKeys.Issue(sessionID, clientAddress, key, request.Purpose)
+	} else {
+		err = services.ErrCaptchaRequired
+	}
+
+	captchaVerified := false
+	if errors.Is(err, services.ErrCaptchaRequired) {
+		if h.captchaEnforcement == "observe" {
+			log.Printf("Cap observation: challenge would be required for purpose=%s", request.Purpose)
+		} else {
+			if request.CapToken == "" {
+				writeJSON(w, http.StatusForbidden, map[string]interface{}{
+					"error":   "captcha_required",
+					"purpose": request.Purpose,
+				})
+				return
+			}
+			if h.captchaVerifier == nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "captcha_unavailable"})
+				return
+			}
+			if verifyErr := h.captchaVerifier.Verify(r.Context(), request.CapToken); verifyErr != nil {
+				if errors.Is(verifyErr, services.ErrCaptchaInvalid) {
+					writeJSON(w, http.StatusForbidden, map[string]string{"error": "captcha_invalid"})
+				} else {
+					w.Header().Set("Retry-After", "5")
+					writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "captcha_unavailable"})
+				}
+				return
+			}
+			captchaVerified = true
+		}
+		issued, err = h.accessKeys.IssueCaptchaCleared(
+			sessionID,
+			clientAddress,
+			key,
+			request.Purpose,
+		)
+	}
+
 	if err != nil {
-		var limited *services.KeyLimitExceededError
-		if errors.As(err, &limited) {
-			retryAfter := max(1, int(math.Ceil(limited.RetryAfter.Seconds())))
-			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-			writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
-				"error":      "key_limit_exceeded",
-				"purpose":    request.Purpose,
-				"scope":      limited.Scope,
-				"limit":      limited.Limit.Count,
-				"window":     limited.Limit.Window.String(),
-				"retryAfter": retryAfter,
-			})
+		if h.writeKeyLimitError(w, request.Purpose, err) {
 			return
 		}
 		log.Printf("Error issuing %s access key for share_key=%s: %v", request.Purpose, key, err)
@@ -221,12 +294,45 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 
-	expiresIn := max(time.Duration(0), issued.ExpiresAt.Sub(h.now()))
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	if captchaVerified && request.Purpose == services.MediaPurposeStream && h.streamClearanceTTL > 0 {
+		setStreamCaptchaClearanceCookie(
+			w,
+			r,
+			h.sessionSecret,
+			sessionID,
+			now,
+			now.Add(h.streamClearanceTTL),
+		)
+	}
+	expiresIn := max(time.Duration(0), issued.ExpiresAt.Sub(now))
+	response := map[string]interface{}{
 		"accessKey":   issued.AccessKey,
 		"expiresAt":   issued.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		"expiresInMs": expiresIn.Milliseconds(),
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *AudioHandler) writeKeyLimitError(
+	w http.ResponseWriter,
+	purpose services.MediaPurpose,
+	err error,
+) bool {
+	var limited *services.KeyLimitExceededError
+	if !errors.As(err, &limited) {
+		return false
+	}
+	retryAfter := max(1, int(math.Ceil(limited.RetryAfter.Seconds())))
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+	writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+		"error":      "key_limit_exceeded",
+		"purpose":    purpose,
+		"scope":      limited.Scope,
+		"limit":      limited.Limit.Count,
+		"window":     limited.Limit.Window.String(),
+		"retryAfter": retryAfter,
 	})
+	return true
 }
 
 type audioRow struct {
@@ -308,7 +414,12 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	if download {
 		purpose = services.MediaPurposeDownload
 	}
-	err := h.accessKeys.Verify(r.URL.Query().Get("access_key"), sessionID, key, purpose)
+	verifiedAccess, err := h.accessKeys.VerifyAndExtract(
+		r.URL.Query().Get("access_key"),
+		sessionID,
+		key,
+		purpose,
+	)
 	if err != nil {
 		if h.accessFailureLimiter != nil {
 			h.accessFailureLimiter.RecordAccessFailure(clientAddress)
@@ -373,7 +484,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		if download {
 			eventType = "download"
 		}
-		h.recordMediaEvent(r, row.id, key, eventType, info.Size())
+		h.recordMediaEvent(r, row.id, key, eventType, verifiedAccess.Nonce, info.Size())
 	}
 
 	reader := newThrottledReadSeeker(
@@ -444,7 +555,14 @@ func isBotLikeUserAgent(userAgent string) bool {
 	return false
 }
 
-func (h *AudioHandler) recordMediaEvent(r *http.Request, audioFileID int64, shareKey, eventType string, fileSize int64) {
+func (h *AudioHandler) recordMediaEvent(
+	r *http.Request,
+	audioFileID int64,
+	shareKey,
+	eventType,
+	accessKeyNonce string,
+	fileSize int64,
+) {
 	sessionID := ""
 	if id, ok := currentSessionID(r, h.sessionSecret); ok {
 		sessionID = id
@@ -454,11 +572,12 @@ func (h *AudioHandler) recordMediaEvent(r *http.Request, audioFileID int64, shar
 	_, err := h.db.Exec(`
 		INSERT INTO download_events (
 			audio_file_id, event_type, share_key, session_id, client_ip, user_agent,
-			referer, range_header, method, file_size, requested_bytes
+			referer, range_header, method, file_size, requested_bytes, access_key_nonce
 		)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10, $11)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10, $11, $12)
+		ON CONFLICT DO NOTHING
 	`, audioFileID, eventType, shareKey, sessionID, clientIP(r), r.UserAgent(),
-		r.Referer(), r.Header.Get("Range"), r.Method, fileSize, requestedBytes)
+		r.Referer(), r.Header.Get("Range"), r.Method, fileSize, requestedBytes, accessKeyNonce)
 	if err != nil {
 		log.Printf("Error recording %s event for audio_file_id=%d: %v", eventType, audioFileID, err)
 	}

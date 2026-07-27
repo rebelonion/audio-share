@@ -15,6 +15,7 @@ const sessionCookieName = "audio_session_id"
 const sessionCreatedCookieName = "audio_session_created_at"
 const sessionCookieMaxAge = 365 * 24 * 60 * 60
 const matureCookieName = "audio_show_mature"
+const streamCaptchaCookieName = "audio_stream_captcha"
 
 func NewSessionBootstrapHandler(sessionSecret string) http.Handler {
 	secret := []byte(sessionSecret)
@@ -193,6 +194,48 @@ func clearMaturePreferenceCookie(w http.ResponseWriter, r *http.Request) {
 		Name:     matureCookieName,
 		Value:    "",
 		MaxAge:   -1,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecureRequest(r),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func streamCaptchaClearanceEnabled(
+	r *http.Request,
+	secret []byte,
+	sessionID string,
+	now time.Time,
+) bool {
+	cookie, err := r.Cookie(streamCaptchaCookieName)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+	value, ok := verifySignedValue(cookie.Value, secret)
+	if !ok {
+		return false
+	}
+	separator := strings.LastIndex(value, ":")
+	if separator < 0 || value[:separator] != sessionID {
+		return false
+	}
+	expiresAt, err := strconv.ParseInt(value[separator+1:], 10, 64)
+	return err == nil && now.Before(time.UnixMilli(expiresAt))
+}
+
+func setStreamCaptchaClearanceCookie(
+	w http.ResponseWriter,
+	r *http.Request,
+	secret []byte,
+	sessionID string,
+	now time.Time,
+	expiresAt time.Time,
+) {
+	maxAge := max(1, int(expiresAt.Sub(now).Seconds()))
+	http.SetCookie(w, &http.Cookie{
+		Name:     streamCaptchaCookieName,
+		Value:    signValue(sessionID+":"+strconv.FormatInt(expiresAt.UnixMilli(), 10), secret),
+		MaxAge:   maxAge,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   isSecureRequest(r),

@@ -1,10 +1,18 @@
 import {API_BASE} from '@/lib/api';
+import {solveCaptcha} from '@/lib/captcha';
 
 export type MediaAccessPurpose = 'stream' | 'download';
 
 export interface MediaAccessGrant {
     accessKey: string;
     expiresAt: number;
+}
+
+export type MediaAccessPhase = 'requesting' | 'verifying';
+
+interface MediaAccessOptions {
+    signal?: AbortSignal;
+    onPhase?: (phase: MediaAccessPhase) => void;
 }
 
 interface MediaAccessErrorBody {
@@ -70,12 +78,13 @@ async function issueAccessKey(
     shareKey: string,
     purpose: MediaAccessPurpose,
     signal?: AbortSignal,
+    capToken?: string,
 ): Promise<Response> {
     return fetch(`${API_BASE}/api/audio/key/${encodeURIComponent(shareKey)}/access`, {
         method: 'POST',
         credentials: 'include',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({purpose}),
+        body: JSON.stringify(capToken ? {purpose, capToken} : {purpose}),
         signal,
     });
 }
@@ -83,8 +92,10 @@ async function issueAccessKey(
 export async function requestMediaAccess(
     shareKey: string,
     purpose: MediaAccessPurpose,
-    signal?: AbortSignal,
+    options: MediaAccessOptions = {},
 ): Promise<MediaAccessGrant> {
+    const {signal, onPhase} = options;
+    onPhase?.('requesting');
     const sessionGeneration = await ensureMediaSession();
     let response = await issueAccessKey(shareKey, purpose, signal);
     if (response.status === 401) {
@@ -92,11 +103,18 @@ export async function requestMediaAccess(
         response = await issueAccessKey(shareKey, purpose, signal);
     }
 
-    const body = await response.json().catch(() => ({})) as MediaAccessErrorBody & {
-        accessKey?: string;
-        expiresAt?: string;
-        expiresInMs?: number;
-    };
+    let body = await mediaAccessBody(response);
+    if (response.status === 403 && body.error === 'captcha_required') {
+        onPhase?.('verifying');
+        const capToken = await solveCaptcha(signal);
+        response = await issueAccessKey(shareKey, purpose, signal, capToken);
+        if (response.status === 401) {
+            await refreshMediaSession(sessionGeneration);
+            response = await issueAccessKey(shareKey, purpose, signal, capToken);
+        }
+        body = await mediaAccessBody(response);
+    }
+
     if (!response.ok) {
         const headerRetry = Number.parseInt(response.headers.get('Retry-After') || '', 10);
         const retryAfter = Number.isFinite(headerRetry)
@@ -126,6 +144,18 @@ export async function requestMediaAccess(
     return {accessKey: body.accessKey, expiresAt};
 }
 
+async function mediaAccessBody(response: Response): Promise<MediaAccessErrorBody & {
+    accessKey?: string;
+    expiresAt?: string;
+    expiresInMs?: number;
+}> {
+    return response.json().catch(() => ({})) as Promise<MediaAccessErrorBody & {
+        accessKey?: string;
+        expiresAt?: string;
+        expiresInMs?: number;
+    }>;
+}
+
 export function mediaAccessURL(
     shareKey: string,
     purpose: MediaAccessPurpose,
@@ -135,8 +165,11 @@ export function mediaAccessURL(
     return `${API_BASE}/api/audio/key/${encodeURIComponent(shareKey)}${action}?access_key=${encodeURIComponent(accessKey)}`;
 }
 
-export async function startAudioDownload(shareKey: string): Promise<void> {
-    const grant = await requestMediaAccess(shareKey, 'download');
+export async function startAudioDownload(
+    shareKey: string,
+    onPhase?: (phase: MediaAccessPhase) => void,
+): Promise<void> {
+    const grant = await requestMediaAccess(shareKey, 'download', {onPhase});
     const anchor = document.createElement('a');
     anchor.href = mediaAccessURL(shareKey, 'download', grant.accessKey);
     anchor.download = '';
@@ -165,6 +198,12 @@ export function mediaAccessErrorMessage(error: unknown, action: 'play' | 'downlo
     }
     if (error.status === 404) {
         return 'This audio is no longer available.';
+    }
+    if (error.code === 'captcha_invalid') {
+        return 'Verification expired or was rejected. Please try again.';
+    }
+    if (error.code === 'captcha_unavailable') {
+        return 'Verification is temporarily unavailable. Please try again shortly.';
     }
     return action === 'play'
         ? 'Could not authorize playback. Please try again.'

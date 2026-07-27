@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/onion/audio-share-backend/config"
@@ -77,6 +78,41 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid audio access key configuration: %v", err)
 	}
+	if err := accessKeys.SetCaptchaPolicy(services.MediaPurposeStream, cfg.StreamCaptchaLimits); err != nil {
+		log.Fatalf("Invalid STREAM_CAPTCHA_LIMITS %q: %v", cfg.StreamCaptchaLimits, err)
+	}
+	captchaEnforcement := strings.ToLower(strings.TrimSpace(cfg.CapEnforcement))
+	if captchaEnforcement != "off" && captchaEnforcement != "observe" && captchaEnforcement != "enforce" {
+		log.Fatalf("Invalid CAP_ENFORCEMENT %q", cfg.CapEnforcement)
+	}
+	downloadCaptchaMode := strings.ToLower(strings.TrimSpace(cfg.DownloadCaptchaMode))
+	if downloadCaptchaMode != "off" && downloadCaptchaMode != "always" {
+		log.Fatalf("Invalid DOWNLOAD_CAPTCHA_MODE %q", cfg.DownloadCaptchaMode)
+	}
+	streamClearanceTTL, err := time.ParseDuration(cfg.StreamCaptchaClearanceTTL)
+	if err != nil || streamClearanceTTL <= 0 {
+		log.Fatalf("Invalid STREAM_CAPTCHA_CLEARANCE_TTL %q", cfg.StreamCaptchaClearanceTTL)
+	}
+	capVerifyTimeout, err := time.ParseDuration(cfg.CapVerifyTimeout)
+	if err != nil || capVerifyTimeout <= 0 {
+		log.Fatalf("Invalid CAP_VERIFY_TIMEOUT %q", cfg.CapVerifyTimeout)
+	}
+	var captchaVerifier services.CaptchaVerifier
+	captchaConfigured := downloadCaptchaMode == "always" || cfg.StreamCaptchaLimits != ""
+	if captchaEnforcement == "enforce" && captchaConfigured {
+		if cfg.CapPublicEndpoint == "" {
+			log.Fatal("CAP_PUBLIC_ENDPOINT is required when Cap enforcement is enabled")
+		}
+		verifier, err := services.NewCapVerifier(
+			cfg.CapVerifyEndpoint,
+			cfg.CapSecretKey,
+			capVerifyTimeout,
+		)
+		if err != nil {
+			log.Fatalf("Invalid Cap verification configuration: %v", err)
+		}
+		captchaVerifier = verifier
+	}
 	var streamIPLimiter, downloadIPLimiter *services.IPBandwidthLimiter
 	if cfg.StreamIPBytesPerSecond > 0 {
 		streamIPLimiter = services.NewIPBandwidthLimiter(cfg.StreamIPBytesPerSecond, cfg.StreamIPBurstBytes)
@@ -86,7 +122,8 @@ func main() {
 	}
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
-	playbackService := services.NewPlaybackService(db)
+	playbackService := services.NewPlaybackService(db, streamKeyTTL)
+	playbackService.StartAccessKeyClaimCleanup()
 	libraryService := services.NewLibraryService(db)
 	requestsService := services.NewRequestsService(db)
 	rateLimiter := middleware.NewRateLimiter(cfg)
@@ -100,6 +137,10 @@ func main() {
 		AccessFailureLimiter:   rateLimiter,
 		StreamIPLimiter:        streamIPLimiter,
 		DownloadIPLimiter:      downloadIPLimiter,
+		CaptchaVerifier:        captchaVerifier,
+		CaptchaEnforcement:     captchaEnforcement,
+		DownloadCaptchaMode:    downloadCaptchaMode,
+		StreamClearanceTTL:     streamClearanceTTL,
 	})
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
@@ -107,7 +148,7 @@ func main() {
 	contactHandler := handlers.NewContactHandler(ntfyService)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
-	playbackHandler := handlers.NewPlaybackHandler(playbackService, cfg.SessionSecret)
+	playbackHandler := handlers.NewPlaybackHandler(playbackService, cfg.SessionSecret, accessKeys)
 	libraryHandler := handlers.NewLibraryHandler(libraryService, cfg.SessionSecret)
 	preferencesHandler := handlers.NewPreferencesHandler(cfg.SessionSecret)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
@@ -120,10 +161,11 @@ func main() {
 		BannerVariant:      cfg.BannerVariant,
 		BannerLinkText:     cfg.BannerLinkText,
 		BannerLinkURL:      cfg.BannerLinkURL,
+		CapPublicEndpoint:  cfg.CapPublicEndpoint,
 	}
 	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, cfg.RybbitURL, cfg.RybbitSiteID, db.DB())
 
-	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL)
+	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
 	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)
 	if cfg.RequestsAPIKey == "" {
 		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are disabled")
