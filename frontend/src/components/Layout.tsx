@@ -6,6 +6,7 @@ import { Music, Menu, X } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
+import UpdateBanner from './UpdateBanner'
 import AudioPlayer from './AudioPlayer'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
 import { AudioPlayerProvider } from '@/contexts/AudioPlayerContext'
@@ -108,6 +109,7 @@ function LayoutContent() {
         </header>
 
         <InfoBanner />
+        <UpdateBanner />
 
         <main className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-grow">
           <Suspense

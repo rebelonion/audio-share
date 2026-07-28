@@ -18,6 +18,7 @@ type FrontendConfig struct {
 	BannerLinkText     string `json:"bannerLinkText,omitempty"`
 	BannerLinkURL      string `json:"bannerLinkUrl,omitempty"`
 	CapPublicEndpoint  string `json:"capPublicEndpoint,omitempty"`
+	BuildID            string `json:"buildId,omitempty"`
 }
 
 type SPAHandler struct {
@@ -86,7 +87,20 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(path, "/assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 	http.ServeFile(w, r, fullPath)
+}
+
+func (h *SPAHandler) VersionHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"buildId": h.config.BuildID,
+		})
+	}
 }
 
 type pageMeta struct {
@@ -229,6 +243,7 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 	srH1 := `<h1 aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">` + escapedH1 + `</h1>`
 	doc = strings.Replace(doc, `<div id="root"></div>`, srH1+`<div id="root"></div>`, 1)
 
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if meta.notFound {
 		w.WriteHeader(http.StatusNotFound)

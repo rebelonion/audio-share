@@ -13,6 +13,8 @@ import (
 	"github.com/onion/audio-share-backend/services"
 )
 
+var buildID = "development"
+
 func main() {
 	cfg := config.Load()
 
@@ -162,6 +164,7 @@ func main() {
 		BannerLinkText:     cfg.BannerLinkText,
 		BannerLinkURL:      cfg.BannerLinkURL,
 		CapPublicEndpoint:  cfg.CapPublicEndpoint,
+		BuildID:            buildID,
 	}
 	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, cfg.RybbitURL, cfg.RybbitSiteID, db.DB())
 
@@ -173,6 +176,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/api/version", spaHandler.VersionHandler())
 	mux.Handle("/api/session", handlers.NewSessionBootstrapHandler(cfg.SessionSecret))
 	mux.Handle("/api/audio/key/", audioHandler)
 	mux.Handle("/api/folder/key/", folderHandler)
@@ -217,6 +221,7 @@ func main() {
 	log.Printf("Audio directories: %v", fsService.GetSlugToDirectoryMap())
 	log.Printf("Content directory: %s", cfg.ContentDir)
 	log.Printf("Static directory: %s", cfg.StaticDir)
+	log.Printf("Build ID: %s", buildID)
 
 	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
 		log.Fatal(err)

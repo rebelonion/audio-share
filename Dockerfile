@@ -1,3 +1,5 @@
+ARG BUILD_ID=development
+
 # Stage 1: Build React frontend
 FROM node:20-alpine AS frontend-builder
 
@@ -18,6 +20,8 @@ RUN npm run build
 # Stage 2: Build Go backend
 FROM golang:1.25-alpine AS backend-builder
 
+ARG BUILD_ID
+
 WORKDIR /app
 
 # Copy go mod files
@@ -30,7 +34,7 @@ RUN go mod download
 COPY backend/ .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /audio-share-backend
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.buildID=${BUILD_ID}" -o /audio-share-backend
 
 # Stage 3: Final image
 FROM alpine:3.23
