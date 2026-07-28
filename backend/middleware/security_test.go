@@ -20,7 +20,7 @@ func TestSecurityHeadersAllowConfiguredCapOriginAndBlobWorkers(t *testing.T) {
 
 	csp := recorder.Header().Get("Content-Security-Policy")
 	for _, directive := range []string{
-		"connect-src 'self' https://analytics.example.test https://captcha.example.test;",
+		"connect-src 'self' https://pagead2.googlesyndication.com https://analytics.example.test https://captcha.example.test;",
 		"worker-src 'self' blob:;",
 	} {
 		if !strings.Contains(csp, directive) {

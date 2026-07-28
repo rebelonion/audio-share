@@ -32,7 +32,7 @@ func (s *SecurityHeaders) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Build CSP
 		scriptSrc := "'self' 'unsafe-inline' 'unsafe-eval'"
-		connectSrc := "'self'"
+		connectSrc := "'self' https://pagead2.googlesyndication.com"
 		if s.rybbitDomain != "" {
 			scriptSrc += " " + s.rybbitDomain
 			connectSrc += " " + s.rybbitDomain
