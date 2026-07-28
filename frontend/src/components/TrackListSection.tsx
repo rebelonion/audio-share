@@ -147,7 +147,7 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                                     <TrackPoster track={track} />
                                 </div>
                                 <div className="relative pointer-events-none p-2.5">
-                                    <div className="font-medium text-sm line-clamp-2 text-left group-hover:text-[var(--primary)] transition-colors">{track.title || track.filename}</div>
+                                    <div className="min-h-10 font-medium text-sm leading-5 line-clamp-2 text-left group-hover:text-[var(--primary)] transition-colors">{track.title || track.filename}</div>
                                     <div className="text-xs text-[var(--muted-foreground)] truncate mt-1">{track.artist || track.parentFolderName || '\u00A0'}</div>
                                     <div className="relative z-10 mt-2 flex items-center justify-between pointer-events-auto">
                                         <TrackQuickActions track={playbackToPlayerTrack(track, source)} compact />
