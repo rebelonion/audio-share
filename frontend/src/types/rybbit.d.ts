@@ -5,6 +5,7 @@ interface Rybbit {
     setTraits: (traits: Record<string, unknown>) => void;
     clearUserId: () => void;
     getUserId: () => string | null;
+    onReady: (callback: (rybbit: Rybbit) => void) => void;
     trackOutbound: (url: string, text?: string, target?: string) => void;
 }
 

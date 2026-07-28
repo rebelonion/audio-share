@@ -1,6 +1,8 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {setRybbitAdBlockTraits, syncRybbitIdentity} from './rybbitIdentity';
 
+type RybbitClient = NonNullable<Window['rybbit']>;
+
 function installRybbit(currentUserId: string | null = null) {
     let userId = currentUserId;
     const identify = vi.fn((nextUserId: string) => {
@@ -12,6 +14,7 @@ function installRybbit(currentUserId: string | null = null) {
             getUserId: () => userId,
             identify,
             setTraits,
+            onReady: (callback: (rybbit: RybbitClient) => void) => callback(window.rybbit!),
         },
     });
     return {identify, setTraits};
@@ -56,6 +59,40 @@ describe('Rybbit profile synchronization', () => {
         expect(rybbit.setTraits).toHaveBeenCalledWith({
             ad_block_status: 'not_detected',
             ad_delivery_status: 'available',
+        });
+    });
+
+    it('waits for queued identification when the tracker is still loading', () => {
+        const setTraits = vi.fn();
+        let ready: ((rybbit: RybbitClient) => void) | undefined;
+        vi.stubGlobal('window', {
+            rybbit: {
+                getUserId: () => null,
+                identify: vi.fn(),
+                setTraits,
+                onReady: (callback: (rybbit: RybbitClient) => void) => {
+                    ready = callback;
+                },
+            },
+        });
+
+        syncRybbitIdentity('queued-profile');
+        setRybbitAdBlockTraits('blocked', 'blocked');
+        const readyRybbit: RybbitClient = {
+            pageview: vi.fn(),
+            event: vi.fn(),
+            identify: vi.fn(),
+            clearUserId: vi.fn(),
+            getUserId: () => 'queued-profile',
+            onReady: vi.fn(),
+            setTraits,
+            trackOutbound: vi.fn(),
+        };
+        ready?.(readyRybbit);
+
+        expect(setTraits).toHaveBeenCalledWith({
+            ad_block_status: 'blocked',
+            ad_delivery_status: 'blocked',
         });
     });
 });

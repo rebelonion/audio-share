@@ -35,6 +35,8 @@ export function setRybbitAdBlockTraits(
     adBlockStatus = status;
     adDeliveryStatus = deliveryStatus;
 
-    if (!window.rybbit?.getUserId()) return;
-    window.rybbit.setTraits(adBlockTraits()!);
+    const traits = adBlockTraits()!;
+    window.rybbit?.onReady(rybbit => {
+        if (rybbit.getUserId()) rybbit.setTraits(traits);
+    });
 }
