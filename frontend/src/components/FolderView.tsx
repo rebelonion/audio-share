@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Calendar, Clock, SortAsc} from 'lucide-react';
+import {Calendar, Clock, Loader2, SortAsc} from 'lucide-react';
 import {FileSystemItem} from '@/types';
 import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
@@ -13,7 +13,11 @@ import {useSearchParams} from "react-router";
 import {useRybbit} from "@/hooks/useRybbit";
 import {useAudioPlayerCommands} from '@/contexts/AudioPlayerContext';
 import {audioFileToPlayerTrack} from '@/lib/tracks';
-import {mediaAccessErrorMessage, startAudioDownload} from '@/lib/mediaAccess';
+import {
+    mediaAccessErrorMessage,
+    startAudioDownload,
+    type MediaAccessPhase,
+} from '@/lib/mediaAccess';
 import {useToast} from '@/contexts/ToastContext';
 import {audioShareUrl} from '@/lib/share';
 
@@ -36,7 +40,9 @@ type DisplayEntry =
 const DESKTOP_LETTER_HEIGHT = 33;
 const DESKTOP_ITEM_HEIGHT = 65;
 const MOBILE_LETTER_HEIGHT = 40; // h-8 + mb-2
-const MOBILE_ITEM_HEIGHT = 122; // h-[110px] + mb-3
+const MOBILE_AUDIO_ITEM_HEIGHT = 160; // h-[148px] + mb-3
+const MOBILE_FOLDER_ITEM_HEIGHT = 128; // h-[116px] + mb-3
+const MOBILE_FOLDER_ACTION_ITEM_HEIGHT = 144; // h-[132px] + mb-3
 
 function getIsDesktop() {
     return typeof window === 'undefined'
@@ -68,7 +74,6 @@ function useWindowedEntries(entries: DisplayEntry[], isDesktop: boolean) {
     const containerRef = useRef<HTMLDivElement | HTMLTableSectionElement | null>(null);
     const [viewport, setViewport] = useState({top: 0, height: 800});
     const letterHeight = isDesktop ? DESKTOP_LETTER_HEIGHT : MOBILE_LETTER_HEIGHT;
-    const itemHeight = isDesktop ? DESKTOP_ITEM_HEIGHT : MOBILE_ITEM_HEIGHT;
     const overscan = isDesktop ? 600 : 800;
 
     const rowMetrics = useMemo(() => {
@@ -77,7 +82,15 @@ function useWindowedEntries(entries: DisplayEntry[], isDesktop: boolean) {
         let totalHeight = 0;
 
         entries.forEach((entry) => {
-            const height = entry.type === 'letter' ? letterHeight : itemHeight;
+            const height = entry.type === 'letter'
+                ? letterHeight
+                : isDesktop
+                    ? DESKTOP_ITEM_HEIGHT
+                    : entry.item.type === 'audio'
+                        ? MOBILE_AUDIO_ITEM_HEIGHT
+                        : entry.item.metadata?.original_url
+                            ? MOBILE_FOLDER_ACTION_ITEM_HEIGHT
+                        : MOBILE_FOLDER_ITEM_HEIGHT;
 
             offsets.push(totalHeight);
 
@@ -89,7 +102,7 @@ function useWindowedEntries(entries: DisplayEntry[], isDesktop: boolean) {
         });
 
         return {offsets, letterOffsets, totalHeight};
-    }, [entries, itemHeight, letterHeight]);
+    }, [entries, isDesktop, letterHeight]);
 
     useLayoutEffect(() => {
         let frame = 0;
@@ -181,6 +194,7 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
     const [isDesktop, setIsDesktop] = useState(getIsDesktop);
     const [pendingDownload, setPendingDownload] = useState<FileSystemItem | null>(null);
     const [copiedShareKey, setCopiedShareKey] = useState<string | null>(null);
+    const [downloadPhase, setDownloadPhase] = useState<MediaAccessPhase | null>(null);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(min-width: 768px)');
@@ -437,11 +451,14 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
 
     const openDownload = useCallback(async (item: FileSystemItem) => {
         if (item.type !== 'audio' || !item.shareKey) return;
+        setDownloadPhase('requesting');
         try {
-            await startAudioDownload(item.shareKey);
+            await startAudioDownload(item.shareKey, setDownloadPhase);
             track('audio-download', {path: item.path, name: item.name});
         } catch (error) {
             toast.error(mediaAccessErrorMessage(error, 'download'));
+        } finally {
+            setDownloadPhase(null);
         }
     }, [toast, track]);
 
@@ -464,6 +481,18 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                     onCancel={() => setPendingDownload(null)}
                     onConfirm={confirmMatureDownload}
                 />,
+                document.body
+            )}
+            {downloadPhase && createPortal(
+                <div
+                    className="fixed left-1/2 top-4 z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--primary-border)] bg-[var(--card)] px-3 py-2 text-xs text-[var(--foreground)] shadow-lg animate-fadeIn"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                >
+                    <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-[var(--primary)]"/>
+                    {downloadPhase === 'verifying' ? 'Verifying download…' : 'Preparing download…'}
+                </div>,
                 document.body
             )}
 
@@ -642,7 +671,13 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                                 ) : (
                                                     <div
                                                         key={`mobile-${entry.key}`}
-                                                        className={`h-[110px] border border-[var(--border)] rounded-lg mb-3 overflow-hidden ${
+                                                        className={`${
+                                                            entry.item.type === 'audio'
+                                                                ? 'h-[148px]'
+                                                                : entry.item.metadata?.original_url
+                                                                    ? 'h-[132px]'
+                                                                    : 'h-[116px]'
+                                                        } border border-[var(--border)] rounded-xl mb-3 overflow-hidden transition-colors ${
                                                             entry.item.type === 'audio' ? 'cursor-pointer' : ''
                                                         } ${entry.item.type === 'audio' && entry.item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
                                                         title={entry.item.type === 'audio' && entry.item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}

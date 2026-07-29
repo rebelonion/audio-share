@@ -271,7 +271,7 @@ export default function Share() {
                                         >
                                             <Download className="h-4 w-4" /> {
                                                 isDownloading
-                                                    ? downloadPhase === 'verifying' ? 'Verifying…' : 'Preparing…'
+                                                    ? downloadPhase === 'verifying' ? 'Verifying download…' : 'Preparing download…'
                                                     : 'Download'
                                             }
                                         </button>

@@ -264,10 +264,10 @@ export default function AudioPlayer() {
                     )}
                     {notice && (
                         <div
-                            className="mb-3 flex items-start rounded border border-[var(--border)] bg-[var(--secondary)] p-2 text-[var(--foreground)] animate-fadeIn"
+                            className="mb-3 flex items-center rounded border border-[var(--border)] bg-[var(--secondary)] p-2 text-[var(--foreground)] animate-fadeIn"
                             role="status"
                         >
-                            <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
+                            <AlertCircle className="mr-2 h-4 w-4 flex-shrink-0"/>
                             <span className="text-xs">{notice}</span>
                         </div>
                     )}

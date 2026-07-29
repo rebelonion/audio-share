@@ -88,7 +88,10 @@ describe('FolderView', () => {
         );
 
         fireEvent.click(screen.getByRole('button', {name: 'Download'}));
-        await waitFor(() => expect(mediaAccess.startAudioDownload).toHaveBeenCalledWith('track-key'));
+        await waitFor(() => expect(mediaAccess.startAudioDownload).toHaveBeenCalledWith(
+            'track-key',
+            expect.any(Function),
+        ));
         await screen.findByRole('alert');
         fireEvent.click(screen.getByRole('button', {name: 'remove folder'}));
 
@@ -115,5 +118,34 @@ describe('FolderView', () => {
             'audio-download',
             {path: track.path, name: track.name},
         ));
+    });
+
+    it('shows when a download captcha is being verified', async () => {
+        let finishDownload: (() => void) | undefined;
+        mediaAccess.startAudioDownload.mockImplementationOnce((_shareKey, onPhase) => {
+            onPhase?.('verifying');
+            return new Promise<void>(resolve => {
+                finishDownload = resolve;
+            });
+        });
+        render(
+            <ToastProvider>
+                <MemoryRouter>
+                    <Harness/>
+                </MemoryRouter>
+            </ToastProvider>,
+        );
+
+        fireEvent.click(screen.getByRole('button', {name: 'Download'}));
+
+        const status = await screen.findByRole('status');
+        expect(status.textContent).toBe('Verifying download…');
+        expect(mediaAccess.startAudioDownload).toHaveBeenCalledWith(
+            'track-key',
+            expect.any(Function),
+        );
+
+        finishDownload?.();
+        await waitFor(() => expect(screen.queryByText('Verifying download…')).toBeNull());
     });
 });

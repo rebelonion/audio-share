@@ -12,8 +12,8 @@ function MobileItemName({ item }: ItemNameProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
 
     return (
-        <div className="p-3 flex items-center">
-            <div className="mr-3 flex items-center">
+        <div className="flex h-16 items-start px-3 pt-3 pb-2">
+            <div className="mr-3 mt-0.5 flex items-center">
                 {item.type === 'folder' ? (
                     item.posterImage && item.type === 'folder' && item.shareKey ? (
                         <PosterImage
@@ -35,19 +35,24 @@ function MobileItemName({ item }: ItemNameProps) {
                 )}
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className="min-w-0 flex-1">
                 {item.type === 'folder' ? (
                     <Link
                         to={folderHref}
                         className="text-[var(--primary)] hover:text-[var(--primary-hover)] block w-full text-left"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="font-medium truncate">
+                        <div className="font-medium leading-snug line-clamp-2">
                             {item.name}
                         </div>
                     </Link>
                 ) : (
-                    <div className="font-medium truncate">{item.title || item.name}</div>
+                    <div
+                        className="font-medium leading-snug line-clamp-2"
+                        title={item.title || item.name}
+                    >
+                        {item.title || item.name}
+                    </div>
                 )}
             </div>
         </div>
