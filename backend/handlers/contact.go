@@ -13,17 +13,29 @@ import (
 )
 
 type ContactHandler struct {
-	ntfy *services.NtfyService
+	ntfy          *services.NtfyService
+	sessionSecret []byte
 }
 
-func NewContactHandler(ntfy *services.NtfyService) *ContactHandler {
-	return &ContactHandler{ntfy: ntfy}
+func NewContactHandler(ntfy *services.NtfyService, sessionSecret string) *ContactHandler {
+	return &ContactHandler{
+		ntfy:          ntfy,
+		sessionSecret: []byte(sessionSecret),
+	}
 }
 
 type contactRequest struct {
-	Topic   string `json:"topic"`
-	Email   string `json:"email"`
-	Message string `json:"message"`
+	Topic      string `json:"topic"`
+	Email      string `json:"email"`
+	Message    string `json:"message"`
+	Browser    string `json:"browser"`
+	Platform   string `json:"platform"`
+	Viewport   string `json:"viewport"`
+	Screen     string `json:"screen"`
+	Language   string `json:"language"`
+	Timezone   string `json:"timezone"`
+	Page       string `json:"page"`
+	AppBuildID string `json:"appBuildId"`
 }
 
 var emailRegex = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
@@ -79,7 +91,25 @@ func (h *ContactHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ntfy.SendContactNotification(req.Topic, req.Email, req.Message, attachment); err != nil {
+	diagnostics := services.ContactDiagnostics{
+		Browser:    sanitizeDiagnostic(req.Browser, 100),
+		Platform:   sanitizeDiagnostic(req.Platform, 100),
+		Viewport:   sanitizeDiagnostic(req.Viewport, 50),
+		Screen:     sanitizeDiagnostic(req.Screen, 50),
+		Language:   sanitizeDiagnostic(req.Language, 50),
+		Timezone:   sanitizeDiagnostic(req.Timezone, 100),
+		Page:       sanitizeDiagnostic(req.Page, 300),
+		AppBuildID: sanitizeDiagnostic(req.AppBuildID, 100),
+		UserAgent:  sanitizeDiagnostic(r.UserAgent(), 500),
+	}
+	sessionID, ok := resolveSessionID(r, h.sessionSecret)
+	if !ok {
+		sessionID = generateSessionID()
+	}
+	setSessionCookie(w, r, h.sessionSecret, sessionID)
+	diagnostics.SessionID = sessionID
+
+	if err := h.ntfy.SendContactNotification(req.Topic, req.Email, req.Message, diagnostics, attachment); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return
 	}
@@ -101,9 +131,17 @@ func parseContactRequest(w http.ResponseWriter, r *http.Request) (contactRequest
 		}
 
 		req := contactRequest{
-			Topic:   r.FormValue("topic"),
-			Email:   r.FormValue("email"),
-			Message: r.FormValue("message"),
+			Topic:      r.FormValue("topic"),
+			Email:      r.FormValue("email"),
+			Message:    r.FormValue("message"),
+			Browser:    r.FormValue("browser"),
+			Platform:   r.FormValue("platform"),
+			Viewport:   r.FormValue("viewport"),
+			Screen:     r.FormValue("screen"),
+			Language:   r.FormValue("language"),
+			Timezone:   r.FormValue("timezone"),
+			Page:       r.FormValue("page"),
+			AppBuildID: r.FormValue("appBuildId"),
 		}
 
 		file, header, err := r.FormFile("image")
@@ -157,4 +195,13 @@ func parseContactRequest(w http.ResponseWriter, r *http.Request) (contactRequest
 	}
 
 	return req, nil, nil, nil
+}
+
+func sanitizeDiagnostic(value string, maxRunes int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	runes := []rune(value)
+	if len(runes) > maxRunes {
+		value = string(runes[:maxRunes])
+	}
+	return value
 }

@@ -24,6 +24,19 @@ type NtfyAttachment struct {
 	Reader      io.Reader
 }
 
+type ContactDiagnostics struct {
+	SessionID  string
+	Browser    string
+	Platform   string
+	Viewport   string
+	Screen     string
+	Language   string
+	Timezone   string
+	Page       string
+	AppBuildID string
+	UserAgent  string
+}
+
 func NewNtfyService(url, topic, token string, priority int, reviewURL string) *NtfyService {
 	return &NtfyService{
 		url:       url,
@@ -58,7 +71,13 @@ func (n *NtfyService) SendShareNotification(requestURL string) error {
 	return n.send(body, "New Audio Source Request", "audio,request,source", actions)
 }
 
-func (n *NtfyService) SendContactNotification(topic, email, message string, attachment *NtfyAttachment) error {
+func (n *NtfyService) SendContactNotification(
+	topic,
+	email,
+	message string,
+	diagnostics ContactDiagnostics,
+	attachment *NtfyAttachment,
+) error {
 	if !n.IsConfigured() {
 		return fmt.Errorf("ntfy not configured")
 	}
@@ -83,6 +102,9 @@ func (n *NtfyService) SendContactNotification(topic, email, message string, atta
 	}
 
 	body := fmt.Sprintf("Topic: %s\nEmail: %s\n\nMessage:\n%s", topicLabel, emailInfo, message)
+	if diagnosticLines := contactDiagnosticLines(diagnostics); len(diagnosticLines) > 0 {
+		body += "\n\nDiagnostics:\n" + strings.Join(diagnosticLines, "\n")
+	}
 	if err := n.send(body, "New Contact Form Submission", "contact,message,form", ""); err != nil {
 		return err
 	}
@@ -92,6 +114,32 @@ func (n *NtfyService) SendContactNotification(topic, email, message string, atta
 	}
 
 	return nil
+}
+
+func contactDiagnosticLines(diagnostics ContactDiagnostics) []string {
+	fields := []struct {
+		label string
+		value string
+	}{
+		{"Session ID", diagnostics.SessionID},
+		{"Browser", diagnostics.Browser},
+		{"Platform", diagnostics.Platform},
+		{"Viewport", diagnostics.Viewport},
+		{"Screen", diagnostics.Screen},
+		{"Language", diagnostics.Language},
+		{"Timezone", diagnostics.Timezone},
+		{"Page", diagnostics.Page},
+		{"App build", diagnostics.AppBuildID},
+		{"User agent", diagnostics.UserAgent},
+	}
+
+	lines := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field.value != "" {
+			lines = append(lines, field.label+": "+field.value)
+		}
+	}
+	return lines
 }
 
 func (n *NtfyService) send(body, title, tags, actions string) error {

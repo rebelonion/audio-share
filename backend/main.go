@@ -155,7 +155,7 @@ func main() {
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
 	shareHandler := handlers.NewShareHandler(ntfyService)
-	contactHandler := handlers.NewContactHandler(ntfyService)
+	contactHandler := handlers.NewContactHandler(ntfyService, cfg.SessionSecret)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)
 	playbackHandler := handlers.NewPlaybackHandler(playbackService, cfg.SessionSecret, accessKeys)

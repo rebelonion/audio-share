@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
-import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
-import { contactTopicFromSearch, contactTopicOptions } from '@/lib/contact';
+import { BUILD_ID, DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
+import { collectContactDiagnostics, contactTopicFromSearch, contactTopicOptions } from '@/lib/contact';
 import CustomSelect from '@/components/CustomSelect';
 
 export default function Contact() {
@@ -56,12 +56,17 @@ export default function Contact() {
             formData.append('topic', topic);
             formData.append('email', email.trim());
             formData.append('message', message.trim());
+            const diagnostics = collectContactDiagnostics(BUILD_ID);
+            Object.entries(diagnostics).forEach(([key, value]) => {
+                formData.append(key, value);
+            });
             if (image) {
                 formData.append('image', image);
             }
 
             const response = await fetch(`${API_BASE}/api/contact`, {
                 method: 'POST',
+                credentials: 'include',
                 body: formData
             });
 
