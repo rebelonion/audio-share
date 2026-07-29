@@ -117,10 +117,16 @@ func main() {
 	}
 	var streamIPLimiter, downloadIPLimiter *services.IPBandwidthLimiter
 	if cfg.StreamIPBytesPerSecond > 0 {
-		streamIPLimiter = services.NewIPBandwidthLimiter(cfg.StreamIPBytesPerSecond, cfg.StreamIPBurstBytes)
+		streamIPLimiter = services.NewIPBandwidthLimiter(
+			cfg.StreamIPBytesPerSecond,
+			max(cfg.StreamIPBytesPerSecond, cfg.StreamBurstBytes),
+		)
 	}
 	if cfg.DownloadIPBytesPerSecond > 0 {
-		downloadIPLimiter = services.NewIPBandwidthLimiter(cfg.DownloadIPBytesPerSecond, cfg.DownloadIPBurstBytes)
+		downloadIPLimiter = services.NewIPBandwidthLimiter(
+			cfg.DownloadIPBytesPerSecond,
+			max(cfg.DownloadIPBytesPerSecond, cfg.DownloadBurstBytes),
+		)
 	}
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
@@ -132,7 +138,9 @@ func main() {
 
 	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), handlers.AudioHandlerOptions{
 		StreamBytesPerSecond:   cfg.StreamBytesPerSecond,
+		StreamBurstBytes:       cfg.StreamBurstBytes,
 		DownloadBytesPerSecond: cfg.DownloadBytesPerSecond,
+		DownloadBurstBytes:     cfg.DownloadBurstBytes,
 		DownloadSessionMinAge:  downloadSessionMinAge,
 		SessionSecret:          cfg.SessionSecret,
 		AccessKeys:             accessKeys,

@@ -59,11 +59,11 @@ type Config struct {
 	AudioDir string
 
 	StreamBytesPerSecond     int64
+	StreamBurstBytes         int64
 	DownloadBytesPerSecond   int64
+	DownloadBurstBytes       int64
 	StreamIPBytesPerSecond   int64
 	DownloadIPBytesPerSecond int64
-	StreamIPBurstBytes       int64
-	DownloadIPBurstBytes     int64
 
 	StreamKeyLimits       string
 	DownloadKeyLimits     string
@@ -128,11 +128,11 @@ func Load() *Config {
 		Port:                      getEnv("PORT", "8080"),
 		AudioDir:                  getEnv("AUDIO_DIR", ""),
 		StreamBytesPerSecond:      getEnvInt64("STREAM_BYTES_PER_SECOND", 0),
+		StreamBurstBytes:          getEnvInt64("STREAM_BURST_BYTES", 0),
 		DownloadBytesPerSecond:    getEnvInt64("DOWNLOAD_BYTES_PER_SECOND", 0),
+		DownloadBurstBytes:        getEnvInt64("DOWNLOAD_BURST_BYTES", 0),
 		StreamIPBytesPerSecond:    getEnvInt64("STREAM_IP_BYTES_PER_SECOND", 0),
 		DownloadIPBytesPerSecond:  getEnvInt64("DOWNLOAD_IP_BYTES_PER_SECOND", 0),
-		StreamIPBurstBytes:        getEnvInt64("STREAM_IP_BURST_BYTES", 0),
-		DownloadIPBurstBytes:      getEnvInt64("DOWNLOAD_IP_BURST_BYTES", 0),
 		StreamKeyLimits:           getEnv("STREAM_KEY_LIMITS", "10/1m"),
 		DownloadKeyLimits:         getEnv("DOWNLOAD_KEY_LIMITS", "10/1m"),
 		StreamKeyTTL:              getEnv("STREAM_KEY_TTL", "30m"),

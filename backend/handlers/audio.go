@@ -29,7 +29,9 @@ type AudioHandler struct {
 	fs                     *services.FileSystemService
 	db                     *sql.DB
 	streamBytesPerSecond   int64
+	streamBurstBytes       int64
 	downloadBytesPerSecond int64
+	downloadBurstBytes     int64
 	downloadSessionMinAge  time.Duration
 	sessionSecret          []byte
 	accessKeys             *services.AccessKeyManager
@@ -51,7 +53,9 @@ type AccessFailureLimiter interface {
 
 type AudioHandlerOptions struct {
 	StreamBytesPerSecond   int64
+	StreamBurstBytes       int64
 	DownloadBytesPerSecond int64
+	DownloadBurstBytes     int64
 	DownloadSessionMinAge  time.Duration
 	SessionSecret          string
 	AccessKeys             *services.AccessKeyManager
@@ -69,7 +73,9 @@ func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, options AudioHa
 		fs:                     fs,
 		db:                     db,
 		streamBytesPerSecond:   options.StreamBytesPerSecond,
+		streamBurstBytes:       options.StreamBurstBytes,
 		downloadBytesPerSecond: options.DownloadBytesPerSecond,
+		downloadBurstBytes:     options.DownloadBurstBytes,
 		downloadSessionMinAge:  options.DownloadSessionMinAge,
 		sessionSecret:          []byte(options.SessionSecret),
 		accessKeys:             options.AccessKeys,
@@ -490,6 +496,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	reader := newThrottledReadSeeker(
 		file,
 		h.bytesPerSecond(download),
+		h.burstBytes(download),
 		h.ipLimiter(download),
 		clientAddress,
 	)
@@ -501,6 +508,13 @@ func (h *AudioHandler) bytesPerSecond(download bool) int64 {
 		return h.downloadBytesPerSecond
 	}
 	return h.streamBytesPerSecond
+}
+
+func (h *AudioHandler) burstBytes(download bool) int64 {
+	if download {
+		return h.downloadBurstBytes
+	}
+	return h.streamBurstBytes
 }
 
 func (h *AudioHandler) ipLimiter(download bool) *services.IPBandwidthLimiter {
