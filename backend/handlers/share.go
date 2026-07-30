@@ -17,7 +17,8 @@ func NewShareHandler(ntfy *services.NtfyService) *ShareHandler {
 }
 
 type shareRequest struct {
-	RequestURL string `json:"requestUrl"`
+	RequestURL           string `json:"requestUrl"`
+	HasHigherRemovalRisk bool   `json:"hasHigherRemovalRisk"`
 }
 
 func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +48,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ntfy.SendShareNotification(req.RequestURL); err != nil {
+	if err := h.ntfy.SendShareNotification(req.RequestURL, req.HasHigherRemovalRisk); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return
 	}

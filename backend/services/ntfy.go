@@ -51,12 +51,15 @@ func (n *NtfyService) IsConfigured() bool {
 	return n.topic != ""
 }
 
-func (n *NtfyService) SendShareNotification(requestURL string) error {
+func (n *NtfyService) SendShareNotification(requestURL string, hasHigherRemovalRisk bool) error {
 	if !n.IsConfigured() {
 		return fmt.Errorf("ntfy not configured")
 	}
 
 	body := fmt.Sprintf("New source request: %s", requestURL)
+	if hasHigherRemovalRisk {
+		body += "\nContent removal risk: Higher"
+	}
 
 	var actions string
 	if n.reviewURL != "" {

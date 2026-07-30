@@ -12,6 +12,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
     const { track } = useRybbit();
     const [requestUrl, setRequestUrl] = useState('');
     const [hasAcknowledged, setHasAcknowledged] = useState(false);
+    const [hasHigherRemovalRisk, setHasHigherRemovalRisk] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<{
         success?: boolean;
@@ -21,6 +22,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
     const handleClose = () => {
         setRequestUrl('');
         setHasAcknowledged(false);
+        setHasHigherRemovalRisk(false);
         setStatus({});
         onCloseAction();
     };
@@ -53,7 +55,10 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ requestUrl: requestUrl })
+                body: JSON.stringify({
+                    requestUrl,
+                    hasHigherRemovalRisk,
+                })
             });
 
             const data = await response.json();
@@ -74,6 +79,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
             track('artist-request');
             setRequestUrl('');
             setHasAcknowledged(false);
+            setHasHigherRemovalRisk(false);
 
             setTimeout(() => {
                 onCloseAction();
@@ -128,6 +134,27 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                             Requests are manually reviewed before appearing on the requests page.
                         </p>
                     </div>
+
+                    <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--background)] p-3 transition-colors hover:border-[var(--primary-border)] hover:bg-[var(--card-hover)]">
+                        <input
+                            type="checkbox"
+                            checked={hasHigherRemovalRisk}
+                            onChange={(e) => setHasHigherRemovalRisk(e.target.checked)}
+                            disabled={isSubmitting}
+                            className="peer sr-only"
+                        />
+                        <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border border-[var(--border)] bg-[var(--card)] text-transparent transition-colors peer-checked:border-[var(--primary)] peer-checked:bg-[var(--primary)] peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--primary)]">
+                            <Check className="h-3.5 w-3.5" />
+                        </span>
+                        <span>
+                            <span className="block text-sm font-medium text-[var(--foreground)]">
+                                This channel has a higher chance of having content removed
+                            </span>
+                            <span className="mt-0.5 block text-xs leading-relaxed text-[var(--muted-foreground)]">
+                                Select this if uploads may disappear and should be prioritized.
+                            </span>
+                        </span>
+                    </label>
 
                     <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--secondary-translucent)] p-3">
                         <div className="mb-2 flex items-start gap-2 text-sm font-medium text-[var(--foreground)]">
