@@ -257,8 +257,8 @@ export default function AudioPlayer() {
                     </div>
 
                     {error && (
-                        <div className="mb-3 flex items-start rounded border border-[var(--error-border)] bg-[var(--error-bg)] p-2 text-[var(--error-text)] animate-fadeIn">
-                            <Info className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5"/>
+                        <div className="mb-3 flex items-center rounded border border-[var(--error-border)] bg-[var(--error-bg)] p-2 text-[var(--error-text)] animate-fadeIn">
+                            <Info className="mr-2 h-4 w-4 flex-shrink-0"/>
                             <span className="text-xs">{error}</span>
                         </div>
                     )}
