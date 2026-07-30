@@ -1,10 +1,43 @@
 import type Cap from '@cap.js/widget';
+import type {CapErrorEvent} from '@cap.js/widget';
 import capWasmUrl from '@cap.js/wasm/browser/cap_wasm_bg.wasm?url';
 import pakoUrl from 'pako/dist/pako_inflate.min.js?url';
 import {CAP_PUBLIC_ENDPOINT} from '@/lib/config';
 
 let capInstance: Cap | null = null;
 let solveQueue: Promise<void> = Promise.resolve();
+let lastCapError: CapErrorEvent['detail'] | null = null;
+
+class CaptchaSolveError extends Error {
+    readonly code: string;
+
+    constructor(code: string, message: string) {
+        super(message);
+        this.name = 'CaptchaSolveError';
+        this.code = code;
+    }
+}
+
+function handleCapError(event: CapErrorEvent) {
+    event.stopPropagation();
+    lastCapError = event.detail;
+    try {
+        window.rybbit?.event('captcha-error', {
+            code: event.detail.code,
+            message: event.detail.message,
+        });
+    } catch {
+        // Analytics must not interfere with verification.
+    }
+}
+
+function solveFailure(): CaptchaSolveError {
+    const detail = lastCapError;
+    return new CaptchaSolveError(
+        detail?.code || 'solve_failed',
+        detail?.message || 'CAPTCHA solve did not return a token',
+    );
+}
 
 async function getCap(): Promise<Cap> {
     if (!CAP_PUBLIC_ENDPOINT) {
@@ -14,7 +47,9 @@ async function getCap(): Promise<Cap> {
     window.CAP_CUSTOM_WASM_URL = capWasmUrl;
     window.CAP_PAKO_URL = pakoUrl;
     const {default: CapWidget} = await import('@cap.js/widget');
-    capInstance = new CapWidget({apiEndpoint: CAP_PUBLIC_ENDPOINT});
+    const cap = new CapWidget({apiEndpoint: CAP_PUBLIC_ENDPOINT});
+    cap.addEventListener('error', handleCapError);
+    capInstance = cap;
     return capInstance;
 }
 
@@ -48,13 +83,14 @@ export function solveCaptcha(signal?: AbortSignal): Promise<string> {
                 throw postSetupAbort;
             }
 
+            lastCapError = null;
             cap.reset();
             const result = await cap.solve();
 
             const postSolveAbort = aborted(signal);
             if (postSolveAbort) throw postSolveAbort;
-            if (!result.success || !result.token) {
-                throw new Error('captcha_solve_failed');
+            if (!result?.success || !result.token) {
+                throw solveFailure();
             }
             return result.token;
         } catch (error) {

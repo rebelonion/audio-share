@@ -16,6 +16,8 @@ interface CapInstance {
     widget: {
         remove: ReturnType<typeof vi.fn>;
     };
+    addEventListener: ReturnType<typeof vi.fn>;
+    dispatchError: (event: CustomEvent) => void;
     reset: ReturnType<typeof vi.fn>;
     solve: ReturnType<typeof vi.fn>;
 }
@@ -32,9 +34,18 @@ vi.mock('@/lib/config', () => ({
 vi.mock('@cap.js/widget', () => ({
     default: class {
         private activeSolve: DeferredSolve | undefined;
+        private errorListeners: Array<(event: CustomEvent) => void> = [];
 
         widget = {
             remove: vi.fn(() => this.activeSolve?.resolve(undefined)),
+        };
+
+        addEventListener = vi.fn((name: string, listener: (event: CustomEvent) => void) => {
+            if (name === 'error') this.errorListeners.push(listener);
+        });
+
+        dispatchError = (event: CustomEvent) => {
+            for (const listener of this.errorListeners) listener(event);
         };
 
         reset = vi.fn();
@@ -63,9 +74,11 @@ function deferredSolve(): DeferredSolve {
 beforeEach(() => {
     capState.solves.length = 0;
     capState.instances.length = 0;
+    window.rybbit = undefined;
 });
 
 afterEach(() => {
+    window.rybbit = undefined;
     vi.clearAllMocks();
     vi.resetModules();
 });
@@ -112,5 +125,57 @@ describe('solveCaptcha', () => {
         await queuedResult;
         expect(capState.instances).toHaveLength(1);
         expect(capState.instances[0].widget.remove).not.toHaveBeenCalled();
+    });
+
+    it('stops Cap errors from bubbling and records their details as a custom event', async () => {
+        const active = deferredSolve();
+        capState.solves.push(active);
+        const eventMock = vi.fn();
+        window.rybbit = {event: eventMock} as unknown as NonNullable<Window['rybbit']>;
+        const {solveCaptcha} = await import('./captcha');
+
+        const solve = solveCaptcha();
+        await vi.waitFor(() => expect(capState.instances[0]?.solve).toHaveBeenCalledOnce());
+        const errorEvent = new CustomEvent('error', {
+            detail: {
+                isCap: true,
+                code: 'network_error',
+                message: 'Blocked',
+            },
+        });
+        const stopPropagation = vi.spyOn(errorEvent, 'stopPropagation');
+
+        capState.instances[0].dispatchError(errorEvent);
+        active.resolve({success: true, token: 'active-token'});
+
+        await expect(solve).resolves.toBe('active-token');
+        expect(stopPropagation).toHaveBeenCalledOnce();
+        expect(eventMock).toHaveBeenCalledWith('captcha-error', {
+            code: 'network_error',
+            message: 'Blocked',
+        });
+    });
+
+    it('uses the captured Cap error when solve returns without a result', async () => {
+        const active = deferredSolve();
+        capState.solves.push(active);
+        const {solveCaptcha} = await import('./captcha');
+
+        const solve = solveCaptcha();
+        await vi.waitFor(() => expect(capState.instances[0]?.solve).toHaveBeenCalledOnce());
+        capState.instances[0].dispatchError(new CustomEvent('error', {
+            detail: {
+                isCap: true,
+                code: 'instr_timeout',
+                message: 'Instrumentation timed out',
+            },
+        }));
+        active.resolve(undefined);
+
+        await expect(solve).rejects.toMatchObject({
+            name: 'CaptchaSolveError',
+            code: 'instr_timeout',
+            message: 'Instrumentation timed out',
+        });
     });
 });
