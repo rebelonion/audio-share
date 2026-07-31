@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -22,6 +24,43 @@ func TestProtectedAudioRequestClassification(t *testing.T) {
 		if got := limiter.isProtectedAudioRequest(path); got != want {
 			t.Errorf("isProtectedAudioRequest(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+func TestImageRequestsUseSeparateLimit(t *testing.T) {
+	limiter := NewRateLimiter(&config.Config{
+		MaxRequestsPerWindow: 1,
+		RateLimitWindow:      int(time.Minute / time.Millisecond),
+		MaxImagesPerWindow:   2,
+		ImageRateLimitWindow: int(time.Minute / time.Millisecond),
+	})
+	handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, req)
+		return recorder
+	}
+
+	if status := request("/api/folder/key/folder/poster/").Code; status != http.StatusNoContent {
+		t.Fatalf("first image status = %d, want %d", status, http.StatusNoContent)
+	}
+	if status := request("/api/audio/key/track/thumbnail/").Code; status != http.StatusNoContent {
+		t.Fatalf("second image status = %d, want %d", status, http.StatusNoContent)
+	}
+	if status := request("/api/audio/key/other/thumbnail").Code; status != http.StatusTooManyRequests {
+		t.Fatalf("third image status = %d, want %d", status, http.StatusTooManyRequests)
+	}
+
+	if status := request("/api/search?q=test").Code; status != http.StatusNoContent {
+		t.Fatalf("first API status = %d, want %d", status, http.StatusNoContent)
+	}
+	if status := request("/api/stats").Code; status != http.StatusTooManyRequests {
+		t.Fatalf("second API status = %d, want %d", status, http.StatusTooManyRequests)
 	}
 }
 

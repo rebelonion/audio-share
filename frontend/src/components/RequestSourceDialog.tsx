@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
 import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
+import { appFetch } from '@/lib/cloudflareChallenge';
 
 interface RequestSourceDialogProps {
     isOpen: boolean;
@@ -50,7 +51,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
         setStatus({});
 
         try {
-            const response = await fetch(`${API_BASE}/api/share`, {
+            const response = await appFetch(`${API_BASE}/api/share`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

@@ -14,12 +14,14 @@ import (
 
 type rateLimitData struct {
 	apiCount           int
+	imageCount         int
 	accessFailureCount int
 	shareCount         int
 	shareTimestamp     int64
 	contactCount       int
 	contactTimestamp   int64
 	timestamp          int64
+	imageTimestamp     int64
 }
 
 type RateLimiter struct {
@@ -68,6 +70,7 @@ func (rl *RateLimiter) dataLocked(ip string, now int64) *rateLimitData {
 			shareTimestamp:   now,
 			contactTimestamp: now,
 			timestamp:        now,
+			imageTimestamp:   now,
 		}
 		rl.limits[ip] = data
 	}
@@ -115,7 +118,7 @@ func (rl *RateLimiter) isProtectedAudioRequest(path string) bool {
 }
 
 func (rl *RateLimiter) isImageRequest(path string) bool {
-	path = strings.ToLower(path)
+	path = strings.ToLower(strings.TrimRight(path, "/"))
 	return strings.HasSuffix(path, "/poster") || strings.HasSuffix(path, "/thumbnail")
 }
 
@@ -124,6 +127,10 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		ip := rl.getClientIP(r)
 		now := time.Now().UnixMilli()
 		path := r.URL.Path
+
+		if strings.HasPrefix(path, "/api/") {
+			w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+		}
 
 		if strings.HasPrefix(path, "/api/admin/") || rl.isProtectedAudioRequest(path) {
 			next.ServeHTTP(w, r)
@@ -145,18 +152,25 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			data.contactCount = 0
 			data.contactTimestamp = now
 		}
+		if now-data.imageTimestamp > int64(rl.cfg.ImageRateLimitWindow) {
+			data.imageCount = 0
+			data.imageTimestamp = now
+		}
 
 		if isShare {
 			data.shareCount++
 		} else if isContact {
 			data.contactCount++
-		} else if !isImage {
+		} else if isImage {
+			data.imageCount++
+		} else {
 			data.apiCount++
 		}
 
 		if rand.Float64() < 0.01 {
 			for key, val := range rl.limits {
 				if now-val.timestamp > int64(rl.cfg.RateLimitWindow) &&
+					now-val.imageTimestamp > int64(rl.cfg.ImageRateLimitWindow) &&
 					now-val.shareTimestamp > int64(rl.cfg.ShareLimitWindow) &&
 					now-val.contactTimestamp > int64(rl.cfg.ContactLimitWindow) {
 					delete(rl.limits, key)
@@ -178,6 +192,11 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			current = data.contactCount
 			limitWindow = rl.cfg.ContactLimitWindow
 			limitType = "contact"
+		} else if isImage {
+			limit = rl.cfg.MaxImagesPerWindow
+			current = data.imageCount
+			limitWindow = rl.cfg.ImageRateLimitWindow
+			limitType = "image"
 		} else {
 			limit = rl.cfg.MaxRequestsPerWindow
 			current = data.apiCount

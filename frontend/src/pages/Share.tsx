@@ -15,6 +15,7 @@ import {
     startAudioDownload,
     type MediaAccessPhase,
 } from '@/lib/mediaAccess';
+import { appFetch } from '@/lib/cloudflareChallenge';
 
 interface AudioMeta {
     title: string;
@@ -65,7 +66,7 @@ export default function Share() {
 
         const fetchMeta = async () => {
             try {
-                const response = await fetch(`${API_BASE}/api/audio/key/${key}/meta`, {
+                const response = await appFetch(`${API_BASE}/api/audio/key/${key}/meta`, {
                     credentials: 'include',
                     signal: controller.signal,
                 });

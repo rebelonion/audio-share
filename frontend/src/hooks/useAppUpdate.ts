@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
 import {BUILD_ID} from '@/lib/config';
+import {appFetch} from '@/lib/cloudflareChallenge';
 
 const VERSION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -31,7 +32,7 @@ export function useAppUpdate() {
             checking = true;
 
             try {
-                const response = await fetch('/api/version', {
+                const response = await appFetch('/api/version', {
                     cache: 'no-store',
                     signal: controller.signal,
                 });

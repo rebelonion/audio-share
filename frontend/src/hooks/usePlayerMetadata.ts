@@ -2,6 +2,7 @@ import {useEffect, useState} from 'react';
 import {API_BASE} from '@/lib/api';
 import {MATURE_PREFERENCE_EVENT} from '@/lib/matureContentPreference';
 import type {PlayerTrack} from '@/lib/playerQueue';
+import {appFetch} from '@/lib/cloudflareChallenge';
 
 export interface PlayerMetadata {
     title: string;
@@ -55,10 +56,10 @@ export function usePlayerMetadata(track: PlayerTrack | null) {
         const key = track.shareKey;
         setState({...EMPTY_METADATA, trackID: track.id, preferenceVersion});
 
-        const waveformRequest = fetch(`${API_BASE}/api/audio/key/${key}/waveform`, {signal})
+        const waveformRequest = appFetch(`${API_BASE}/api/audio/key/${key}/waveform`, {signal})
             .then(response => response.status === 200 ? response.json() : null)
             .catch(() => null);
-        const metadataRequest = fetch(`${API_BASE}/api/audio/key/${key}/meta`, {
+        const metadataRequest = appFetch(`${API_BASE}/api/audio/key/${key}/meta`, {
             signal,
             credentials: 'include',
         }).then(response => response.ok ? response.json() : null);

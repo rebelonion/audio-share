@@ -15,6 +15,7 @@ function UpdateProbe() {
 function versionResponse(buildId: string) {
     return {
         ok: true,
+        headers: new Headers(),
         json: vi.fn().mockResolvedValue({buildId}),
     };
 }

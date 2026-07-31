@@ -11,7 +11,11 @@ vi.mock('@/hooks/useRybbit', () => ({
     useRybbit: () => ({ track: vi.fn() }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+});
 
 describe('Contact topic links', () => {
     it('accepts known topic values from the query string', () => {
@@ -49,5 +53,23 @@ describe('Contact diagnostics', () => {
         expect(browserFromUserAgent(
             'Mozilla/5.0 Firefox/127.0',
         )).toBe('Firefox 127.0');
+    });
+});
+
+describe('Contact draft recovery', () => {
+    it('still renders when browser storage rejects draft writes', () => {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new DOMException('Storage unavailable', 'SecurityError');
+        });
+
+        expect(() => render(
+            <HelmetProvider>
+                <MemoryRouter initialEntries={['/contact']}>
+                    <Contact />
+                </MemoryRouter>
+            </HelmetProvider>,
+        )).not.toThrow();
+
+        expect(screen.getByRole('heading', {name: 'Contact us'})).toBeTruthy();
     });
 });

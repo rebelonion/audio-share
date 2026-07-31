@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { AudioChart, SourcesChart, DurationChart, PublicationYearChart, SourceAvailabilityChart } from '@/components/StatsCharts';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
+import { appFetch } from '@/lib/cloudflareChallenge';
 
 interface DayData {
     date: string;
@@ -94,7 +95,7 @@ export default function Stats() {
     useEffect(() => {
         async function fetchStats() {
             try {
-                const response = await fetch(`${API_BASE}/api/stats`);
+                const response = await appFetch(`${API_BASE}/api/stats`);
                 if (response.ok) {
                     const data = await response.json();
                     setAudioData(data.audio);

@@ -113,6 +113,10 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `DOWNLOAD_BURST_BYTES` | Initial burst allowance for each download response (`0` disables) | `0` |
 | `STREAM_IP_BYTES_PER_SECOND` | Aggregate streaming bandwidth per client IP across concurrent responses (`0` disables) | `0` |
 | `DOWNLOAD_IP_BYTES_PER_SECOND` | Aggregate download bandwidth per client IP across concurrent responses (`0` disables) | `0` |
+| `RATE_LIMIT_WINDOW` | General API rate-limit window in milliseconds | `60000` |
+| `MAX_REQUESTS_PER_WINDOW` | General API requests allowed per client IP per window | `100` |
+| `IMAGE_RATE_LIMIT_WINDOW` | Thumbnail and poster rate-limit window in milliseconds | `60000` |
+| `MAX_IMAGES_PER_WINDOW` | Thumbnail and poster requests allowed per client IP per window | `300` |
 | `CONTENT_DIR` | Directory for `about.md` | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
 | `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |

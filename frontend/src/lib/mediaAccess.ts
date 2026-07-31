@@ -1,5 +1,6 @@
 import {API_BASE} from '@/lib/api';
 import {solveCaptcha} from '@/lib/captcha';
+import {appFetch} from '@/lib/cloudflareChallenge';
 
 export type MediaAccessPurpose = 'stream' | 'download';
 
@@ -45,7 +46,7 @@ let nextSessionGeneration = 1;
 function startSessionBootstrap(): SessionBootstrap {
     const bootstrap: SessionBootstrap = {
         generation: nextSessionGeneration++,
-        promise: fetch(`${API_BASE}/api/session`, {
+        promise: appFetch(`${API_BASE}/api/session`, {
             method: 'POST',
             credentials: 'include',
         }).then(response => {
@@ -80,7 +81,7 @@ async function issueAccessKey(
     signal?: AbortSignal,
     capToken?: string,
 ): Promise<Response> {
-    return fetch(`${API_BASE}/api/audio/key/${encodeURIComponent(shareKey)}/access`, {
+    return appFetch(`${API_BASE}/api/audio/key/${encodeURIComponent(shareKey)}/access`, {
         method: 'POST',
         credentials: 'include',
         headers: {'Content-Type': 'application/json'},

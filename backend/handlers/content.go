@@ -87,7 +87,7 @@ func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
 }
 
 func (h *ContentHandler) RobotsHandler() http.HandlerFunc {
-	body := "User-agent: *\nDisallow: /api/audio/\n"
+	body := "User-agent: *\nDisallow: /api/\n"
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

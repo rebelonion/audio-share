@@ -39,6 +39,8 @@ type SearchResponse struct {
 	Limit   int                     `json:"limit"`
 }
 
+const maxSearchLimit = 50
+
 func (h *SearchHandler) RandomHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -89,10 +91,10 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 50
+	limit := maxSearchLimit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-			limit = parsed
+			limit = min(parsed, maxSearchLimit)
 		}
 	}
 

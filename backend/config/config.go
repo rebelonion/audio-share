@@ -92,6 +92,8 @@ type Config struct {
 
 	RateLimitWindow      int // milliseconds
 	MaxRequestsPerWindow int
+	ImageRateLimitWindow int // milliseconds
+	MaxImagesPerWindow   int
 	ShareRequestLimit    int
 	ShareLimitWindow     int // milliseconds
 	ContactRequestLimit  int
@@ -157,6 +159,8 @@ func Load() *Config {
 
 		RateLimitWindow:      getEnvInt("RATE_LIMIT_WINDOW", 60000),
 		MaxRequestsPerWindow: getEnvInt("MAX_REQUESTS_PER_WINDOW", 100),
+		ImageRateLimitWindow: getEnvInt("IMAGE_RATE_LIMIT_WINDOW", 60000),
+		MaxImagesPerWindow:   getEnvInt("MAX_IMAGES_PER_WINDOW", 300),
 		ShareRequestLimit:    getEnvInt("SHARE_REQUEST_LIMIT", 3),
 		ShareLimitWindow:     getEnvInt("SHARE_LIMIT_WINDOW", 86400000),
 		ContactRequestLimit:  getEnvInt("CONTACT_REQUEST_LIMIT", 5),

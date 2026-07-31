@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { useRybbit } from '@/hooks/useRybbit';
@@ -6,19 +6,62 @@ import { API_BASE } from '@/lib/api';
 import { BUILD_ID, DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { collectContactDiagnostics, contactTopicFromSearch, contactTopicOptions } from '@/lib/contact';
 import CustomSelect from '@/components/CustomSelect';
+import { appFetch, CloudflareChallengeError } from '@/lib/cloudflareChallenge';
+
+const CONTACT_DRAFT_KEY = 'audio-share:contact-draft';
+
+interface ContactDraft {
+    topic: string;
+    email: string;
+    message: string;
+}
+
+function readContactDraft(): ContactDraft {
+    try {
+        const draft = JSON.parse(sessionStorage.getItem(CONTACT_DRAFT_KEY) || '{}');
+        return {
+            topic: typeof draft.topic === 'string' ? draft.topic : '',
+            email: typeof draft.email === 'string' ? draft.email : '',
+            message: typeof draft.message === 'string' ? draft.message : '',
+        };
+    } catch {
+        return {topic: '', email: '', message: ''};
+    }
+}
+
+function writeContactDraft(draft: ContactDraft): void {
+    try {
+        sessionStorage.setItem(CONTACT_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+        // Draft recovery is best-effort when browser storage is unavailable.
+    }
+}
+
+function clearContactDraft(): void {
+    try {
+        sessionStorage.removeItem(CONTACT_DRAFT_KEY);
+    } catch {
+        // Draft recovery is best-effort when browser storage is unavailable.
+    }
+}
 
 export default function Contact() {
     const { track } = useRybbit();
     const { search } = useLocation();
-    const [topic, setTopic] = useState(() => contactTopicFromSearch(search));
-    const [email, setEmail] = useState('');
-    const [message, setMessage] = useState('');
+    const [draft] = useState(readContactDraft);
+    const [topic, setTopic] = useState(() => contactTopicFromSearch(search) || draft.topic);
+    const [email, setEmail] = useState(draft.email);
+    const [message, setMessage] = useState(draft.message);
     const [image, setImage] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const navigate = useNavigate();
 
     const isAbuseReport = topic === 'abuse';
+
+    useEffect(() => {
+        writeContactDraft({topic, email, message});
+    }, [email, message, topic]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -64,7 +107,7 @@ export default function Contact() {
                 formData.append('image', image);
             }
 
-            const response = await fetch(`${API_BASE}/api/contact`, {
+            const response = await appFetch(`${API_BASE}/api/contact`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData
@@ -79,6 +122,7 @@ export default function Contact() {
                 setEmail('');
                 setMessage('');
                 setImage(null);
+                clearContactDraft();
 
                 setTimeout(() => {
                     navigate('/');
@@ -86,8 +130,13 @@ export default function Contact() {
             } else {
                 setSubmitMessage({ type: 'error', text: data.error || 'Failed to send message' });
             }
-        } catch {
-            setSubmitMessage({ type: 'error', text: 'Failed to send message. Please try again.' });
+        } catch (error) {
+            setSubmitMessage({
+                type: 'error',
+                text: error instanceof CloudflareChallengeError
+                    ? 'Your security check expired. Reload to verify, then submit again.'
+                    : 'Failed to send message. Please try again.',
+            });
         } finally {
             setIsSubmitting(false);
         }

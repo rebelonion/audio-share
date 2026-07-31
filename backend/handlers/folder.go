@@ -20,6 +20,8 @@ func NewFolderHandler(fs *services.FileSystemService, db *sql.DB) *FolderHandler
 }
 
 func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+
 	// Path format: /api/folder/key/{key}/poster
 	path := strings.TrimPrefix(r.URL.Path, "/api/folder/key/")
 	path = strings.Trim(path, "/")

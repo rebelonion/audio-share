@@ -7,6 +7,7 @@ import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
 import UpdateBanner from './UpdateBanner'
+import CloudflareChallengeRecovery from './CloudflareChallengeRecovery'
 import AudioPlayer from './AudioPlayer'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
 import { AudioPlayerProvider } from '@/contexts/AudioPlayerContext'
@@ -37,6 +38,7 @@ function LayoutContent() {
       </Helmet>
 
       <div className="bg-[var(--background)] text-[var(--foreground)] min-h-screen flex flex-col">
+        <CloudflareChallengeRecovery />
         <header className="bg-[var(--card)] border-b border-[var(--border)]">
           <div className="h-[2px]" style={{ background: 'linear-gradient(to right, transparent 0%, var(--primary) 30%, var(--primary-hover) 70%, transparent 100%)', opacity: 0.9 }} />
           <div className="px-4 sm:px-6 lg:px-8 py-4">

@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
+import { appFetch } from '@/lib/cloudflareChallenge';
 
 export default function About() {
     const [markdown, setMarkdown] = useState<string>('');
@@ -13,7 +14,7 @@ export default function About() {
     useEffect(() => {
         async function fetchAbout() {
             try {
-                const response = await fetch(`${API_BASE}/api/about`);
+                const response = await appFetch(`${API_BASE}/api/about`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch about content: ${response.status}`);
                 }
