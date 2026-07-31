@@ -186,6 +186,7 @@ func main() {
 
 	mux.HandleFunc("/api/version", spaHandler.VersionHandler())
 	mux.Handle("/api/session", handlers.NewSessionBootstrapHandler(cfg.SessionSecret))
+	mux.Handle("/api/session/targeted-message", handlers.NewTargetedMessageHandler(db.DB(), cfg.SessionSecret))
 	mux.Handle("/api/audio/key/", audioHandler)
 	mux.Handle("/api/folder/key/", folderHandler)
 	mux.Handle("/api/browse", browseHandler)

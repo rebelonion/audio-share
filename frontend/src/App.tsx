@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router'
 import Layout from './components/Layout'
+import TargetedMessageModal from './components/TargetedMessageModal'
 
 const Home = lazy(() => import('./pages/Home'))
 const About = lazy(() => import('./pages/About'))
@@ -17,6 +18,7 @@ const Recover = lazy(() => import('./pages/Recover'))
 export default function App() {
   return (
     <BrowserRouter>
+      <TargetedMessageModal />
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />

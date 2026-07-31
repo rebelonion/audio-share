@@ -94,6 +94,7 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `PORT` | Server port | `8080` |
 | `AUDIO_DIR` | Audio directories (format: `/path:Name,/path2:Name2`) | - |
 | `SESSION_SECRET` | Required secret used to sign anonymous sessions and media access keys | - |
+| `REQUESTS_API_KEY` | API key required in `X-API-Key` for `/api/admin` operations | - |
 | `STREAM_KEY_LIMITS` | Rolling per-session and per-IP stream-key limits in `count/duration` format, comma-separated | `10/1m` |
 | `DOWNLOAD_KEY_LIMITS` | Rolling per-session and per-IP download-key limits in `count/duration` format, comma-separated | `10/1m` |
 | `STREAM_KEY_TTL` | Lifetime of a stream access key | `30m` |
@@ -148,6 +149,23 @@ DOWNLOAD_SESSION_MIN_AGE=5m
 Each rolling policy is enforced independently for the signed session and the resolved client IP, so replacing a browser session does not reset the IP allowance. When `DOWNLOAD_SESSION_MIN_AGE` is enabled, its delay begins when the server signs the session's creation-time cookie. Legacy sessions receive that cookie on their next session bootstrap.
 
 One key is issued for a logical playback or download. Browser Range requests made with that key do not consume additional key allowances. Limit state and aggregate IP bandwidth state are held in memory and are not shared between application replicas.
+
+### Targeted messages
+
+Create a one-time message for an anonymous session through the admin API:
+
+```bash
+curl -X POST http://localhost:8080/api/admin/targeted-messages \
+  -H "X-API-Key: $REQUESTS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "0123456789abcdef0123456789abcdef",
+    "title": "A note for you",
+    "message": "Please get in touch through the contact page."
+  }'
+```
+
+Only one message may be pending for a session. The browser checks for it as soon as the app loads and displays it in a modal. Delivery is at most once: the row is atomically removed when the signed session claims it, preventing duplicate delivery across tabs. A displayed message fires the Rybbit event `targeted-message-displayed` with its numeric `messageId`; message text and session identifiers are not sent to analytics.
 
 ### Cap CAPTCHA
 

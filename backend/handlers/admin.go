@@ -36,6 +36,10 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		key = strings.TrimSuffix(key, "/unavailable")
 		h.handleAudioUnavailable(w, r, key)
 
+	// Targeted messages
+	case path == "targeted-messages" && r.Method == http.MethodPost:
+		h.handleTargetedMessageCreate(w, r)
+
 	// Requests
 	case path == "requests" && r.Method == http.MethodPost:
 		h.handleRequestCreate(w, r)

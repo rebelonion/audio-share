@@ -97,6 +97,13 @@ func (d *Database) migrate() {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS targeted_messages (
+			id BIGSERIAL PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			message TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS likes (
 			profile_id TEXT NOT NULL REFERENCES anonymous_profiles(session_id) ON DELETE CASCADE,
 			audio_file_id BIGINT NOT NULL REFERENCES audio_files(id) ON DELETE CASCADE,
@@ -148,6 +155,7 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_likes_audio_file_id ON likes(audio_file_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_likes_profile_created_at ON likes(profile_id, created_at DESC)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_targeted_messages_session_id ON targeted_messages(session_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS age_limit INTEGER`,
