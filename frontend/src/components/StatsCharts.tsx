@@ -1,6 +1,6 @@
 import {useState, useEffect} from 'react';
 import {Link} from 'react-router';
-import {LineChart, Line, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush} from 'recharts';
+import {LineChart, Line, BarChart, Bar, Rectangle, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush, type BarShapeProps} from 'recharts';
 
 interface DayData {
     date: string;
@@ -61,6 +61,52 @@ const CustomTooltip = ({active, payload, label}: CustomTooltipProps) => {
     return null;
 };
 
+interface UnavailableDayData extends DayData {
+    initialBacklog?: boolean;
+}
+
+interface UnavailableTooltipProps {
+    active?: boolean;
+    payload?: {
+        color: string;
+        name: string;
+        value: number;
+        payload: UnavailableDayData;
+    }[];
+    label?: string;
+}
+
+const UnavailableTooltip = ({active, payload, label}: UnavailableTooltipProps) => {
+    if (!active || !payload?.length) return null;
+
+    const day = payload[0].payload;
+    return (
+        <div className="bg-[var(--card)] border border-[var(--border)] p-3 rounded-lg shadow-lg max-w-xs">
+            <p className="text-[var(--foreground)] font-semibold mb-1">{label}</p>
+            <p className="text-sm text-amber-500">Marked unavailable: {payload[0].value.toLocaleString()}</p>
+            {day.initialBacklog && (
+                <p className="text-xs text-[var(--muted-foreground)] mt-2">
+                    This first record may include audio that became unavailable before tracking began.
+                </p>
+            )}
+        </div>
+    );
+};
+
+const UnavailableBar = (props: BarShapeProps) => {
+    const day = props.payload as UnavailableDayData | undefined;
+    const isInitialBacklog = day?.initialBacklog === true;
+
+    return (
+        <Rectangle
+            {...props}
+            radius={[6, 6, 0, 0]}
+            fill={isInitialBacklog ? 'var(--muted-foreground)' : '#f59e0b'}
+            fillOpacity={isInitialBacklog ? 0.65 : 0.85}
+        />
+    );
+};
+
 interface SourcesTooltipProps {
     active?: boolean;
     payload?: {
@@ -115,7 +161,7 @@ function backfillDays(days: DayData[]): DayData[] {
     while (currentDate <= lastDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
         result.push(dayMap.get(dateStr) || { date: dateStr, count: 0 });
-        currentDate.setDate(currentDate.getDate() + 1);
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
     return result;
@@ -138,7 +184,7 @@ function backfillSourceDays(days: SourceDayData[]): SourceDayData[] {
     while (currentDate <= lastDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
         result.push(dayMap.get(dateStr) || { date: dateStr, count: 0, sources: [] });
-        currentDate.setDate(currentDate.getDate() + 1);
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
     return result;
@@ -298,6 +344,88 @@ export function AudioChart({data}: AudioChartProps) {
                         />
                     </BarChart>
                 )}
+            </ResponsiveContainer>
+        </>
+    );
+}
+
+export function UnavailableChart({data}: AudioChartProps) {
+    const [showInitialBacklog, setShowInitialBacklog] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 640);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    const days = backfillDays(data.days);
+    const initialDay = days[0];
+    const hasLaterDays = days.length > 1;
+    const visibleDays: UnavailableDayData[] = (showInitialBacklog || !hasLaterDays ? days : days.slice(1)).map(day => ({
+        ...day,
+        initialBacklog: day.date === initialDay.date,
+    }));
+    const defaultStartIndex = Math.max(0, visibleDays.length - 30);
+    const defaultEndIndex = Math.max(0, visibleDays.length - 1);
+    const chartHeight = isMobile ? 300 : 400;
+    const chartMargin = isMobile
+        ? {top: 5, right: 5, left: -10, bottom: 5}
+        : {top: 5, right: 30, left: 20, bottom: 5};
+
+    return (
+        <>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+                <p className="text-[var(--muted-foreground)]">
+                    Current total: <span className="text-amber-500 font-bold text-xl">{data.total.toLocaleString()}</span>
+                </p>
+                {hasLaterDays && (
+                    <button
+                        type="button"
+                        aria-pressed={showInitialBacklog}
+                        onClick={() => setShowInitialBacklog(current => !current)}
+                        className="self-start sm:self-auto rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:border-amber-500/60 hover:text-[var(--foreground)]"
+                    >
+                        {showInitialBacklog ? 'Hide' : 'Show'} initial record
+                    </button>
+                )}
+            </div>
+
+            <div className="mb-5 rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-sm text-[var(--muted-foreground)]">
+                <span className="font-semibold text-amber-500">Initial record: {initialDay.count.toLocaleString()} on {initialDay.date}.</span>{' '}
+                It may include older unavailable audio collected when tracking began{hasLaterDays && !showInitialBacklog ? ', so it is excluded from the chart scale' : ''}.
+            </div>
+
+            <ResponsiveContainer width="100%" height={chartHeight} key={`unavailable-${showInitialBacklog}`}>
+                <BarChart data={visibleDays} margin={chartMargin}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                        dataKey="date"
+                        stroke="var(--muted-foreground)"
+                        tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                        angle={isMobile ? -45 : 0}
+                        textAnchor={isMobile ? 'end' : 'middle'}
+                        height={isMobile ? 60 : 30}
+                        interval={isMobile ? Math.floor(visibleDays.length / 8) : 'preserveStartEnd'}
+                    />
+                    <YAxis
+                        allowDecimals={false}
+                        stroke="var(--muted-foreground)"
+                        tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
+                        width={isMobile ? 30 : 60}
+                    />
+                    <Tooltip content={<UnavailableTooltip />} cursor={{fill: '#f59e0b', fillOpacity: 0.08}} />
+                    <Bar dataKey="count" name="Marked unavailable" shape={UnavailableBar} />
+                    <Brush
+                        dataKey="date"
+                        height={isMobile ? 40 : 30}
+                        stroke="#f59e0b"
+                        fill="var(--card)"
+                        startIndex={defaultStartIndex}
+                        endIndex={defaultEndIndex}
+                    />
+                </BarChart>
             </ResponsiveContainer>
         </>
     );

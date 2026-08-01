@@ -158,6 +158,8 @@ func (d *Database) migrate() {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_targeted_messages_session_id ON targeted_messages(session_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_unavailable_at
+			ON audio_files(unavailable_at) WHERE unavailable_at IS NOT NULL AND deleted = 0`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS age_limit INTEGER`,
 		`ALTER TABLE waveform_cache ADD COLUMN IF NOT EXISTS duration_seconds REAL`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_filename ON audio_files USING gin (filename gin_trgm_ops)`,

@@ -50,6 +50,11 @@ type AudioStats struct {
 	Days  []AudioDayStat `json:"days"`
 }
 
+type UnavailableStats struct {
+	Total int            `json:"total"`
+	Days  []AudioDayStat `json:"days"`
+}
+
 type SourceEntry struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
@@ -122,6 +127,35 @@ func (s *SearchService) GetAudioStats() (*AudioStats, error) {
 
 	if stats.Days == nil {
 		stats.Days = []AudioDayStat{}
+	}
+
+	return &stats, nil
+}
+
+func (s *SearchService) GetUnavailableStats() (*UnavailableStats, error) {
+	rows, err := s.db.DB().Query(`
+		SELECT (unavailable_at AT TIME ZONE 'UTC')::date::text as day, COUNT(*) as count
+		FROM audio_files
+		WHERE unavailable_at IS NOT NULL AND deleted = 0
+		GROUP BY 1
+		ORDER BY 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := UnavailableStats{Days: []AudioDayStat{}}
+	for rows.Next() {
+		var day AudioDayStat
+		if err := rows.Scan(&day.Date, &day.Count); err != nil {
+			return nil, err
+		}
+		stats.Total += day.Count
+		stats.Days = append(stats.Days, day)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return &stats, nil

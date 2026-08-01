@@ -165,6 +165,13 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			return
 		}
 
+		unavailableStats, err := h.searchService.GetUnavailableStats()
+		if err != nil {
+			log.Printf("Error getting unavailable stats: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		sourcesStats, err := h.searchService.GetSourcesStats()
 		if err != nil {
 			log.Printf("Error getting sources stats: %v", err)
@@ -202,6 +209,7 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 
 		result := map[string]interface{}{
 			"audio":              audioStats,
+			"unavailable":        unavailableStats,
 			"sources":            sourcesStats,
 			"summary":            summaryStats,
 			"durations":          durationStats,

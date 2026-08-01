@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { AudioChart, SourcesChart, DurationChart, PublicationYearChart, SourceAvailabilityChart } from '@/components/StatsCharts';
+import { AudioChart, UnavailableChart, SourcesChart, DurationChart, PublicationYearChart, SourceAvailabilityChart } from '@/components/StatsCharts';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { appFetch } from '@/lib/cloudflareChallenge';
@@ -85,6 +85,7 @@ function formatStorage(bytes: number): string {
 
 export default function Stats() {
     const [audioData, setAudioData] = useState<AudioByDayData | null>(null);
+    const [unavailableData, setUnavailableData] = useState<AudioByDayData | null>(null);
     const [sourcesData, setSourcesData] = useState<SourcesByDayData | null>(null);
     const [summary, setSummary] = useState<SummaryStats | null>(null);
     const [durationData, setDurationData] = useState<DurationStatsData | null>(null);
@@ -99,6 +100,7 @@ export default function Stats() {
                 if (response.ok) {
                     const data = await response.json();
                     setAudioData(data.audio);
+                    setUnavailableData(data.unavailable);
                     setSourcesData(data.sources);
                     setSummary(data.summary);
                     setDurationData(data.durations);
@@ -176,6 +178,22 @@ export default function Stats() {
                         )}
                     </div>
                 </section>
+
+                {/* Unavailable Audio by Day */}
+                {unavailableData && unavailableData.days.length > 0 && (
+                    <section className="mb-8 sm:mb-12">
+                        <div className="bg-[var(--card)] rounded-lg p-4 sm:p-6 shadow-lg">
+                            <h2 className="flex items-center gap-3 text-xl sm:text-2xl font-bold mb-2 text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+                                <span className="inline-block w-1 h-5 sm:h-6 bg-amber-500 rounded-sm flex-shrink-0" style={{ opacity: 0.85 }} />
+                                Unavailable Audio by Day
+                            </h2>
+                            <p className="text-sm text-[var(--muted-foreground)] mb-5">
+                                When currently unavailable audio was marked as no longer available at its original source.
+                            </p>
+                            <UnavailableChart data={unavailableData} />
+                        </div>
+                    </section>
+                )}
 
                 {/* Duration Distribution */}
                 {durationData && durationData.buckets.length > 0 && (
