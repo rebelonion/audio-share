@@ -18,6 +18,7 @@ type Tag struct {
 type SourceRequest struct {
 	ID             int64   `json:"id"`
 	SubmittedURL   string  `json:"submittedUrl"`
+	SourceKey      string  `json:"sourceKey,omitempty"`
 	Title          string  `json:"title"`
 	Status         string  `json:"status"`
 	Tags           []Tag   `json:"tags"`
@@ -58,6 +59,13 @@ func (n *NullableString) UnmarshalJSON(data []byte) error {
 
 type RequestsService struct {
 	db *Database
+}
+
+type ExistingSourceRequest struct {
+	ID           int64  `json:"id"`
+	SubmittedURL string `json:"submittedUrl"`
+	Title        string `json:"title"`
+	Status       string `json:"status"`
 }
 
 func NewRequestsService(db *Database) *RequestsService {
@@ -132,7 +140,7 @@ func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 	return result, nil
 }
 
-func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status *string) (*SourceRequest, error) {
+func (s *RequestsService) Create(title, submittedURL, sourceKey string, tags []Tag, status *string) (*SourceRequest, error) {
 	tagsJSON, err := json.Marshal(tags)
 	if err != nil {
 		return nil, err
@@ -147,11 +155,11 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 
 	var id int64
 	err = s.db.DB().QueryRow(`
-		INSERT INTO source_requests (submitted_url, title, tags, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT(submitted_url) DO NOTHING
+		INSERT INTO source_requests (submitted_url, source_key, title, tags, status, created_at, updated_at)
+		VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7)
+		ON CONFLICT DO NOTHING
 		RETURNING id
-	`, submittedURL, title, string(tagsJSON), initialStatus, now, now).Scan(&id)
+	`, submittedURL, sourceKey, title, string(tagsJSON), initialStatus, now, now).Scan(&id)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -162,12 +170,37 @@ func (s *RequestsService) Create(title, submittedURL string, tags []Tag, status 
 	return &SourceRequest{
 		ID:           id,
 		SubmittedURL: submittedURL,
+		SourceKey:    sourceKey,
 		Title:        title,
 		Status:       initialStatus,
 		Tags:         tags,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}, nil
+}
+
+func (s *RequestsService) FindExistingSource(sourceKey, canonicalURL string) (*ExistingSourceRequest, error) {
+	var existing ExistingSourceRequest
+	err := s.db.DB().QueryRow(`
+		SELECT id, submitted_url, title, status
+		FROM source_requests
+		WHERE source_key = $1
+			OR RTRIM(submitted_url, '/') = RTRIM($2, '/')
+		ORDER BY CASE WHEN source_key = $1 THEN 0 ELSE 1 END
+		LIMIT 1
+	`, sourceKey, canonicalURL).Scan(
+		&existing.ID,
+		&existing.SubmittedURL,
+		&existing.Title,
+		&existing.Status,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &existing, nil
 }
 
 func (s *RequestsService) UpdateStatus(id int64, status string, folderShareKey NullableString) error {

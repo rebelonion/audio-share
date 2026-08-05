@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +15,14 @@ import (
 )
 
 var buildID = "development"
+
+func sourceNormalizerFromConfig(cfg *config.Config) (*services.ScriptSourceNormalizer, error) {
+	timeout, err := time.ParseDuration(cfg.SourceNormalizerTimeout)
+	if err != nil || timeout <= 0 {
+		return nil, fmt.Errorf("invalid SOURCE_NORMALIZER_TIMEOUT %q", cfg.SourceNormalizerTimeout)
+	}
+	return services.NewScriptSourceNormalizer(cfg.SourceNormalizerScript, timeout), nil
+}
 
 func main() {
 	cfg := config.Load()
@@ -134,6 +143,10 @@ func main() {
 	playbackService.StartAccessKeyClaimCleanup()
 	libraryService := services.NewLibraryService(db)
 	requestsService := services.NewRequestsService(db)
+	sourceNormalizer, err := sourceNormalizerFromConfig(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	rateLimiter := middleware.NewRateLimiter(cfg)
 
 	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), handlers.AudioHandlerOptions{
@@ -154,7 +167,7 @@ func main() {
 	})
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
-	shareHandler := handlers.NewShareHandler(ntfyService)
+	shareHandler := handlers.NewShareHandler(ntfyService, requestsService, sourceNormalizer)
 	contactHandler := handlers.NewContactHandler(ntfyService, cfg.SessionSecret)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)

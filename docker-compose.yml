@@ -28,11 +28,13 @@ services:
       - CONTENT_DIR=/app/content
       - STATIC_DIR=/app/static
       - DATABASE_URL=postgres://${DB_USER:-audio_share}:${DB_PASSWORD:-audio_share}@postgres:5432/${DB_NAME:-audio_share}
+      - SOURCE_NORMALIZER_SCRIPT=/app/config/source_normalizer.py
     env_file:
       - .env.local
     volumes:
       - ${AUDIO_PATH:-./audio}:/audio:ro
       - ${CONTENT_PATH:-./content}:/app/content:ro
+      - ${SOURCE_NORMALIZER_PATH:-/scripts/source_normalizer.py}:/app/config/source_normalizer.py:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s

@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	maxTitleLen = 500
-	maxURLLen   = 2048
+	maxTitleLen     = 500
+	maxURLLen       = 2048
+	maxSourceKeyLen = 500
 )
 
 var validRequestStatuses = map[string]bool{
@@ -28,6 +29,7 @@ func isValidRequestStatus(s string) bool {
 type createRequestBody struct {
 	Title        string         `json:"title"`
 	SubmittedURL string         `json:"submittedUrl"`
+	SourceKey    string         `json:"sourceKey"`
 	Tags         []services.Tag `json:"tags"`
 	Status       *string        `json:"status,omitempty"`
 }
@@ -41,7 +43,6 @@ type updateRequestBody struct {
 	Title string         `json:"title"`
 	Tags  []services.Tag `json:"tags"`
 }
-
 
 type RequestsHandler struct {
 	service *services.RequestsService

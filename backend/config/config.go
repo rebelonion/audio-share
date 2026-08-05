@@ -90,6 +90,9 @@ type Config struct {
 	NtfyPriority  int
 	NtfyReviewURL string
 
+	SourceNormalizerScript  string
+	SourceNormalizerTimeout string
+
 	RateLimitWindow      int // milliseconds
 	MaxRequestsPerWindow int
 	ImageRateLimitWindow int // milliseconds
@@ -156,6 +159,9 @@ func Load() *Config {
 		NtfyToken:     getEnv("NTFY_TOKEN", ""),
 		NtfyPriority:  getEnvInt("NTFY_PRIORITY", 1),
 		NtfyReviewURL: getEnv("NTFY_REVIEW_URL", ""),
+
+		SourceNormalizerScript:  getEnv("SOURCE_NORMALIZER_SCRIPT", ""),
+		SourceNormalizerTimeout: getEnv("SOURCE_NORMALIZER_TIMEOUT", "15s"),
 
 		RateLimitWindow:      getEnvInt("RATE_LIMIT_WINDOW", 60000),
 		MaxRequestsPerWindow: getEnvInt("MAX_REQUESTS_PER_WINDOW", 100),

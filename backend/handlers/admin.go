@@ -161,6 +161,10 @@ func (h *AdminHandler) handleRequestCreate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "URL is too long"})
 		return
 	}
+	if len(body.SourceKey) > maxSourceKeyLen {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Source key is too long"})
+		return
+	}
 	if u, err := url.ParseRequestURI(body.SubmittedURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Please enter a valid URL"})
 		return
@@ -173,7 +177,7 @@ func (h *AdminHandler) handleRequestCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	request, err := h.requests.Create(body.Title, body.SubmittedURL, body.Tags, body.Status)
+	request, err := h.requests.Create(body.Title, body.SubmittedURL, body.SourceKey, body.Tags, body.Status)
 	if err != nil {
 		log.Printf("admin: failed to create request: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create request"})

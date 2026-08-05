@@ -39,8 +39,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.buildID=${BUILD_ID
 # Stage 3: Final image
 FROM alpine:3.23
 
-# Install ca-certificates for HTTPS requests (ntfy) and ffmpeg for waveform generation
-RUN apk --no-cache add ca-certificates ffmpeg tzdata
+# Install runtime dependencies for HTTPS, waveforms, and source normalization
+RUN apk --no-cache add ca-certificates ffmpeg python3 tzdata
 
 WORKDIR /app
 
@@ -50,8 +50,8 @@ COPY --from=backend-builder /audio-share-backend .
 # Copy frontend build to static directory
 COPY --from=frontend-builder /app/dist ./static
 
-# Create non-root user
-RUN adduser -D -g '' appuser
+# Create the normalizer mount point and non-root user
+RUN mkdir -p /app/config && adduser -D -g '' appuser
 USER appuser
 
 EXPOSE 8080

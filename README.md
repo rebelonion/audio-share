@@ -133,8 +133,12 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |
 | `NTFY_TOPIC` | Ntfy topic for notifications | - |
 | `NTFY_TOKEN` | Ntfy authentication token | - |
+| `SOURCE_NORMALIZER_SCRIPT` | In-container path to the mounted Python source normalizer | - |
+| `SOURCE_NORMALIZER_TIMEOUT` | Maximum time allowed to resolve a creator URL | `15s` |
 | `WAVEFORM_CRON` | Cron expression for waveform generation (e.g., `0 3 * * *`) | - (disabled) |
 | `WAVEFORM_MAX_DURATION` | Max time to spend generating waveforms per run (e.g., `2h`, `30m`) | `2h` |
+
+Docker Compose mounts `SOURCE_NORMALIZER_PATH` from the host at `SOURCE_NORMALIZER_SCRIPT` inside the app container.
 
 Stream and download burst allowances are separate token-bucket capacities that refill at their corresponding per-request rates. When an aggregate IP limit is enabled, its shared bucket capacity is derived as the greater of one second at the IP rate or the matching per-request burst. This lets one response use its configured startup burst while concurrent responses from the same IP still share a single aggregate allowance.
 

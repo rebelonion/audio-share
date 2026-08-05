@@ -78,6 +78,7 @@ func (d *Database) migrate() {
 		`CREATE TABLE IF NOT EXISTS source_requests (
 			id BIGSERIAL PRIMARY KEY,
 			submitted_url TEXT NOT NULL,
+			source_key TEXT,
 			title TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'requested',
 			tags TEXT DEFAULT '[]',
@@ -124,15 +125,15 @@ func (d *Database) migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_session_id ON play_events(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_play_events_listening_session_id ON play_events(listening_session_id)`,
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_play_events_access_key_nonce
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_play_events_access_key_nonce
 					ON play_events(access_key_nonce) WHERE access_key_nonce IS NOT NULL`,
-			`CREATE TABLE IF NOT EXISTS playback_access_keys (
+		`CREATE TABLE IF NOT EXISTS playback_access_keys (
 				access_key_nonce TEXT PRIMARY KEY,
 				first_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				expires_at TIMESTAMPTZ
 			)`,
-			`ALTER TABLE playback_access_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
-			`CREATE INDEX IF NOT EXISTS idx_playback_access_keys_expires_at
+		`ALTER TABLE playback_access_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+		`CREATE INDEX IF NOT EXISTS idx_playback_access_keys_expires_at
 					ON playback_access_keys(expires_at) WHERE expires_at IS NOT NULL`,
 		`ALTER TABLE download_events ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT 'download'`,
 		`ALTER TABLE download_events ADD COLUMN IF NOT EXISTS share_key TEXT`,
@@ -153,10 +154,13 @@ func (d *Database) migrate() {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_download_events_access_key_nonce
 				ON download_events(access_key_nonce) WHERE access_key_nonce IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_source_requests_status ON source_requests(status)`,
+		`ALTER TABLE source_requests ADD COLUMN IF NOT EXISTS source_key TEXT`,
 		`CREATE INDEX IF NOT EXISTS idx_likes_audio_file_id ON likes(audio_file_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_likes_profile_created_at ON likes(profile_id, created_at DESC)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_targeted_messages_session_id ON targeted_messages(session_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_submitted_url ON source_requests(submitted_url)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_source_requests_source_key
+			ON source_requests(source_key) WHERE source_key IS NOT NULL`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_unavailable_at
 			ON audio_files(unavailable_at) WHERE unavailable_at IS NOT NULL AND deleted = 0`,
