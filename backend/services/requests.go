@@ -62,10 +62,11 @@ type RequestsService struct {
 }
 
 type ExistingSourceRequest struct {
-	ID           int64  `json:"id"`
-	SubmittedURL string `json:"submittedUrl"`
-	Title        string `json:"title"`
-	Status       string `json:"status"`
+	ID           int64   `json:"id"`
+	SubmittedURL string  `json:"submittedUrl"`
+	Title        string  `json:"title"`
+	Status       string  `json:"status"`
+	FolderPath   *string `json:"folderPath,omitempty"`
 }
 
 func NewRequestsService(db *Database) *RequestsService {
@@ -182,17 +183,19 @@ func (s *RequestsService) Create(title, submittedURL, sourceKey string, tags []T
 func (s *RequestsService) FindExistingSource(sourceKey, canonicalURL string) (*ExistingSourceRequest, error) {
 	var existing ExistingSourceRequest
 	err := s.db.DB().QueryRow(`
-		SELECT id, submitted_url, title, status
-		FROM source_requests
-		WHERE source_key = $1
-			OR RTRIM(submitted_url, '/') = RTRIM($2, '/')
-		ORDER BY CASE WHEN source_key = $1 THEN 0 ELSE 1 END
+		SELECT sr.id, sr.submitted_url, sr.title, sr.status, f.path
+		FROM source_requests sr
+		LEFT JOIN folders f ON f.share_key = sr.folder_share_key
+		WHERE sr.source_key = $1
+			OR RTRIM(sr.submitted_url, '/') = RTRIM($2, '/')
+		ORDER BY CASE WHEN sr.source_key = $1 THEN 0 ELSE 1 END
 		LIMIT 1
 	`, sourceKey, canonicalURL).Scan(
 		&existing.ID,
 		&existing.SubmittedURL,
 		&existing.Title,
 		&existing.Status,
+		&existing.FolderPath,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

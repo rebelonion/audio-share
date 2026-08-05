@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
+import { Link } from 'react-router';
+import { AlertTriangle, Check, Folder, Loader2, X } from 'lucide-react';
 import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
 import { appFetch } from '@/lib/cloudflareChallenge';
@@ -18,6 +19,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
     const [status, setStatus] = useState<{
         success?: boolean;
         message?: string;
+        folderPath?: string;
     }>({});
 
     const handleClose = () => {
@@ -67,7 +69,8 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
             if (!response.ok) {
                 setStatus({
                     success: false,
-                    message: data.message || data.error || 'Failed to submit request'
+                    message: data.message || data.error || 'Failed to submit request',
+                    folderPath: data.code === 'source_exists' ? data.existing?.folderPath : undefined,
                 });
                 return;
             }
@@ -184,7 +187,17 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
 
                     {status.message && (
                         <div className={`mb-4 p-3 rounded-md ${status.success ? 'bg-[var(--success-bg)] border border-[var(--success-border)] text-[var(--success-text)]' : 'bg-[var(--error-bg)] border border-[var(--error-border)] text-[var(--error-text)]'}`}>
-                            {status.message}
+                            <div>{status.message}</div>
+                            {status.folderPath && (
+                                <Link
+                                    to={`/browse/${status.folderPath.split('/').map(encodeURIComponent).join('/')}`}
+                                    onClick={handleClose}
+                                    className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-current px-2.5 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5"
+                                >
+                                    <Folder className="h-4 w-4" />
+                                    Browse
+                                </Link>
+                            )}
                         </div>
                     )}
 

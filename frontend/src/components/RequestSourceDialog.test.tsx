@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RequestSourceDialog from './RequestSourceDialog';
 
@@ -45,13 +46,20 @@ describe('RequestSourceDialog', () => {
             new Response(JSON.stringify({
                 code: 'source_exists',
                 error: 'This source is already in the archive.',
+                existing: {
+                    folderPath: 'Audio/Mao Chika',
+                },
             }), {
                 status: 409,
                 headers: { 'Content-Type': 'application/json' },
             }),
         );
 
-        render(<RequestSourceDialog isOpen onCloseAction={vi.fn()} />);
+        render(
+            <MemoryRouter>
+                <RequestSourceDialog isOpen onCloseAction={vi.fn()} />
+            </MemoryRouter>,
+        );
 
         fireEvent.change(screen.getByLabelText('Artist or channel URL'), {
             target: { value: 'https://m.youtube.com/@example' },
@@ -60,5 +68,7 @@ describe('RequestSourceDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Send request' }));
 
         expect(await screen.findByText('This source is already in the archive.')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Browse' }).getAttribute('href'))
+            .toBe('/browse/Audio/Mao%20Chika');
     });
 });

@@ -25,9 +25,11 @@ func (s *stubSourceNormalizer) Normalize(context.Context, string) (*services.Nor
 type stubSourceRequestLookup struct {
 	existing *services.ExistingSourceRequest
 	err      error
+	called   bool
 }
 
 func (s *stubSourceRequestLookup) FindExistingSource(string, string) (*services.ExistingSourceRequest, error) {
+	s.called = true
 	return s.existing, s.err
 }
 
@@ -80,6 +82,9 @@ func TestShareNotificationIncludesHigherRemovalRisk(t *testing.T) {
 			t.Errorf("notification body missing %q:\n%s", expected, notificationBody)
 		}
 	}
+	if strings.Contains(notificationBody, "Normalization failed") {
+		t.Errorf("normalized notification unexpectedly contains warning:\n%s", notificationBody)
+	}
 }
 
 func TestShareNotificationOmitsHigherRemovalRiskWhenNotSelected(t *testing.T) {
@@ -124,6 +129,7 @@ func TestShareReturnsConflictWithoutNotificationForExistingSource(t *testing.T) 
 	}))
 	defer notificationServer.Close()
 
+	folderPath := "Audio/Mao Chika"
 	handler := NewShareHandler(
 		services.NewNtfyService(notificationServer.URL, "requests", "", 3, ""),
 		&stubSourceRequestLookup{existing: &services.ExistingSourceRequest{
@@ -131,6 +137,7 @@ func TestShareReturnsConflictWithoutNotificationForExistingSource(t *testing.T) 
 			SubmittedURL: youtubeNormalizerResult().CanonicalURL,
 			Title:        "Example",
 			Status:       "added",
+			FolderPath:   &folderPath,
 		}},
 		&stubSourceNormalizer{result: youtubeNormalizerResult()},
 	)
@@ -151,6 +158,9 @@ func TestShareReturnsConflictWithoutNotificationForExistingSource(t *testing.T) 
 	}
 	if !strings.Contains(recorder.Body.String(), "already in the archive") {
 		t.Fatalf("unexpected response body: %s", recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"folderPath":"Audio/Mao Chika"`) {
+		t.Fatalf("response body missing folder path: %s", recorder.Body.String())
 	}
 }
 
@@ -174,5 +184,51 @@ func TestShareReturnsNormalizerValidationError(t *testing.T) {
 
 	if recorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestShareSendsUnnormalizedNotificationWhenNormalizerIsUnavailable(t *testing.T) {
+	var notificationBody string
+	notificationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read notification body: %v", err)
+		}
+		notificationBody = string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer notificationServer.Close()
+
+	lookup := &stubSourceRequestLookup{}
+	handler := NewShareHandler(
+		services.NewNtfyService(notificationServer.URL, "requests", "", 3, ""),
+		lookup,
+		&stubSourceNormalizer{err: &services.SourceNormalizationError{
+			Code:    "upstream_error",
+			Message: "The source page could not be loaded.",
+		}},
+	)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"https://example.test/api/share",
+		strings.NewReader(`{"requestUrl": "https://m.youtube.com/@example"}`),
+	)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	for _, expected := range []string{
+		"New source request: https://m.youtube.com/@example",
+		"Normalization failed: review the submitted URL and check for duplicates manually.",
+	} {
+		if !strings.Contains(notificationBody, expected) {
+			t.Errorf("notification body missing %q:\n%s", expected, notificationBody)
+		}
+	}
+	if lookup.called {
+		t.Fatal("duplicate lookup was called without a normalized identity")
 	}
 }

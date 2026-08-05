@@ -51,7 +51,11 @@ func (n *NtfyService) IsConfigured() bool {
 	return n.topic != ""
 }
 
-func (n *NtfyService) SendShareNotification(requestURL string, hasHigherRemovalRisk bool) error {
+func (n *NtfyService) SendShareNotification(
+	requestURL string,
+	hasHigherRemovalRisk bool,
+	normalizationFailed bool,
+) error {
 	if !n.IsConfigured() {
 		return fmt.Errorf("ntfy not configured")
 	}
@@ -59,6 +63,9 @@ func (n *NtfyService) SendShareNotification(requestURL string, hasHigherRemovalR
 	body := fmt.Sprintf("New source request: %s", requestURL)
 	if hasHigherRemovalRisk {
 		body += "\nContent removal risk: Higher"
+	}
+	if normalizationFailed {
+		body += "\nNormalization failed: review the submitted URL and check for duplicates manually."
 	}
 
 	var actions string

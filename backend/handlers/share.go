@@ -12,7 +12,7 @@ import (
 
 type shareNotifier interface {
 	IsConfigured() bool
-	SendShareNotification(requestURL string, hasHigherRemovalRisk bool) error
+	SendShareNotification(requestURL string, hasHigherRemovalRisk, normalizationFailed bool) error
 }
 
 type sourceRequestLookup interface {
@@ -56,53 +56,56 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.normalizer == nil || !h.normalizer.IsConfigured() {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server configuration error"})
-		return
-	}
-
 	if !h.ntfy.IsConfigured() {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server configuration error"})
 		return
 	}
 
-	normalized, err := h.normalizer.Normalize(r.Context(), req.RequestURL)
-	if err != nil {
-		var normalizationError *services.SourceNormalizationError
-		if errors.As(err, &normalizationError) {
-			switch normalizationError.Code {
-			case "invalid_url", "invalid_input", "unsupported_platform", "unresolved_source":
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
-					"code":  normalizationError.Code,
-					"error": normalizationError.Message,
-				})
+	notificationURL := req.RequestURL
+	normalizationFailed := true
+	if h.normalizer == nil || !h.normalizer.IsConfigured() {
+		log.Printf("share: source normalizer is not configured; sending unnormalized request")
+	} else {
+		normalized, err := h.normalizer.Normalize(r.Context(), req.RequestURL)
+		if err != nil {
+			var normalizationError *services.SourceNormalizationError
+			if errors.As(err, &normalizationError) {
+				switch normalizationError.Code {
+				case "invalid_url", "invalid_input", "unsupported_platform":
+					writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+						"code":  normalizationError.Code,
+						"error": normalizationError.Message,
+					})
+					return
+				}
+			}
+			log.Printf("share: failed to normalize source; sending unnormalized request: %v", err)
+		} else {
+			notificationURL = normalized.CanonicalURL
+			normalizationFailed = false
+
+			existing, err := h.requests.FindExistingSource(normalized.SourceKey, normalized.CanonicalURL)
+			if err != nil {
+				log.Printf("share: failed to check existing source: %v", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check existing requests"})
 				return
-			case "timeout":
-				writeJSON(w, http.StatusGatewayTimeout, map[string]string{"error": normalizationError.Message})
+			}
+			if existing != nil {
+				writeJSON(w, http.StatusConflict, map[string]interface{}{
+					"code":     "source_exists",
+					"error":    duplicateSourceMessage(existing.Status),
+					"existing": existing,
+				})
 				return
 			}
 		}
-		log.Printf("share: failed to normalize source: %v", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Could not verify this source. Please try again."})
-		return
 	}
 
-	existing, err := h.requests.FindExistingSource(normalized.SourceKey, normalized.CanonicalURL)
-	if err != nil {
-		log.Printf("share: failed to check existing source: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check existing requests"})
-		return
-	}
-	if existing != nil {
-		writeJSON(w, http.StatusConflict, map[string]interface{}{
-			"code":     "source_exists",
-			"error":    duplicateSourceMessage(existing.Status),
-			"existing": existing,
-		})
-		return
-	}
-
-	if err := h.ntfy.SendShareNotification(normalized.CanonicalURL, req.HasHigherRemovalRisk); err != nil {
+	if err := h.ntfy.SendShareNotification(
+		notificationURL,
+		req.HasHigherRemovalRisk,
+		normalizationFailed,
+	); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return
 	}
