@@ -72,6 +72,11 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                     message: data.message || data.error || 'Failed to submit request',
                     folderPath: data.code === 'source_exists' ? data.existing?.folderPath : undefined,
                 });
+                track('artist-request-failed', {
+                    reason: typeof data.code === 'string' ? data.code : 'http_error',
+                    status: response.status,
+                    requestUrl: requestUrl.trim(),
+                });
                 return;
             }
 
@@ -95,6 +100,10 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
             setStatus({
                 success: false,
                 message: error instanceof Error ? error.message : 'Could not send the request.'
+            });
+            track('artist-request-failed', {
+                reason: 'request_error',
+                requestUrl: requestUrl.trim(),
             });
         } finally {
             setIsSubmitting(false);

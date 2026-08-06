@@ -5,13 +5,16 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RequestSourceDialog from './RequestSourceDialog';
 
+const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }));
+
 vi.mock('@/hooks/useRybbit', () => ({
-    useRybbit: () => ({ track: vi.fn() }),
+    useRybbit: () => ({ track: trackMock }),
 }));
 
 afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    trackMock.mockReset();
 });
 
 describe('RequestSourceDialog', () => {
@@ -39,6 +42,7 @@ describe('RequestSourceDialog', () => {
             requestUrl: 'https://youtube.com/@example',
             hasHigherRemovalRisk: true,
         });
+        expect(trackMock).toHaveBeenCalledWith('artist-request');
     });
 
     it('shows the duplicate message returned by the backend', async () => {
@@ -70,5 +74,32 @@ describe('RequestSourceDialog', () => {
         expect(await screen.findByText('This source is already in the archive.')).toBeTruthy();
         expect(screen.getByRole('link', { name: 'Browse' }).getAttribute('href'))
             .toBe('/browse/Audio/Mao%20Chika');
+        expect(trackMock).toHaveBeenCalledWith('artist-request-failed', {
+            reason: 'source_exists',
+            status: 409,
+            requestUrl: 'https://m.youtube.com/@example',
+        });
+        expect(trackMock).not.toHaveBeenCalledWith('artist-request');
+    });
+
+    it('tracks request errors with the requested URL', async () => {
+        vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        render(<RequestSourceDialog isOpen onCloseAction={vi.fn()} />);
+
+        fireEvent.change(screen.getByLabelText('Artist or channel URL'), {
+            target: { value: 'https://youtube.com/@example' },
+        });
+        fireEvent.click(screen.getByText('I understand these rules'));
+        fireEvent.click(screen.getByRole('button', { name: 'Send request' }));
+
+        await waitFor(() => expect(trackMock).toHaveBeenCalledWith(
+            'artist-request-failed',
+            {
+                reason: 'request_error',
+                requestUrl: 'https://youtube.com/@example',
+            },
+        ));
     });
 });
