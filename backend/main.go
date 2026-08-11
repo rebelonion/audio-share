@@ -187,7 +187,19 @@ func main() {
 		CapPublicEndpoint:  cfg.CapPublicEndpoint,
 		BuildID:            buildID,
 	}
-	spaHandler := handlers.NewSPAHandler(cfg.StaticDir, frontendConfig, cfg.RybbitURL, cfg.RybbitSiteID, db.DB())
+	spaHandler := handlers.NewSPAHandler(
+		cfg.StaticDir,
+		frontendConfig,
+		cfg.RybbitURL,
+		cfg.RybbitSiteID,
+		db.DB(),
+		handlers.SPAHandlerOptions{
+			ContentDir:      cfg.ContentDir,
+			SearchService:   searchService,
+			RequestsService: requestsService,
+			SessionSecret:   cfg.SessionSecret,
+		},
+	)
 
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
 	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)

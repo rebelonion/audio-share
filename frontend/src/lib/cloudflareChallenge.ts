@@ -1,3 +1,5 @@
+import {takeInitialResponse} from '@/lib/initialData';
+
 export const CLOUDFLARE_CHALLENGE_EVENT = 'audio-share:cloudflare-challenge';
 
 export class CloudflareChallengeError extends Error {
@@ -15,6 +17,9 @@ export async function appFetch(
     input: RequestInfo | URL,
     init?: RequestInit,
 ): Promise<Response> {
+    const initialResponse = takeInitialResponse(input, init);
+    if (initialResponse) return initialResponse;
+
     const response = await fetch(input, init);
     if (!isCloudflareChallengeResponse(response)) return response;
 

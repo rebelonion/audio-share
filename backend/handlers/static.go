@@ -22,13 +22,24 @@ type FrontendConfig struct {
 }
 
 type SPAHandler struct {
-	staticDir    string
-	htmlTemplate string
-	db           *sql.DB
-	config       FrontendConfig
+	staticDir       string
+	htmlTemplate    string
+	db              *sql.DB
+	config          FrontendConfig
+	contentDir      string
+	searchService   snapshotSearchService
+	requestsService snapshotRequestsService
+	sessionSecret   []byte
 }
 
-func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSiteID string, db *sql.DB) *SPAHandler {
+type SPAHandlerOptions struct {
+	ContentDir      string
+	SearchService   snapshotSearchService
+	RequestsService snapshotRequestsService
+	SessionSecret   string
+}
+
+func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSiteID string, db *sql.DB, options ...SPAHandlerOptions) *SPAHandler {
 	cleanDir := filepath.Clean(staticDir)
 	indexPath := filepath.Join(cleanDir, "index.html")
 
@@ -55,12 +66,19 @@ func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSit
 		htmlTemplate = strings.Replace(string(data), "</head>", injection+"</head>", 1)
 	}
 
-	return &SPAHandler{
+	handler := &SPAHandler{
 		staticDir:    cleanDir,
 		htmlTemplate: htmlTemplate,
 		db:           db,
 		config:       config,
 	}
+	if len(options) > 0 {
+		handler.contentDir = options[0].ContentDir
+		handler.searchService = options[0].SearchService
+		handler.requestsService = options[0].RequestsService
+		handler.sessionSecret = []byte(options[0].SessionSecret)
+	}
+	return handler
 }
 
 func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -120,45 +138,60 @@ func siteOrigin(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
+func isBrowseRoute(path string) bool {
+	return path == "/browse" || strings.HasPrefix(path, "/browse/")
+}
+
+func shareKeyFromPath(path string) (string, bool) {
+	if !strings.HasPrefix(path, "/share/") {
+		return "", false
+	}
+	key := strings.Trim(strings.TrimPrefix(path, "/share/"), "/")
+	return key, key != ""
+}
+
+func (h *SPAHandler) audioRowForRoute(r *http.Request) (*audioRow, error) {
+	key, ok := shareKeyFromPath(r.URL.Path)
+	if !ok || h.db == nil {
+		return nil, nil
+	}
+	return lookupAudioByKey(h.db, key)
+}
+
 func (h *SPAHandler) getPageMeta(r *http.Request) pageMeta {
+	row, _ := h.audioRowForRoute(r)
+	return h.getPageMetaWithAudio(r, row)
+}
+
+func (h *SPAHandler) getPageMetaWithAudio(r *http.Request, row *audioRow) pageMeta {
 	urlPath := r.URL.Path
 	origin := siteOrigin(r)
 
 	// /share/:key — look up audio metadata from DB
-	if strings.HasPrefix(urlPath, "/share/") {
-		key := strings.Trim(strings.TrimPrefix(urlPath, "/share/"), "/")
-		if key != "" && h.db != nil {
-			var title, artist, thumbnail sql.NullString
-			err := h.db.QueryRow(`
-				SELECT title, meta_artist, thumbnail
-				FROM audio_files WHERE share_key = $1 AND deleted = 0
-			`, key).Scan(&title, &artist, &thumbnail)
-			if err == nil {
-				t := h.config.DefaultTitle
-				if title.Valid && title.String != "" {
-					t = title.String
-				}
-				if artist.Valid && artist.String != "" {
-					t = t + " by " + artist.String
-				}
-				desc := h.config.DefaultDescription + " · " + t
-				imageURL := ""
-				if thumbnail.Valid && thumbnail.String != "" {
-					imageURL = origin + "/api/audio/key/" + key + "/thumbnail"
-				}
-				return pageMeta{
-					title:       t + " - " + h.config.DefaultTitle,
-					description: desc,
-					h1:          t,
-					imageURL:    imageURL,
-					ogType:      "music.song",
-				}
-			}
+	if key, ok := shareKeyFromPath(urlPath); ok && row != nil && !row.deleted {
+		t := h.config.DefaultTitle
+		if row.title.Valid && row.title.String != "" {
+			t = row.title.String
+		}
+		if row.artist.Valid && row.artist.String != "" {
+			t = t + " by " + row.artist.String
+		}
+		desc := h.config.DefaultDescription + " · " + t
+		imageURL := ""
+		if row.thumbnail.Valid && row.thumbnail.String != "" {
+			imageURL = origin + "/api/audio/key/" + key + "/thumbnail"
+		}
+		return pageMeta{
+			title:       t + " - " + h.config.DefaultTitle,
+			description: desc,
+			h1:          t,
+			imageURL:    imageURL,
+			ogType:      "music.song",
 		}
 	}
 
 	// /browse/* — use the last path segment as folder name
-	if strings.HasPrefix(urlPath, "/browse") {
+	if isBrowseRoute(urlPath) {
 		pathStr := strings.Trim(strings.TrimPrefix(urlPath, "/browse"), "/")
 		folderName := "Root"
 		if pathStr != "" {
@@ -207,10 +240,10 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta := h.getPageMeta(r)
+	shareRow, shareLookupErr := h.audioRowForRoute(r)
+	meta := h.getPageMetaWithAudio(r, shareRow)
 	escapedTitle := html.EscapeString(meta.title)
 	escapedDesc := html.EscapeString(meta.description)
-	escapedH1 := html.EscapeString(meta.h1)
 	pageURL := html.EscapeString(siteOrigin(r) + r.URL.Path)
 
 	ogType := meta.ogType
@@ -240,8 +273,11 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 
 	doc = strings.Replace(doc, "</head>", b.String()+"</head>", 1)
 
-	srH1 := `<h1 aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">` + escapedH1 + `</h1>`
-	doc = strings.Replace(doc, `<div id="root"></div>`, srH1+`<div id="root"></div>`, 1)
+	snapshot, initialData := h.renderPageSnapshot(r, meta, shareRow, shareLookupErr)
+	doc = strings.Replace(doc, `<div id="root"></div>`, `<div id="root">`+snapshot+`</div>`, 1)
+	if initialData != "" {
+		doc = strings.Replace(doc, "</head>", initialData+"</head>", 1)
+	}
 
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

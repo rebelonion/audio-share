@@ -20,6 +20,53 @@ type ContentHandler struct {
 	searchService *services.SearchService
 }
 
+type statsService interface {
+	GetAudioStats() (*services.AudioStats, error)
+	GetUnavailableStats() (*services.UnavailableStats, error)
+	GetSourcesStats() (*services.SourcesStats, error)
+	GetSummaryStats() (*services.SummaryStats, error)
+	GetDurationStats() (*services.DurationStats, error)
+	GetPublicationYearStats() (*services.PublicationYearStats, error)
+	GetSourceAvailabilityStats() (*services.SourceAvailabilityStats, error)
+}
+
+type StatsResponse struct {
+	Audio              *services.AudioStats              `json:"audio"`
+	Unavailable        *services.UnavailableStats        `json:"unavailable"`
+	Sources            *services.SourcesStats            `json:"sources"`
+	Summary            *services.SummaryStats            `json:"summary"`
+	Durations          *services.DurationStats           `json:"durations"`
+	PublicationYears   *services.PublicationYearStats    `json:"publicationYears"`
+	SourceAvailability *services.SourceAvailabilityStats `json:"sourceAvailability"`
+}
+
+func loadStats(service statsService) (*StatsResponse, error) {
+	result := &StatsResponse{}
+	var err error
+	if result.Audio, err = service.GetAudioStats(); err != nil {
+		return nil, fmt.Errorf("audio stats: %w", err)
+	}
+	if result.Unavailable, err = service.GetUnavailableStats(); err != nil {
+		return nil, fmt.Errorf("unavailable stats: %w", err)
+	}
+	if result.Sources, err = service.GetSourcesStats(); err != nil {
+		return nil, fmt.Errorf("sources stats: %w", err)
+	}
+	if result.Summary, err = service.GetSummaryStats(); err != nil {
+		return nil, fmt.Errorf("summary stats: %w", err)
+	}
+	if result.Durations, err = service.GetDurationStats(); err != nil {
+		return nil, fmt.Errorf("duration stats: %w", err)
+	}
+	if result.PublicationYears, err = service.GetPublicationYearStats(); err != nil {
+		return nil, fmt.Errorf("publication year stats: %w", err)
+	}
+	if result.SourceAvailability, err = service.GetSourceAvailabilityStats(); err != nil {
+		return nil, fmt.Errorf("source availability stats: %w", err)
+	}
+	return result, nil
+}
+
 func NewContentHandler(contentDir string, title string, searchService *services.SearchService) *ContentHandler {
 	return &ContentHandler{contentDir: contentDir, title: title, searchService: searchService}
 }
@@ -158,63 +205,11 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 			return
 		}
 
-		audioStats, err := h.searchService.GetAudioStats()
+		result, err := loadStats(h.searchService)
 		if err != nil {
-			log.Printf("Error getting audio stats: %v", err)
+			log.Printf("Error getting stats: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
-		}
-
-		unavailableStats, err := h.searchService.GetUnavailableStats()
-		if err != nil {
-			log.Printf("Error getting unavailable stats: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		sourcesStats, err := h.searchService.GetSourcesStats()
-		if err != nil {
-			log.Printf("Error getting sources stats: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		summaryStats, err := h.searchService.GetSummaryStats()
-		if err != nil {
-			log.Printf("Error getting summary stats: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		durationStats, err := h.searchService.GetDurationStats()
-		if err != nil {
-			log.Printf("Error getting duration stats: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		publicationYearStats, err := h.searchService.GetPublicationYearStats()
-		if err != nil {
-			log.Printf("Error getting publication year stats: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		sourceAvailabilityStats, err := h.searchService.GetSourceAvailabilityStats()
-		if err != nil {
-			log.Printf("Error getting source availability stats: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		result := map[string]interface{}{
-			"audio":              audioStats,
-			"unavailable":        unavailableStats,
-			"sources":            sourcesStats,
-			"summary":            summaryStats,
-			"durations":          durationStats,
-			"publicationYears":   publicationYearStats,
-			"sourceAvailability": sourceAvailabilityStats,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

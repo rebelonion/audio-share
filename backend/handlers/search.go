@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,106 @@ type SearchResponse struct {
 
 const maxSearchLimit = 50
 
+type searchExecutor interface {
+	Search(string, int, int, services.SearchOptions) ([]services.SearchResult, int, error)
+}
+
+func searchResponseForValues(service searchExecutor, values url.Values) (SearchResponse, error) {
+	query := values.Get("q")
+	root := strings.Trim(strings.TrimSpace(values.Get("root")), "/")
+	hasRootFilter := isRootSlug(root)
+
+	hasFilters := values.Get("type") != "" ||
+		values.Get("unavailableOnly") == "true" ||
+		values.Get("sort") != "" ||
+		values.Get("dateFrom") != "" ||
+		values.Get("dateTo") != "" ||
+		values.Get("durationMin") != "" ||
+		values.Get("durationMax") != "" ||
+		values.Get("fields") != "" ||
+		values.Get("includeMature") == "true" ||
+		hasRootFilter
+
+	if len(query) < 2 && !hasFilters {
+		return SearchResponse{
+			Results: []services.SearchResult{},
+			Query:   query,
+			Count:   0,
+			Total:   0,
+			Offset:  0,
+			Limit:   maxSearchLimit,
+		}, nil
+	}
+
+	limit := maxSearchLimit
+	if limitStr := values.Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = min(parsed, maxSearchLimit)
+		}
+	}
+
+	offset := 0
+	if offsetStr := values.Get("offset"); offsetStr != "" {
+		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	opts := services.SearchOptions{}
+	if value := values.Get("type"); value == "audio" || value == "folder" {
+		opts.Type = value
+	}
+	if values.Get("unavailableOnly") == "true" {
+		opts.UnavailableOnly = true
+	}
+	if values.Get("includeMature") == "true" {
+		opts.IncludeMature = true
+	}
+	if value := values.Get("sort"); value != "" {
+		opts.Sort = value
+	}
+	opts.DateFrom = values.Get("dateFrom")
+	opts.DateTo = values.Get("dateTo")
+	if value := values.Get("durationMin"); value != "" {
+		if parsed, err := strconv.ParseFloat(value, 64); err == nil && parsed > 0 {
+			opts.DurationMin = parsed
+		}
+	}
+	if value := values.Get("durationMax"); value != "" {
+		if parsed, err := strconv.ParseFloat(value, 64); err == nil && parsed > 0 {
+			opts.DurationMax = parsed
+		}
+	}
+	if value := values.Get("fields"); value != "" {
+		validFields := map[string]bool{"filename": true, "title": true, "artist": true, "description": true}
+		for _, field := range strings.Split(value, ",") {
+			field = strings.TrimSpace(field)
+			if validFields[field] {
+				opts.Fields = append(opts.Fields, field)
+			}
+		}
+	}
+	if hasRootFilter {
+		opts.Root = root
+	}
+
+	results, total, err := service.Search(query, limit, offset, opts)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	if results == nil {
+		results = []services.SearchResult{}
+	}
+	return SearchResponse{
+		Results: results,
+		Query:   query,
+		Count:   len(results),
+		Total:   total,
+		Offset:  offset,
+		Limit:   limit,
+	}, nil
+}
+
 func (h *SearchHandler) RandomHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -63,110 +164,12 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := r.URL.Query().Get("q")
-	root := strings.Trim(strings.TrimSpace(r.URL.Query().Get("root")), "/")
-	hasRootFilter := isRootSlug(root)
-
-	hasFilters := r.URL.Query().Get("type") != "" ||
-		r.URL.Query().Get("unavailableOnly") == "true" ||
-		r.URL.Query().Get("sort") != "" ||
-		r.URL.Query().Get("dateFrom") != "" ||
-		r.URL.Query().Get("dateTo") != "" ||
-		r.URL.Query().Get("durationMin") != "" ||
-		r.URL.Query().Get("durationMax") != "" ||
-		r.URL.Query().Get("fields") != "" ||
-		r.URL.Query().Get("includeMature") == "true" ||
-		hasRootFilter
-
-	if len(query) < 2 && !hasFilters {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SearchResponse{
-			Results: []services.SearchResult{},
-			Query:   query,
-			Count:   0,
-			Total:   0,
-			Offset:  0,
-			Limit:   50,
-		})
-		return
-	}
-
-	limit := maxSearchLimit
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-			limit = min(parsed, maxSearchLimit)
-		}
-	}
-
-	offset := 0
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
-
-	opts := services.SearchOptions{}
-
-	if t := r.URL.Query().Get("type"); t == "audio" || t == "folder" {
-		opts.Type = t
-	}
-
-	if r.URL.Query().Get("unavailableOnly") == "true" {
-		opts.UnavailableOnly = true
-	}
-	if r.URL.Query().Get("includeMature") == "true" {
-		opts.IncludeMature = true
-	}
-
-	if s := r.URL.Query().Get("sort"); s != "" {
-		opts.Sort = s
-	}
-
-	opts.DateFrom = r.URL.Query().Get("dateFrom")
-	opts.DateTo = r.URL.Query().Get("dateTo")
-
-	if v := r.URL.Query().Get("durationMin"); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-			opts.DurationMin = f
-		}
-	}
-	if v := r.URL.Query().Get("durationMax"); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-			opts.DurationMax = f
-		}
-	}
-
-	if v := r.URL.Query().Get("fields"); v != "" {
-		validFields := map[string]bool{"filename": true, "title": true, "artist": true, "description": true}
-		for _, f := range strings.Split(v, ",") {
-			f = strings.TrimSpace(f)
-			if validFields[f] {
-				opts.Fields = append(opts.Fields, f)
-			}
-		}
-	}
-
-	if hasRootFilter {
-		opts.Root = root
-	}
-
-	results, total, err := h.searchService.Search(query, limit, offset, opts)
+	response, err := searchResponseForValues(h.searchService, r.URL.Query())
 	if err != nil {
 		http.Error(w, "Search error", http.StatusInternalServerError)
 		return
 	}
 
-	if results == nil {
-		results = []services.SearchResult{}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SearchResponse{
-		Results: results,
-		Query:   query,
-		Count:   len(results),
-		Total:   total,
-		Offset:  offset,
-		Limit:   limit,
-	})
+	json.NewEncoder(w).Encode(response)
 }

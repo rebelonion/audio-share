@@ -19,7 +19,10 @@ window.addEventListener('vite:preloadError', event => {
 void detectAdBlocking()
   .then(result => setRybbitAdBlockTraits(result.status, result.adDeliveryStatus))
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')!
+rootElement.replaceChildren()
+
+createRoot(rootElement).render(
   <StrictMode>
     <HelmetProvider>
       <ToastProvider>

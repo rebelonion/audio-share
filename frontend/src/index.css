@@ -264,3 +264,69 @@
     }
 
 }
+
+.snapshot-markdown > * + * {
+    @apply mt-5;
+}
+
+.snapshot-markdown h1 {
+    @apply text-4xl font-bold text-[var(--foreground)];
+}
+
+.snapshot-markdown h2 {
+    @apply text-3xl font-bold text-[var(--foreground)];
+}
+
+.snapshot-markdown h3 {
+    @apply text-2xl font-semibold text-[var(--foreground)];
+}
+
+.snapshot-markdown p,
+.snapshot-markdown li {
+    @apply leading-7 text-[var(--foreground)];
+}
+
+.snapshot-markdown a {
+    @apply text-[var(--primary)] underline underline-offset-4;
+}
+
+.snapshot-markdown ul {
+    @apply list-disc space-y-2 pl-6;
+}
+
+.snapshot-markdown ol {
+    @apply list-decimal space-y-2 pl-6;
+}
+
+.snapshot-markdown blockquote {
+    @apply border-l-4 border-[var(--primary)] pl-4 italic text-[var(--muted-foreground)];
+}
+
+.snapshot-markdown code {
+    @apply rounded bg-[var(--card)] px-1.5 py-0.5 text-sm;
+}
+
+.snapshot-markdown pre {
+    @apply overflow-x-auto rounded-lg bg-[var(--card)] p-4;
+}
+
+.snapshot-markdown pre code {
+    @apply bg-transparent p-0;
+}
+
+.snapshot-markdown table {
+    @apply w-full border-collapse;
+}
+
+.snapshot-markdown th,
+.snapshot-markdown td {
+    @apply border border-[var(--border)] px-4 py-2 text-left;
+}
+
+.snapshot-markdown th {
+    @apply bg-[var(--card)] font-semibold;
+}
+
+.snapshot-markdown hr {
+    @apply border-[var(--border)];
+}

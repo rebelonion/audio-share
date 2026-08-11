@@ -357,9 +357,13 @@ type audioRow struct {
 }
 
 func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
+	return lookupAudioByKey(h.db, key)
+}
+
+func lookupAudioByKey(db *sql.DB, key string) (*audioRow, error) {
 	var row audioRow
 	var deletedInt int
-	err := h.db.QueryRow(`
+	err := db.QueryRow(`
 		SELECT id, path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, age_limit, parent_path
 		FROM audio_files WHERE share_key = $1
@@ -971,11 +975,19 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 		return
 	}
 
+	meta := audioMetaFromRow(r, h.sessionSecret, row)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	json.NewEncoder(w).Encode(meta)
+}
+
+func audioMetaFromRow(r *http.Request, sessionSecret []byte, row *audioRow) AudioMeta {
 	meta := AudioMeta{
 		Thumbnail:  row.thumbnail.Valid && row.thumbnail.String != "",
 		Deleted:    row.deleted,
 		IsMature:   row.isMature(),
-		ShowMature: maturePreferenceEnabled(r, h.sessionSecret),
+		ShowMature: maturePreferenceEnabled(r, sessionSecret),
 	}
 	if row.ageLimit.Valid {
 		ageLimit := int(row.ageLimit.Int64)
@@ -1003,10 +1015,7 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 	if row.parentPath.Valid {
 		meta.ParentPath = row.parentPath.String
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache")
-	json.NewEncoder(w).Encode(meta)
+	return meta
 }
 
 func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, key string) {
@@ -1051,6 +1060,30 @@ type BrowseHandler struct {
 	search *services.SearchService
 }
 
+type directoryBrowser interface {
+	BrowseDirectory(string) (*services.DirectoryContents, error)
+}
+
+func browseDirectoryContents(search directoryBrowser, path string) (*services.DirectoryContents, error) {
+	contents, err := search.BrowseDirectory(path)
+	if err != nil {
+		return nil, err
+	}
+
+	const maxSkipDepth = 20
+	for i := 0; i < maxSkipDepth; i++ {
+		if len(contents.Items) != 1 || contents.Items[0].Type != "folder" {
+			break
+		}
+		next, err := search.BrowseDirectory(contents.Items[0].Path)
+		if err != nil {
+			break
+		}
+		contents = next
+	}
+	return contents, nil
+}
+
 func NewBrowseHandler(search *services.SearchService) *BrowseHandler {
 	return &BrowseHandler{search: search}
 }
@@ -1060,22 +1093,10 @@ func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/browse")
 	path = strings.TrimPrefix(path, "/")
 
-	contents, err := h.search.BrowseDirectory(path)
+	contents, err := browseDirectoryContents(h.search, path)
 	if err != nil {
 		http.Error(w, "Error reading directory", http.StatusInternalServerError)
 		return
-	}
-
-	const maxSkipDepth = 20
-	for i := 0; i < maxSkipDepth; i++ {
-		if len(contents.Items) != 1 || contents.Items[0].Type != "folder" {
-			break
-		}
-		next, err := h.search.BrowseDirectory(contents.Items[0].Path)
-		if err != nil {
-			break
-		}
-		contents = next
 	}
 
 	w.Header().Set("Content-Type", "application/json")
