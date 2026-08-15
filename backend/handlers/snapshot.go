@@ -161,7 +161,7 @@ func (h *SPAHandler) renderPageSnapshot(r *http.Request, meta pageMeta, shareRow
 func (h *SPAHandler) renderSnapshotBody(r *http.Request, meta pageMeta, shareRow *audioRow, shareLookupErr error, responses initialResponses) template.HTML {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	if path == "" || path == "/index.html" {
-		return h.renderDirectorySnapshot("", h.config.DefaultTitle, h.config.DefaultDescription, responses)
+		return h.renderDirectorySnapshot(r, "", h.config.DefaultTitle, h.config.DefaultDescription, responses)
 	}
 
 	switch {
@@ -195,7 +195,7 @@ func (h *SPAHandler) renderSnapshotBody(r *http.Request, meta pageMeta, shareRow
 			segments := strings.Split(browsePath, "/")
 			heading = segments[len(segments)-1]
 		}
-		return h.renderDirectorySnapshot(browsePath, heading, "Browse audio and folders in this collection.", responses)
+		return h.renderDirectorySnapshot(r, browsePath, heading, "Browse audio and folders in this collection.", responses)
 	case strings.HasPrefix(path, "/share/"):
 		key, _ := shareKeyFromPath(path)
 		return h.renderShareSnapshot(r, key, meta, shareRow, shareLookupErr, responses)
@@ -232,13 +232,13 @@ func browseAPIPath(path string) string {
 	return "/api/browse/" + encodePath(path)
 }
 
-func (h *SPAHandler) renderDirectorySnapshot(path, heading, description string, responses initialResponses) template.HTML {
+func (h *SPAHandler) renderDirectorySnapshot(r *http.Request, path, heading, description string, responses initialResponses) template.HTML {
 	page := snapshotListPage{Heading: heading, Description: description}
 	if h.searchService == nil {
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
 
-	contents, err := browseDirectoryContents(h.searchService, path)
+	contents, err := browseDirectoryContentsForAccess(h.searchService, path, isLocalRequest(r))
 	if err != nil {
 		log.Printf("server snapshot browse failed for %q: %v", path, err)
 		return executeSnapshotTemplate(snapshotListTemplate, page)
@@ -403,7 +403,7 @@ func (h *SPAHandler) renderSearchSnapshot(r *http.Request, responses initialResp
 	if !hasSearch {
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
-	response, err := searchResponseForValues(h.searchService, values)
+	response, err := searchResponseForValues(h.searchService, values, isLocalRequest(r))
 	if err != nil {
 		log.Printf("server snapshot search failed: %v", err)
 		return executeSnapshotTemplate(snapshotListTemplate, page)
@@ -434,6 +434,11 @@ func (h *SPAHandler) renderShareSnapshot(r *http.Request, key string, meta pageM
 
 	page := snapshotListPage{Heading: meta.h1, Description: meta.description}
 	if row == nil || row.deleted || key == "" || meta.notFound {
+		return executeSnapshotTemplate(snapshotListTemplate, page)
+	}
+	if row.removalRestricted(r) {
+		page.Heading = "Audio no longer shared"
+		page.Description = "Due to a request from the original creator, this audio is no longer shared."
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
 	page.Heading = filepath.Base(row.path)

@@ -23,19 +23,20 @@ type FolderMetadata struct {
 }
 
 type FileSystemItem struct {
-	Name            string          `json:"name"`
-	Path            string          `json:"path"`
-	Size            int64           `json:"size,omitempty"`
-	DurationSeconds float64         `json:"durationSeconds,omitempty"`
-	ModifiedAt      string          `json:"modifiedAt"`
-	Type            string          `json:"type"`
-	MimeType        string          `json:"mimeType,omitempty"`
-	Title           string          `json:"title,omitempty"`
-	AgeLimit        *int            `json:"ageLimit,omitempty"`
-	Metadata        *FolderMetadata `json:"metadata,omitempty"`
-	PosterImage     string          `json:"posterImage,omitempty"`
-	ShareKey        string          `json:"shareKey,omitempty"`
-	UnavailableAt   *string         `json:"unavailableAt,omitempty"`
+	Name               string          `json:"name"`
+	Path               string          `json:"path"`
+	Size               int64           `json:"size,omitempty"`
+	DurationSeconds    float64         `json:"durationSeconds,omitempty"`
+	ModifiedAt         string          `json:"modifiedAt"`
+	Type               string          `json:"type"`
+	MimeType           string          `json:"mimeType,omitempty"`
+	Title              string          `json:"title,omitempty"`
+	AgeLimit           *int            `json:"ageLimit,omitempty"`
+	Metadata           *FolderMetadata `json:"metadata,omitempty"`
+	PosterImage        string          `json:"posterImage,omitempty"`
+	ShareKey           string          `json:"shareKey,omitempty"`
+	UnavailableAt      *string         `json:"unavailableAt,omitempty"`
+	RemovalRequestedAt *string         `json:"removalRequestedAt,omitempty"`
 }
 
 type DirectoryContents struct {

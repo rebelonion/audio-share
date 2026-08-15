@@ -351,13 +351,13 @@ func TestSPAHandlerReusesShareLookupForMetadataAndInitialData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	mock.ExpectQuery("SELECT id, path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date").
+	mock.ExpectQuery("SELECT id, path, deleted, unavailable_at, removal_requested_at, thumbnail, title, meta_artist, upload_date").
 		WithArgs("track-key").
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "path", "deleted", "unavailable_at", "thumbnail", "title", "meta_artist", "upload_date",
+			"id", "path", "deleted", "unavailable_at", "removal_requested_at", "thumbnail", "title", "meta_artist", "upload_date",
 			"webpage_url", "description", "age_limit", "parent_path",
 		}).AddRow(
-			1, "Audio/track.mp3", 0, nil, "cover.jpg", "Track title", "Artist", "20260810",
+			1, "Audio/track.mp3", 0, nil, nil, "cover.jpg", "Track title", "Artist", "20260810",
 			"https://example.test/source", "Description", 0, "Audio",
 		))
 	handler := newSnapshotTestHandler(t)

@@ -112,12 +112,13 @@ func (h *PlaybackHandler) RecentHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecentlyPlayed(30)
+		tracks, err := h.playbackService.GetRecentlyPlayed(30, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recent tracks"})
 			return
 		}
 
+		w.Header().Set("Cache-Control", "private, no-store")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
 	}
 }
@@ -129,12 +130,13 @@ func (h *PlaybackHandler) PopularHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetPopularTracks(30)
+		tracks, err := h.playbackService.GetPopularTracks(30, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch popular tracks"})
 			return
 		}
 
+		w.Header().Set("Cache-Control", "private, no-store")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
 	}
 }
@@ -146,12 +148,13 @@ func (h *PlaybackHandler) NewHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecentlyAdded(30)
+		tracks, err := h.playbackService.GetRecentlyAdded(30, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch new tracks"})
 			return
 		}
 
+		w.Header().Set("Cache-Control", "private, no-store")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
 	}
 }
@@ -163,12 +166,13 @@ func (h *PlaybackHandler) UnavailableHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecentlyUnavailable(10)
+		tracks, err := h.playbackService.GetRecentlyUnavailable(10, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch unavailable tracks"})
 			return
 		}
 
+		w.Header().Set("Cache-Control", "private, no-store")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
 	}
 }
@@ -187,12 +191,13 @@ func (h *PlaybackHandler) RecommendationsHandler() http.HandlerFunc {
 			return
 		}
 
-		tracks, err := h.playbackService.GetRecommendations(key, 30)
+		tracks, err := h.playbackService.GetRecommendations(key, 30, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
 			return
 		}
 
+		w.Header().Set("Cache-Control", "private, no-store")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tracks": tracks})
 	}
 }

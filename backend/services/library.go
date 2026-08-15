@@ -108,15 +108,17 @@ func (s *LibraryService) RecoverProfile(recoveryKey string) (string, error) {
 	return sessionID, err
 }
 
-func (s *LibraryService) Like(sessionID, shareKey string) error {
+func (s *LibraryService) Like(sessionID, shareKey string, includeRemovalRequested bool) error {
 	if err := s.EnsureProfile(sessionID); err != nil {
 		return err
 	}
 	result, err := s.db.DB().Exec(`
 		INSERT INTO likes (profile_id, audio_file_id)
-		SELECT $1, id FROM audio_files WHERE share_key = $2 AND deleted = 0
+		SELECT $1, id FROM audio_files
+		WHERE share_key = $2 AND deleted = 0
+		  AND ($3 OR removal_requested_at IS NULL)
 		ON CONFLICT (profile_id, audio_file_id) DO UPDATE SET profile_id = EXCLUDED.profile_id
-	`, sessionID, shareKey)
+	`, sessionID, shareKey, includeRemovalRequested)
 	if err != nil {
 		return err
 	}
@@ -138,14 +140,15 @@ func (s *LibraryService) Unlike(sessionID, shareKey string) error {
 	return err
 }
 
-func (s *LibraryService) LikedTrackKeys(sessionID string) ([]string, error) {
+func (s *LibraryService) LikedTrackKeys(sessionID string, includeRemovalRequested bool) ([]string, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT af.share_key
 		FROM likes l
 		JOIN audio_files af ON af.id = l.audio_file_id
 		WHERE l.profile_id = $1
+		  AND ($2 OR af.removal_requested_at IS NULL)
 		ORDER BY l.created_at DESC
-	`, sessionID)
+	`, sessionID, includeRemovalRequested)
 	if err != nil {
 		return nil, err
 	}
@@ -162,17 +165,18 @@ func (s *LibraryService) LikedTrackKeys(sessionID string) ([]string, error) {
 	return keys, rows.Err()
 }
 
-func (s *LibraryService) LikedTracks(sessionID string) ([]LibraryTrack, error) {
+func (s *LibraryService) LikedTracks(sessionID string, includeRemovalRequested bool) ([]LibraryTrack, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT af.share_key, af.path, af.filename, af.title, af.meta_artist,
 		       af.parent_path, f.name, f.share_key, af.thumbnail, f.poster_image,
-		       af.age_limit, af.unavailable_at, af.deleted
+		       af.age_limit, af.removal_requested_at, af.unavailable_at, af.deleted
 		FROM likes l
 		JOIN audio_files af ON af.id = l.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE l.profile_id = $1
+		  AND ($2 OR af.removal_requested_at IS NULL)
 		ORDER BY l.created_at DESC
-	`, sessionID)
+	`, sessionID, includeRemovalRequested)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +190,7 @@ func (s *LibraryService) LikedTracks(sessionID string) ([]LibraryTrack, error) {
 		if err := rows.Scan(
 			&track.ShareKey, &track.Path, &track.Filename, &track.Title, &track.Artist,
 			&track.ParentPath, &track.ParentFolderName, &track.ParentShareKey,
-			&track.AudioImage, &track.PosterImage, &track.AgeLimit, &unavailableAt,
+			&track.AudioImage, &track.PosterImage, &track.AgeLimit, &track.RemovalRequestedAt, &unavailableAt,
 			&deleted,
 		); err != nil {
 			return nil, err

@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link} from 'react-router';
-import {ChevronLeft, ChevronRight, Music, Play} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Music, Play, ShieldAlert} from 'lucide-react';
 import type {TrackSummary} from '@/lib/api';
 import {useRybbit} from '@/hooks/useRybbit';
 import {useAudioPlayerCommands} from '@/contexts/AudioPlayerContext';
@@ -145,6 +145,12 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                                 />
                                 <div className="relative pointer-events-none">
                                     <TrackPoster track={track} />
+                                    {track.removalRequestedAt && (
+                                        <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded border border-amber-400/50 bg-black/75 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-300">
+                                            <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+                                            Removal requested
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="relative pointer-events-none p-2.5">
                                     <div className="min-h-10 font-medium text-sm leading-5 line-clamp-2 text-left group-hover:text-[var(--primary)] transition-colors">{track.title || track.filename}</div>

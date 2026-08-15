@@ -13,10 +13,10 @@ type libraryService interface {
 	EnsureProfile(string) error
 	RotateRecoveryKey(string) (string, error)
 	RecoverProfile(string) (string, error)
-	LikedTrackKeys(string) ([]string, error)
-	LikedTracks(string) ([]services.LibraryTrack, error)
+	LikedTrackKeys(string, bool) ([]string, error)
+	LikedTracks(string, bool) ([]services.LibraryTrack, error)
 	ProfileHasRecoveryKey(string) (bool, error)
-	Like(string, string) error
+	Like(string, string, bool) error
 	Unlike(string, string) error
 }
 
@@ -128,7 +128,7 @@ func (h *LibraryHandler) LikesHandler() http.HandlerFunc {
 		if !ok {
 			return
 		}
-		shareKeys, err := h.library.LikedTrackKeys(sessionID)
+		shareKeys, err := h.library.LikedTrackKeys(sessionID, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load likes"})
 			return
@@ -157,7 +157,7 @@ func (h *LibraryHandler) LikedTracksHandler() http.HandlerFunc {
 		if !ok {
 			return
 		}
-		tracks, err := h.library.LikedTracks(sessionID)
+		tracks, err := h.library.LikedTracks(sessionID, isLocalRequest(r))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load liked tracks"})
 			return
@@ -185,7 +185,7 @@ func (h *LibraryHandler) LikeItemHandler() http.HandlerFunc {
 		var err error
 		switch r.Method {
 		case http.MethodPut:
-			err = h.library.Like(sessionID, shareKey)
+			err = h.library.Like(sessionID, shareKey, isLocalRequest(r))
 		case http.MethodDelete:
 			err = h.library.Unlike(sessionID, shareKey)
 		}

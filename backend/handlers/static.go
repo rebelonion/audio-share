@@ -167,6 +167,15 @@ func (h *SPAHandler) getPageMetaWithAudio(r *http.Request, row *audioRow) pageMe
 	urlPath := r.URL.Path
 	origin := siteOrigin(r)
 
+	if _, ok := shareKeyFromPath(urlPath); ok && row != nil && row.removalRestricted(r) {
+		const message = "Due to a request from the original creator, this audio is no longer shared."
+		return pageMeta{
+			title:       "Audio no longer shared - " + h.config.DefaultTitle,
+			description: message,
+			h1:          "Audio no longer shared",
+		}
+	}
+
 	// /share/:key — look up audio metadata from DB
 	if key, ok := shareKeyFromPath(urlPath); ok && row != nil && !row.deleted {
 		t := h.config.DefaultTitle
@@ -279,7 +288,11 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 		doc = strings.Replace(doc, "</head>", initialData+"</head>", 1)
 	}
 
-	w.Header().Set("Cache-Control", "no-cache")
+	cacheControl := "no-cache"
+	if shareRow != nil && shareRow.removalRequestedAt.Valid {
+		cacheControl = "private, no-store"
+	}
+	w.Header().Set("Cache-Control", cacheControl)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if meta.notFound {
 		w.WriteHeader(http.StatusNotFound)

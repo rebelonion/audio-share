@@ -15,6 +15,7 @@ import (
 	"log"
 	"math"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -223,6 +224,10 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return
 	}
+	if row.removalRestricted(r) {
+		writeJSON(w, http.StatusGone, map[string]string{"error": "removal_requested"})
+		return
+	}
 
 	clientAddress := clientIP(r)
 	if err := h.accessKeys.CheckLimit(sessionID, clientAddress, request.Purpose); err != nil {
@@ -342,18 +347,19 @@ func (h *AudioHandler) writeKeyLimitError(
 }
 
 type audioRow struct {
-	id            int64
-	path          string
-	deleted       bool
-	unavailableAt sql.NullTime
-	thumbnail     sql.NullString
-	title         sql.NullString
-	artist        sql.NullString
-	uploadDate    sql.NullString
-	webpageURL    sql.NullString
-	description   sql.NullString
-	ageLimit      sql.NullInt64
-	parentPath    sql.NullString
+	id                 int64
+	path               string
+	deleted            bool
+	unavailableAt      sql.NullTime
+	removalRequestedAt sql.NullTime
+	thumbnail          sql.NullString
+	title              sql.NullString
+	artist             sql.NullString
+	uploadDate         sql.NullString
+	webpageURL         sql.NullString
+	description        sql.NullString
+	ageLimit           sql.NullInt64
+	parentPath         sql.NullString
 }
 
 func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
@@ -364,11 +370,12 @@ func lookupAudioByKey(db *sql.DB, key string) (*audioRow, error) {
 	var row audioRow
 	var deletedInt int
 	err := db.QueryRow(`
-		SELECT id, path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
+		SELECT id, path, deleted, unavailable_at, removal_requested_at, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, age_limit, parent_path
 		FROM audio_files WHERE share_key = $1
 	`, key).Scan(
-		&row.id, &row.path, &deletedInt, &row.unavailableAt, &row.thumbnail, &row.title, &row.artist,
+		&row.id, &row.path, &deletedInt, &row.unavailableAt, &row.removalRequestedAt,
+		&row.thumbnail, &row.title, &row.artist,
 		&row.uploadDate, &row.webpageURL, &row.description, &row.ageLimit, &row.parentPath,
 	)
 	if err != nil {
@@ -380,6 +387,10 @@ func lookupAudioByKey(db *sql.DB, key string) (*audioRow, error) {
 
 func (r *audioRow) isMature() bool {
 	return r.ageLimit.Valid && r.ageLimit.Int64 >= 18
+}
+
+func (r *audioRow) removalRestricted(request *http.Request) bool {
+	return r.removalRequestedAt.Valid && !isLocalRequest(request)
 }
 
 func (h *AudioHandler) resolveFullPath(virtualPath string) (string, bool) {
@@ -453,6 +464,13 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	}
 	if row.deleted {
 		http.Error(w, "Gone", http.StatusGone)
+		return
+	}
+	if row.removalRequestedAt.Valid {
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
+	if row.removalRestricted(r) {
+		writeJSON(w, http.StatusGone, map[string]string{"error": "removal_requested"})
 		return
 	}
 
@@ -614,11 +632,27 @@ func clientIP(r *http.Request) string {
 			return strings.TrimSpace(parts[0])
 		}
 	}
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
+	addr := strings.TrimSpace(r.RemoteAddr)
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
 	}
-	return addr
+	return strings.Trim(addr, "[]")
+}
+
+func isLocalRequest(r *http.Request) bool {
+	client := net.ParseIP(strings.TrimSpace(clientIP(r)))
+	peerAddress := strings.TrimSpace(r.RemoteAddr)
+	if host, _, err := net.SplitHostPort(peerAddress); err == nil {
+		peerAddress = host
+	} else {
+		peerAddress = strings.Trim(peerAddress, "[]")
+	}
+	peer := net.ParseIP(peerAddress)
+	return isLocalIP(peer) && isLocalIP(client)
+}
+
+func isLocalIP(ip net.IP) bool {
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
 }
 
 func estimateRequestedBytes(rangeHeader string, fileSize int64) int64 {
@@ -683,6 +717,13 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
+	if row.removalRequestedAt.Valid {
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
+	if row.removalRestricted(r) {
+		http.Error(w, "Gone", http.StatusGone)
+		return
+	}
 
 	if !row.thumbnail.Valid || row.thumbnail.String == "" {
 		http.Error(w, "No thumbnail", http.StatusNotFound)
@@ -720,7 +761,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 	}
 
 	if row.isMature() && view == "blurred" {
-		h.serveBlurredThumbnail(w, r, key, fullPath, info)
+		h.serveBlurredThumbnail(w, r, key, fullPath, info, row.removalRequestedAt.Valid)
 		return
 	}
 	if row.isMature() && view == "original" && !maturePreferenceEnabled(r, h.sessionSecret) {
@@ -742,16 +783,26 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 	defer file.Close()
 
 	w.Header().Set("Content-Type", contentType)
-	if row.isMature() {
-		w.Header().Set("Cache-Control", "private, max-age=86400")
+	if row.removalRequestedAt.Valid {
+		w.Header().Set("Cache-Control", "private, no-store")
 	} else {
-		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Cache-Control", "private, max-age=86400")
 	}
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
-func (h *AudioHandler) serveBlurredThumbnail(w http.ResponseWriter, r *http.Request, key, fullPath string, info os.FileInfo) {
+func (h *AudioHandler) serveBlurredThumbnail(
+	w http.ResponseWriter,
+	r *http.Request,
+	key, fullPath string,
+	info os.FileInfo,
+	removalRequested bool,
+) {
+	cacheControl := "private, max-age=86400"
+	if removalRequested {
+		cacheControl = "private, no-store"
+	}
 	cacheDir := filepath.Join(os.TempDir(), "audio-share-mature-thumbnails")
 	if err := os.MkdirAll(cacheDir, 0700); err != nil {
 		http.Error(w, "Error preparing thumbnail", http.StatusInternalServerError)
@@ -765,7 +816,7 @@ func (h *AudioHandler) serveBlurredThumbnail(w http.ResponseWriter, r *http.Requ
 		if err == nil {
 			defer file.Close()
 			w.Header().Set("Content-Type", "image/jpeg")
-			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Header().Set("Cache-Control", cacheControl)
 			http.ServeContent(w, r, cacheName, cachedInfo.ModTime(), file)
 			return
 		}
@@ -791,7 +842,7 @@ func (h *AudioHandler) serveBlurredThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Cache-Control", cacheControl)
 	http.ServeContent(w, r, cacheName, cachedInfo.ModTime(), file)
 }
 
@@ -950,18 +1001,20 @@ func writeJPEG(path string, img image.Image) error {
 }
 
 type AudioMeta struct {
-	Title         string  `json:"title"`
-	Artist        string  `json:"artist"`
-	UploadDate    string  `json:"uploadDate"`
-	WebpageURL    string  `json:"webpageUrl"`
-	Description   string  `json:"description"`
-	ParentPath    string  `json:"parentPath"`
-	Thumbnail     bool    `json:"thumbnail"`
-	Deleted       bool    `json:"deleted"`
-	UnavailableAt *string `json:"unavailableAt"`
-	AgeLimit      *int    `json:"ageLimit,omitempty"`
-	IsMature      bool    `json:"isMature"`
-	ShowMature    bool    `json:"showMature"`
+	Title              string  `json:"title"`
+	Artist             string  `json:"artist"`
+	UploadDate         string  `json:"uploadDate"`
+	WebpageURL         string  `json:"webpageUrl"`
+	Description        string  `json:"description"`
+	ParentPath         string  `json:"parentPath"`
+	Thumbnail          bool    `json:"thumbnail"`
+	Deleted            bool    `json:"deleted"`
+	UnavailableAt      *string `json:"unavailableAt"`
+	RemovalRequestedAt *string `json:"removalRequestedAt"`
+	LocalAccess        bool    `json:"localAccess"`
+	AgeLimit           *int    `json:"ageLimit,omitempty"`
+	IsMature           bool    `json:"isMature"`
+	ShowMature         bool    `json:"showMature"`
 }
 
 func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key string) {
@@ -978,17 +1031,25 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 	meta := audioMetaFromRow(r, h.sessionSecret, row)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "private, no-store")
 	json.NewEncoder(w).Encode(meta)
 }
 
 func audioMetaFromRow(r *http.Request, sessionSecret []byte, row *audioRow) AudioMeta {
 	meta := AudioMeta{
-		Thumbnail:  row.thumbnail.Valid && row.thumbnail.String != "",
-		Deleted:    row.deleted,
-		IsMature:   row.isMature(),
-		ShowMature: maturePreferenceEnabled(r, sessionSecret),
+		Deleted:     row.deleted,
+		LocalAccess: isLocalRequest(r),
 	}
+	if row.removalRequestedAt.Valid {
+		s := row.removalRequestedAt.Time.UTC().Format(time.RFC3339)
+		meta.RemovalRequestedAt = &s
+	}
+	if row.removalRestricted(r) {
+		return meta
+	}
+	meta.Thumbnail = row.thumbnail.Valid && row.thumbnail.String != ""
+	meta.IsMature = row.isMature()
+	meta.ShowMature = maturePreferenceEnabled(r, sessionSecret)
 	if row.ageLimit.Valid {
 		ageLimit := int(row.ageLimit.Int64)
 		meta.AgeLimit = &ageLimit
@@ -1020,15 +1081,23 @@ func audioMetaFromRow(r *http.Request, sessionSecret []byte, row *audioRow) Audi
 
 func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, key string) {
 	var fileID int64
+	var removalRequestedAt sql.NullTime
 	err := h.db.QueryRow(`
-		SELECT id FROM audio_files WHERE share_key = $1 AND deleted = 0
-	`, key).Scan(&fileID)
+		SELECT id, removal_requested_at FROM audio_files WHERE share_key = $1 AND deleted = 0
+	`, key).Scan(&fileID, &removalRequestedAt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if removalRequestedAt.Valid {
+		w.Header().Set("Cache-Control", "private, no-store")
+	}
+	if removalRequestedAt.Valid && !isLocalRequest(r) {
+		http.Error(w, "Gone", http.StatusGone)
 		return
 	}
 
@@ -1052,7 +1121,9 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 		resp["duration"] = duration.Float64
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if !removalRequestedAt.Valid {
+		w.Header().Set("Cache-Control", "private, max-age=86400")
+	}
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -1065,10 +1136,15 @@ type directoryBrowser interface {
 }
 
 func browseDirectoryContents(search directoryBrowser, path string) (*services.DirectoryContents, error) {
+	return browseDirectoryContentsForAccess(search, path, true)
+}
+
+func browseDirectoryContentsForAccess(search directoryBrowser, path string, includeRemovalRequested bool) (*services.DirectoryContents, error) {
 	contents, err := search.BrowseDirectory(path)
 	if err != nil {
 		return nil, err
 	}
+	contents = visibleDirectoryContents(contents, includeRemovalRequested)
 
 	const maxSkipDepth = 20
 	for i := 0; i < maxSkipDepth; i++ {
@@ -1079,9 +1155,26 @@ func browseDirectoryContents(search directoryBrowser, path string) (*services.Di
 		if err != nil {
 			break
 		}
-		contents = next
+		contents = visibleDirectoryContents(next, includeRemovalRequested)
 	}
 	return contents, nil
+}
+
+func visibleDirectoryContents(contents *services.DirectoryContents, includeRemovalRequested bool) *services.DirectoryContents {
+	if contents == nil || includeRemovalRequested {
+		return contents
+	}
+	filtered := &services.DirectoryContents{
+		CurrentPath: contents.CurrentPath,
+		Items:       make([]services.FileSystemItem, 0, len(contents.Items)),
+	}
+	for _, item := range contents.Items {
+		if item.Type == "audio" && item.RemovalRequestedAt != nil {
+			continue
+		}
+		filtered.Items = append(filtered.Items, item)
+	}
+	return filtered
 }
 
 func NewBrowseHandler(search *services.SearchService) *BrowseHandler {
@@ -1093,12 +1186,13 @@ func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/browse")
 	path = strings.TrimPrefix(path, "/")
 
-	contents, err := browseDirectoryContents(h.search, path)
+	contents, err := browseDirectoryContentsForAccess(h.search, path, isLocalRequest(r))
 	if err != nil {
 		http.Error(w, "Error reading directory", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, no-store")
 	json.NewEncoder(w).Encode(contents)
 }

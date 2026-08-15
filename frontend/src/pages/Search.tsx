@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Search as SearchIcon, Folder, Music, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
+import { Search as SearchIcon, Folder, Music, ShieldAlert, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
 import { searchAudio, getRandomAudio, getRandomAudioFromSearch, fetchDirectoryContents, SearchResult, SearchFilters, SearchField, isMatureAge } from '@/lib/api';
 import type { Folder as RootFolder } from '@/types';
 import { formatDate } from '@/lib/utils';
@@ -327,11 +327,15 @@ export default function Search() {
                                 <div
                                     key={result.id}
                                     className={`flex flex-col gap-3 border border-[var(--border)] rounded-lg p-4 transition-colors group sm:flex-row sm:items-start ${
-                                        result.type === 'audio' && result.unavailableAt
+                                        result.type === 'audio' && (result.unavailableAt || result.removalRequestedAt)
                                             ? 'bg-amber-500/5 hover:bg-amber-500/10'
                                             : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'
                                     }`}
-                                    title={result.type === 'audio' && result.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
+                                    title={result.type === 'audio' && result.removalRequestedAt
+                                        ? 'A removal request has been received. This item is only visible on the local network.'
+                                        : result.type === 'audio' && result.unavailableAt
+                                            ? 'The original source of this audio is no longer available.'
+                                            : undefined}
                                 >
                                     <div className="flex-1 min-w-0">
                                         <Link
@@ -345,9 +349,11 @@ export default function Search() {
                                                 ) : (
                                                     <div className="relative">
                                                         <Music className="h-5 w-5 text-[var(--primary)]" />
-                                                        {result.unavailableAt && (
+                                                        {result.removalRequestedAt ? (
+                                                            <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested" />
+                                                        ) : result.unavailableAt ? (
                                                             <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
-                                                        )}
+                                                        ) : null}
                                                     </div>
                                                 )}
                                             </div>
@@ -360,6 +366,11 @@ export default function Search() {
                                                     {result.type === 'audio' && isMatureAge(result.ageLimit) && (
                                                         <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
                                                             18+
+                                                        </span>
+                                                    )}
+                                                    {result.removalRequestedAt && (
+                                                        <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
+                                                            Removal requested
                                                         </span>
                                                     )}
                                                     <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />

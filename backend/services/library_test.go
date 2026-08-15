@@ -4,6 +4,7 @@ import (
 	"errors"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 )
@@ -82,15 +83,17 @@ func TestLikeIsIdempotentAndReportsMissingTracks(t *testing.T) {
 			expectProfileUpsert(mock, sessionID)
 			mock.ExpectExec(regexp.QuoteMeta(`
 				INSERT INTO likes (profile_id, audio_file_id)
-				SELECT $1, id FROM audio_files WHERE share_key = $2 AND deleted = 0
+				SELECT $1, id FROM audio_files
+				WHERE share_key = $2 AND deleted = 0
+				  AND ($3 OR removal_requested_at IS NULL)
 				ON CONFLICT (profile_id, audio_file_id) DO UPDATE SET profile_id = EXCLUDED.profile_id
 			`)).
-				WithArgs(sessionID, shareKey).
+				WithArgs(sessionID, shareKey, false).
 				WillReturnResult(sqlmock.NewResult(0, 1))
 		}
 
 		for attempt := range 2 {
-			if err := service.Like(sessionID, shareKey); err != nil {
+			if err := service.Like(sessionID, shareKey, false); err != nil {
 				t.Fatalf("Like attempt %d: %v", attempt+1, err)
 			}
 		}
@@ -101,13 +104,15 @@ func TestLikeIsIdempotentAndReportsMissingTracks(t *testing.T) {
 		expectProfileUpsert(mock, sessionID)
 		mock.ExpectExec(regexp.QuoteMeta(`
 			INSERT INTO likes (profile_id, audio_file_id)
-			SELECT $1, id FROM audio_files WHERE share_key = $2 AND deleted = 0
+			SELECT $1, id FROM audio_files
+			WHERE share_key = $2 AND deleted = 0
+			  AND ($3 OR removal_requested_at IS NULL)
 			ON CONFLICT (profile_id, audio_file_id) DO UPDATE SET profile_id = EXCLUDED.profile_id
 		`)).
-			WithArgs(sessionID, shareKey).
+			WithArgs(sessionID, shareKey, false).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		if err := service.Like(sessionID, shareKey); !errors.Is(err, ErrTrackNotFound) {
+		if err := service.Like(sessionID, shareKey, false); !errors.Is(err, ErrTrackNotFound) {
 			t.Fatalf("Like error = %v, want ErrTrackNotFound", err)
 		}
 	})
@@ -140,32 +145,35 @@ func TestRecoverProfileLooksUpHashedKey(t *testing.T) {
 
 func TestLikedTracksScansSharedTrackSummary(t *testing.T) {
 	service, mock := newMockLibraryService(t)
+	requestedAt := time.Date(2026, time.August, 14, 18, 0, 0, 0, time.UTC)
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT af.share_key, af.path, af.filename, af.title, af.meta_artist,
 		       af.parent_path, f.name, f.share_key, af.thumbnail, f.poster_image,
-		       af.age_limit, af.unavailable_at, af.deleted
+		       af.age_limit, af.removal_requested_at, af.unavailable_at, af.deleted
 		FROM likes l
 		JOIN audio_files af ON af.id = l.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		WHERE l.profile_id = $1
+		  AND ($2 OR af.removal_requested_at IS NULL)
 		ORDER BY l.created_at DESC
 	`)).
-		WithArgs("profile-id").
+		WithArgs("profile-id", true).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"share_key", "path", "filename", "title", "meta_artist",
 			"parent_path", "folder_name", "folder_share_key", "thumbnail", "poster_image",
-			"age_limit", "unavailable_at", "deleted",
+			"age_limit", "removal_requested_at", "unavailable_at", "deleted",
 		}).AddRow(
 			"track-key", "folder/track.mp3", "track.mp3", "Track", "Artist",
 			"folder", "Folder", "folder-key", "thumbnail.jpg", "poster.jpg",
-			0, nil, 0,
+			0, requestedAt, nil, 0,
 		))
 
-	tracks, err := service.LikedTracks("profile-id")
+	tracks, err := service.LikedTracks("profile-id", true)
 	if err != nil {
 		t.Fatalf("LikedTracks: %v", err)
 	}
-	if len(tracks) != 1 || tracks[0].ShareKey != "track-key" || tracks[0].Artist == nil {
+	if len(tracks) != 1 || tracks[0].ShareKey != "track-key" || tracks[0].Artist == nil ||
+		tracks[0].RemovalRequestedAt == nil || !tracks[0].RemovalRequestedAt.Equal(requestedAt) {
 		t.Fatalf("unexpected tracks: %#v", tracks)
 	}
 }
@@ -177,14 +185,15 @@ func TestLikedTrackKeysReturnsLightweightMembership(t *testing.T) {
 		FROM likes l
 		JOIN audio_files af ON af.id = l.audio_file_id
 		WHERE l.profile_id = $1
+		  AND ($2 OR af.removal_requested_at IS NULL)
 		ORDER BY l.created_at DESC
 	`)).
-		WithArgs("profile-id").
+		WithArgs("profile-id", false).
 		WillReturnRows(sqlmock.NewRows([]string{"share_key"}).
 			AddRow("newest-track").
 			AddRow("older-track"))
 
-	keys, err := service.LikedTrackKeys("profile-id")
+	keys, err := service.LikedTrackKeys("profile-id", false)
 	if err != nil {
 		t.Fatalf("LikedTrackKeys: %v", err)
 	}

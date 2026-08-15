@@ -30,8 +30,9 @@ type SearchResult struct {
 	DirectorySize int64  `json:"directorySize,omitempty"`
 	PosterImage   string `json:"posterImage,omitempty"`
 
-	ModifiedAt    string  `json:"modifiedAt,omitempty"`
-	UnavailableAt *string `json:"unavailableAt,omitempty"`
+	ModifiedAt         string  `json:"modifiedAt,omitempty"`
+	UnavailableAt      *string `json:"unavailableAt,omitempty"`
+	RemovalRequestedAt *string `json:"removalRequestedAt,omitempty"`
 }
 
 type SearchOptions struct {
@@ -54,6 +55,8 @@ type SearchOptions struct {
 	Root string
 	// Include audio files marked with age_limit >= 18.
 	IncludeMature bool
+	// Include audio files hidden from public discovery after a creator removal request.
+	IncludeRemovalRequested bool
 }
 
 type SearchService struct {
@@ -123,6 +126,9 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 
 	argIdx := len(audioArgs) + 1
 
+	if !opts.IncludeRemovalRequested {
+		audioWhere += " AND removal_requested_at IS NULL"
+	}
 	if opts.UnavailableOnly {
 		audioWhere += " AND unavailable_at IS NOT NULL"
 	}
@@ -220,7 +226,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				audio_files.description, audio_files.webpage_url, audio_files.age_limit,
 				NULL as original_url, NULL::bigint as item_count, NULL as directory_size, NULL as poster_image,
 				SUBSTR(audio_files.upload_date,1,4) || '-' || SUBSTR(audio_files.upload_date,5,2) || '-' || SUBSTR(audio_files.upload_date,7,2) as modified_at,
-				audio_files.share_key, audio_files.unavailable_at
+				audio_files.share_key, audio_files.unavailable_at, audio_files.removal_requested_at
 			FROM audio_files %s
 			WHERE %s`, audioJoin, reindex(audioWhere, 1))
 		unionParts = append(unionParts, audioSelect)
@@ -237,7 +243,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				original_url, item_count, directory_size_bytes as directory_size,
 				poster_image,
 				SUBSTR(upload_date,1,4)||'-'||SUBSTR(upload_date,5,2)||'-'||SUBSTR(upload_date,7,2) as modified_at,
-				share_key, NULL::timestamptz as unavailable_at
+				share_key, NULL::timestamptz as unavailable_at, NULL::timestamptz as removal_requested_at
 			FROM folders
 			WHERE %s`, reindex(folderWhere, folderOffset))
 		unionParts = append(unionParts, folderSelect)
@@ -253,7 +259,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		SELECT id, name, path, type, parent_path,
 			size, mime_type, title, artist, description, webpage_url,
 			age_limit, original_url, item_count, directory_size, poster_image, modified_at,
-			share_key, unavailable_at, COUNT(*) OVER() as total_count
+			share_key, unavailable_at, removal_requested_at, COUNT(*) OVER() as total_count
 		FROM (%s) sub
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
@@ -275,18 +281,23 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		var directorySize sql.NullInt64
 		var size, itemCount *int64
 		var unavailableAt sql.NullTime
+		var removalRequestedAt sql.NullTime
 
 		if err := rows.Scan(
 			&r.ID, &r.Name, &r.Path, &r.Type, &parentPath,
 			&size, &mimeType, &title, &artist, &description, &webpageURL,
 			&ageLimit, &originalURL, &itemCount, &directorySize, &posterImage, &modifiedAt,
-			&shareKey, &unavailableAt, &total,
+			&shareKey, &unavailableAt, &removalRequestedAt, &total,
 		); err != nil {
 			return nil, 0, err
 		}
 		if unavailableAt.Valid {
 			s := unavailableAt.Time.UTC().Format(time.RFC3339)
 			r.UnavailableAt = &s
+		}
+		if removalRequestedAt.Valid {
+			s := removalRequestedAt.Time.UTC().Format(time.RFC3339)
+			r.RemovalRequestedAt = &s
 		}
 
 		if parentPath != nil {
@@ -361,13 +372,14 @@ func reindex(sql string, start int) string {
 	return b.String()
 }
 
-func (s *SearchService) RandomAudio() (string, error) {
+func (s *SearchService) RandomAudio(includeRemovalRequested bool) (string, error) {
 	var shareKey string
 	err := s.db.DB().QueryRow(`
 		SELECT share_key FROM audio_files
 		WHERE deleted = 0 AND share_key IS NOT NULL AND COALESCE(age_limit, 0) < 18
+		  AND ($1 OR removal_requested_at IS NULL)
 		ORDER BY RANDOM() LIMIT 1
-	`).Scan(&shareKey)
+	`, includeRemovalRequested).Scan(&shareKey)
 	if err != nil {
 		return "", err
 	}

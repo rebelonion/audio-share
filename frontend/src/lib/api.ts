@@ -43,6 +43,7 @@ export interface SearchResult {
     webpageUrl?: string;
     ageLimit?: number;
     unavailableAt?: string;
+    removalRequestedAt?: string;
 
     // Folder fields
     originalUrl?: string;
@@ -74,6 +75,7 @@ export interface TrackSummary {
     audioImage: string | null;
     posterImage: string | null;
     ageLimit?: number;
+    removalRequestedAt?: string;
 }
 
 export interface PlaybackStatsTrack extends TrackSummary {

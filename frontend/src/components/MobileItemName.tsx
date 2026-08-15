@@ -1,4 +1,4 @@
-import {Folder, Music, Unlink} from "lucide-react";
+import {Folder, Music, ShieldAlert, Unlink} from "lucide-react";
 import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
@@ -12,7 +12,7 @@ function MobileItemName({ item }: ItemNameProps) {
     const folderHref = `/browse/${item.path.split('/').map(s => encodeURIComponent(s)).join('/')}`;
 
     return (
-        <div className="flex h-16 items-start px-3 pt-3 pb-2">
+        <div className="flex min-h-16 items-start px-3 pt-3 pb-2">
             <div className="mr-3 mt-0.5 flex items-center">
                 {item.type === 'folder' ? (
                     item.posterImage && item.type === 'folder' && item.shareKey ? (
@@ -28,9 +28,11 @@ function MobileItemName({ item }: ItemNameProps) {
                 ) : (
                     <div className="relative">
                         <Music className="h-5 w-5 text-[var(--primary)]"/>
-                        {item.unavailableAt && (
+                        {item.removalRequestedAt ? (
+                            <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested"/>
+                        ) : item.unavailableAt ? (
                             <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
-                        )}
+                        ) : null}
                     </div>
                 )}
             </div>
@@ -53,6 +55,9 @@ function MobileItemName({ item }: ItemNameProps) {
                     >
                         {item.title || item.name}
                     </div>
+                )}
+                {item.type === 'audio' && item.removalRequestedAt && (
+                    <span className="mt-1 inline-block rounded border border-amber-500/40 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-500">Removal requested</span>
                 )}
             </div>
         </div>

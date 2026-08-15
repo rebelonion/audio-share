@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
-import { Unlink, Music, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Unlink, Music, ChevronLeft, ChevronRight, ShieldAlert } from 'lucide-react';
 import type {UnavailableTrack} from '@/lib/api';
 import { useRybbit } from '@/hooks/useRybbit';
 import {trackArtworkUrls} from '@/lib/tracks';
@@ -86,8 +86,17 @@ export default function UnavailableBanner({ tracks }: Props) {
 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium mb-1.5">
-                        <Unlink className="h-3 w-3 flex-shrink-0" />
-                        Original source no longer available
+                        {track.removalRequestedAt ? (
+                            <>
+                                <ShieldAlert className="h-3 w-3 flex-shrink-0" />
+                                Removal requested
+                            </>
+                        ) : (
+                            <>
+                                <Unlink className="h-3 w-3 flex-shrink-0" />
+                                Original source no longer available
+                            </>
+                        )}
                     </div>
                     <h3 className="font-semibold text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors truncate leading-snug" style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>
                         {displayTitle}

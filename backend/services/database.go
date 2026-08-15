@@ -164,6 +164,9 @@ func (d *Database) migrate() {
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_unavailable_at
 			ON audio_files(unavailable_at) WHERE unavailable_at IS NOT NULL AND deleted = 0`,
+		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS removal_requested_at TIMESTAMPTZ`,
+		`CREATE INDEX IF NOT EXISTS idx_audio_files_removal_requested_at
+			ON audio_files(removal_requested_at) WHERE removal_requested_at IS NOT NULL AND deleted = 0`,
 		`ALTER TABLE audio_files ADD COLUMN IF NOT EXISTS age_limit INTEGER`,
 		`ALTER TABLE waveform_cache ADD COLUMN IF NOT EXISTS duration_seconds REAL`,
 		`CREATE INDEX IF NOT EXISTS idx_audio_files_trgm_filename ON audio_files USING gin (filename gin_trgm_ops)`,

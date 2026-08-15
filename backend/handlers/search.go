@@ -46,7 +46,7 @@ type searchExecutor interface {
 	Search(string, int, int, services.SearchOptions) ([]services.SearchResult, int, error)
 }
 
-func searchResponseForValues(service searchExecutor, values url.Values) (SearchResponse, error) {
+func searchResponseForValues(service searchExecutor, values url.Values, includeRemovalRequested bool) (SearchResponse, error) {
 	query := values.Get("q")
 	root := strings.Trim(strings.TrimSpace(values.Get("root")), "/")
 	hasRootFilter := isRootSlug(root)
@@ -88,6 +88,7 @@ func searchResponseForValues(service searchExecutor, values url.Values) (SearchR
 	}
 
 	opts := services.SearchOptions{}
+	opts.IncludeRemovalRequested = includeRemovalRequested
 	if value := values.Get("type"); value == "audio" || value == "folder" {
 		opts.Type = value
 	}
@@ -148,12 +149,13 @@ func (h *SearchHandler) RandomHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		shareKey, err := h.searchService.RandomAudio()
+		shareKey, err := h.searchService.RandomAudio(isLocalRequest(r))
 		if err != nil {
 			http.Error(w, "No audio found", http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "private, no-store")
 		json.NewEncoder(w).Encode(map[string]string{"shareKey": shareKey})
 	}
 }
@@ -164,12 +166,13 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := searchResponseForValues(h.searchService, r.URL.Query())
+	response, err := searchResponseForValues(h.searchService, r.URL.Query(), isLocalRequest(r))
 	if err != nil {
 		http.Error(w, "Search error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, no-store")
 	json.NewEncoder(w).Encode(response)
 }

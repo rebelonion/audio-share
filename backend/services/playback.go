@@ -26,7 +26,8 @@ const trackSummaryColumns = `
 	f.share_key,
 	af.thumbnail,
 	f.poster_image,
-	af.age_limit
+	af.age_limit,
+	af.removal_requested_at
 `
 
 type PlaybackResult struct {
@@ -53,7 +54,15 @@ func trackSummaryScanDest(track *TrackSummary) []any {
 		&track.AudioImage,
 		&track.PosterImage,
 		&track.AgeLimit,
+		&track.RemovalRequestedAt,
 	}
+}
+
+func removalDiscoveryFilter(includeRemovalRequested bool) string {
+	if includeRemovalRequested {
+		return ""
+	}
+	return " AND af.removal_requested_at IS NULL"
 }
 
 type PlaybackService struct {
@@ -215,7 +224,7 @@ func (s *PlaybackService) RecordPlayEvent(
 	return tx.Commit()
 }
 
-func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]TrackSummary, error) {
+func (s *PlaybackService) GetRecommendations(shareKey string, limit int, includeRemovalRequested bool) ([]TrackSummary, error) {
 	// Co-occurrence normalized by candidate's total session count (TF-IDF style):
 	// score = co_sessions / total_candidate_sessions
 	// This penalizes globally popular tracks that co-occur with everything.
@@ -243,7 +252,7 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Trac
 		)
 		SELECT `+trackSummaryColumns+`
 		FROM co_occurrences co
-		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
+		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
 		LEFT JOIN folders f ON f.path = af.parent_path
 		JOIN candidate_totals ct ON ct.audio_file_id = co.audio_file_id
 		ORDER BY RANDOM() ^ (1.0 / GREATEST(
@@ -288,9 +297,10 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Trac
 			WHERE af.deleted = 0
 				AND af.share_key NOT IN (%s)
 				AND COALESCE(af.age_limit, 0) < 18
+				%s
 			ORDER BY RANDOM()
 			LIMIT $%d
-		`, trackSummaryColumns, strings.Join(placeholders, ", "), len(excludeKeys))
+		`, trackSummaryColumns, strings.Join(placeholders, ", "), removalDiscoveryFilter(includeRemovalRequested), len(excludeKeys))
 
 		fillRows, err := s.db.DB().Query(query, excludeKeys...)
 		if err != nil {
@@ -313,7 +323,7 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int) ([]Trac
 	return results, nil
 }
 
-func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error) {
+func (s *PlaybackService) GetRecentlyPlayed(limit int, includeRemovalRequested bool) ([]PlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT `+trackSummaryColumns+`,
 			COUNT(*) as play_count,
@@ -321,7 +331,7 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 		FROM play_events pe
 		JOIN audio_files af ON af.id = pe.audio_file_id
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
+		WHERE af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
 		GROUP BY af.id, f.id
 		ORDER BY last_played DESC
 		LIMIT $1
@@ -347,7 +357,7 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int) ([]PlaybackResult, error)
 	return results, nil
 }
 
-func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) {
+func (s *PlaybackService) GetPopularTracks(limit int, includeRemovalRequested bool) ([]PlaybackResult, error) {
 	// Trending score: recent play rate vs historical baseline.
 	// score = (plays_last_7d + 1) / (avg_plays_per_7d_over_prior_84d + 1)
 	// Consistently popular items score ~1.0; items spiking above their norm score high.
@@ -368,7 +378,7 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 			pw.recent_7d AS play_count,
 			MAX(pe.played_at) AS last_played
 		FROM play_windows pw
-		JOIN audio_files af ON af.id = pw.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
+		JOIN audio_files af ON af.id = pw.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
 		JOIN play_events pe ON pe.audio_file_id = af.id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		GROUP BY af.id, f.id, pw.recent_7d, pw.older_84d
@@ -396,12 +406,12 @@ func (s *PlaybackService) GetPopularTracks(limit int) ([]PlaybackResult, error) 
 	return results, nil
 }
 
-func (s *PlaybackService) GetRecentlyAdded(limit int) ([]TrackSummary, error) {
+func (s *PlaybackService) GetRecentlyAdded(limit int, includeRemovalRequested bool) ([]TrackSummary, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT `+trackSummaryColumns+`
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
+		WHERE af.downloaded_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
 		ORDER BY af.downloaded_at DESC
 		LIMIT $1
 	`, limit)
@@ -425,13 +435,13 @@ func (s *PlaybackService) GetRecentlyAdded(limit int) ([]TrackSummary, error) {
 	return results, nil
 }
 
-func (s *PlaybackService) GetRecentlyUnavailable(limit int) ([]UnavailablePlaybackResult, error) {
+func (s *PlaybackService) GetRecentlyUnavailable(limit int, includeRemovalRequested bool) ([]UnavailablePlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT `+trackSummaryColumns+`,
 			af.unavailable_at
 		FROM audio_files af
 		LEFT JOIN folders f ON f.path = af.parent_path
-		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18
+		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
 		ORDER BY af.unavailable_at DESC
 		LIMIT $1
 	`, limit)

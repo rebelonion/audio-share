@@ -419,15 +419,15 @@ func expectAudioLookup(mock sqlmock.Sqlmock, shareKey, path string, deleted bool
 		deletedValue = 1
 	}
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, path, deleted, unavailable_at, thumbnail, title, meta_artist, upload_date,
+		SELECT id, path, deleted, unavailable_at, removal_requested_at, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, age_limit, parent_path
 		FROM audio_files WHERE share_key = $1
 	`)).
 		WithArgs(shareKey).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "path", "deleted", "unavailable_at", "thumbnail", "title", "meta_artist",
+			"id", "path", "deleted", "unavailable_at", "removal_requested_at", "thumbnail", "title", "meta_artist",
 			"upload_date", "webpage_url", "description", "age_limit", "parent_path",
-		}).AddRow(1, path, deletedValue, nil, nil, nil, nil, nil, nil, nil, nil, nil))
+		}).AddRow(1, path, deletedValue, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 }
 
 func signedAudioRequest(method, target, body, secret, sessionID string) *http.Request {

@@ -11,6 +11,7 @@ export interface AudioFile {
     ageLimit?: number;
     shareKey: string;
     unavailableAt?: string;
+    removalRequestedAt?: string;
 }
 
 export interface FolderMetadata {

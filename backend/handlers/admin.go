@@ -35,6 +35,15 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		key := strings.TrimPrefix(path, "audio/")
 		key = strings.TrimSuffix(key, "/unavailable")
 		h.handleAudioUnavailable(w, r, key)
+	case strings.HasPrefix(path, "audio/") && strings.HasSuffix(path, "/removal-request") && r.Method == http.MethodPatch:
+		key := strings.TrimPrefix(path, "audio/")
+		key = strings.TrimSuffix(key, "/removal-request")
+		handleKey, err := url.PathUnescape(key)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid key"})
+			return
+		}
+		h.handleAudioRemovalRequest(w, r, handleKey)
 
 	// Targeted messages
 	case path == "targeted-messages" && r.Method == http.MethodPost:
@@ -61,16 +70,18 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Audio handlers
 
 type audioSourceItem struct {
-	ShareKey      string  `json:"shareKey"`
-	WebpageURL    string  `json:"webpageUrl"`
-	Title         string  `json:"title,omitempty"`
-	Filename      string  `json:"filename"`
-	UnavailableAt *string `json:"unavailableAt"`
+	ShareKey           string  `json:"shareKey"`
+	WebpageURL         string  `json:"webpageUrl"`
+	Title              string  `json:"title,omitempty"`
+	Filename           string  `json:"filename"`
+	UnavailableAt      *string `json:"unavailableAt"`
+	RemovalRequestedAt *string `json:"removalRequestedAt"`
 }
 
 func (h *AdminHandler) handleAudioSources(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
-		SELECT share_key, webpage_url, COALESCE(title, ''), filename, unavailable_at
+		SELECT share_key, webpage_url, COALESCE(title, ''), filename, unavailable_at,
+		       removal_requested_at
 		FROM audio_files
 		WHERE deleted = 0 AND webpage_url IS NOT NULL AND webpage_url != ''
 		ORDER BY indexed_at DESC
@@ -86,7 +97,9 @@ func (h *AdminHandler) handleAudioSources(w http.ResponseWriter, r *http.Request
 	for rows.Next() {
 		var item audioSourceItem
 		var unavailableAt sql.NullTime
-		if err := rows.Scan(&item.ShareKey, &item.WebpageURL, &item.Title, &item.Filename, &unavailableAt); err != nil {
+		var removalRequestedAt sql.NullTime
+		if err := rows.Scan(&item.ShareKey, &item.WebpageURL, &item.Title, &item.Filename,
+			&unavailableAt, &removalRequestedAt); err != nil {
 			log.Printf("admin: audio sources scan failed: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
 			return
@@ -94,6 +107,10 @@ func (h *AdminHandler) handleAudioSources(w http.ResponseWriter, r *http.Request
 		if unavailableAt.Valid {
 			s := unavailableAt.Time.UTC().Format(time.RFC3339)
 			item.UnavailableAt = &s
+		}
+		if removalRequestedAt.Valid {
+			s := removalRequestedAt.Time.UTC().Format(time.RFC3339)
+			item.RemovalRequestedAt = &s
 		}
 		items = append(items, item)
 	}
@@ -124,6 +141,41 @@ func (h *AdminHandler) handleAudioUnavailable(w http.ResponseWriter, r *http.Req
 	`, unavailableAt, key)
 	if err != nil {
 		log.Printf("admin: set unavailable failed for key=%s: %v", key, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *AdminHandler) handleAudioRemovalRequest(w http.ResponseWriter, r *http.Request, key string) {
+	if key == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Key required"})
+		return
+	}
+
+	var body struct {
+		RemovalRequested bool `json:"removalRequested"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return
+	}
+
+	var requestedAt interface{}
+	if body.RemovalRequested {
+		requestedAt = time.Now().UTC()
+	}
+	result, err := h.db.Exec(`
+		UPDATE audio_files SET removal_requested_at = $1 WHERE share_key = $2 AND deleted = 0
+	`, requestedAt, key)
+	if err != nil {
+		log.Printf("admin: set removal request failed for key=%s: %v", key, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
 		return
 	}

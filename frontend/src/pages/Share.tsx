@@ -1,7 +1,7 @@
 import { useEffect, useState, type MouseEvent } from 'react';
 import { useParams, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Calendar, Download, ExternalLink, FolderOpen, Home, Music, Unlink } from 'lucide-react';
+import { Calendar, Download, ExternalLink, FolderOpen, Home, Music, ShieldAlert, Unlink } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
 import TrackListSection from '@/components/TrackListSection';
 import { API_BASE, getRecommendations, type TrackSummary } from '@/lib/api';
@@ -27,6 +27,8 @@ interface AudioMeta {
     thumbnail: boolean;
     deleted: boolean;
     unavailableAt: string | null;
+    removalRequestedAt: string | null;
+    localAccess: boolean;
     ageLimit?: number;
     isMature: boolean;
     showMature: boolean;
@@ -93,6 +95,7 @@ export default function Share() {
     }, [key]);
 
     const displayTitle = meta?.title || key || 'Unknown';
+    const removalRestricted = !!meta?.removalRequestedAt && !meta.localAccess;
     const folderPath = meta?.parentPath
         ? `/browse/${meta.parentPath.split('/').map(encodeURIComponent).join('/')}`
         : '/';
@@ -104,9 +107,13 @@ export default function Share() {
         ? `Loading... - ${DEFAULT_TITLE}`
         : notFound
             ? `Not Found - ${DEFAULT_TITLE}`
-            : `${displayTitle} - ${DEFAULT_TITLE}`;
+            : removalRestricted
+                ? `Audio no longer shared - ${DEFAULT_TITLE}`
+                : `${displayTitle} - ${DEFAULT_TITLE}`;
 
-    const pageDescription = meta?.description
+    const pageDescription = removalRestricted
+        ? 'Due to a request from the original creator, this audio is no longer shared.'
+        : meta?.description
         ? (meta.isMature && !maturePreference.enabled ? `${DEFAULT_DESCRIPTION} · ${displayTitle}` : meta.description)
         : `${DEFAULT_DESCRIPTION} · ${displayTitle}`;
     const thumbnailView = meta?.isMature && !maturePreference.enabled ? 'blurred' : 'original';
@@ -186,6 +193,26 @@ export default function Share() {
                         Go to home page
                     </Link>
                 </div>
+            ) : removalRestricted ? (
+                <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+                    <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-amber-500/35 bg-amber-500/10 text-amber-400">
+                        <ShieldAlert className="h-7 w-7" aria-hidden="true" />
+                    </div>
+                    <p className="text-[0.65rem] uppercase tracking-[0.22em] text-[var(--muted-foreground)] mb-3">Removal request</p>
+                    <h1 className="text-4xl sm:text-5xl font-bold italic mb-4" style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
+                        Audio no longer shared
+                    </h1>
+                    <p className="text-[var(--muted-foreground)] mb-8 max-w-md leading-relaxed">
+                        Due to a request from the original creator, this audio is no longer shared.
+                    </p>
+                    <Link
+                        to="/"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm"
+                    >
+                        <Home className="h-4 w-4" />
+                        Go to home page
+                    </Link>
+                </div>
             ) : meta?.deleted ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
                     <p className="text-[0.65rem] uppercase tracking-[0.22em] text-[var(--muted-foreground)] mb-3">Unavailable</p>
@@ -211,6 +238,15 @@ export default function Share() {
             ) : (
                 <div className="container mx-auto p-4 max-w-4xl animate-slideUp">
                     <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-5 sm:p-6 mb-8 relative overflow-clip">
+                        {meta?.removalRequestedAt && meta.localAccess && (
+                            <div className="relative z-10 mb-5 flex items-start gap-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-200" role="status">
+                                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                                <div>
+                                    <span className="font-semibold">Removal requested.</span>{' '}
+                                    This audio remains available because you are accessing the site from a local network.
+                                </div>
+                            </div>
+                        )}
                         {meta?.thumbnail && (
                             <div
                                 className="absolute inset-0 pointer-events-none"

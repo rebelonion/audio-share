@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Heart, ListMusic, Music, Play, Unlink} from 'lucide-react';
+import {Heart, ListMusic, Music, Play, ShieldAlert, Unlink} from 'lucide-react';
 import {Link} from 'react-router';
 import {Helmet} from 'react-helmet-async';
 import RecoveryPanel from '@/components/RecoveryPanel';
@@ -121,6 +121,7 @@ export default function Likes() {
                     {likedTracks.map(track => {
                         const missing = !!track.deleted;
                         const sourceUnavailable = !!track.unavailableAt;
+                        const removalRequested = !!track.removalRequestedAt;
                         const playerTrack = playbackToPlayerTrack(track, 'likes');
                         return (
                             <div key={track.shareKey} className={`group flex w-full min-w-0 max-w-full items-center gap-3 border-t border-[var(--border)] p-3 first:border-t-0 sm:p-4 transition-colors ${missing ? 'opacity-60' : 'hover:bg-[var(--card-hover)]'}`}>
@@ -131,12 +132,19 @@ export default function Likes() {
                                             <Unlink className="h-4 w-4" />
                                         </span>
                                     )}
+                                    {!missing && removalRequested && (
+                                        <span className="absolute right-1 top-1 rounded bg-black/75 p-1 text-amber-300" title="Removal requested">
+                                            <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </span>
+                                    )}
                                 </button>
                                 <button disabled={missing} onClick={() => playTrack(track.shareKey)} className="min-w-0 flex-1 text-left disabled:cursor-default">
                                     <div className="font-medium truncate group-hover:text-[var(--primary)]">{track.title || track.filename}</div>
                                     <div className="text-xs text-[var(--muted-foreground)] truncate mt-1">
                                         {missing ? 'Audio file no longer available' : track.artist || track.parentFolderName || 'Unknown artist'}
-                                        {!missing && sourceUnavailable && <span className="ml-2 text-amber-500">Original source unavailable</span>}
+                                        {!missing && removalRequested
+                                            ? <span className="ml-2 text-amber-500">Removal requested</span>
+                                            : sourceUnavailable && <span className="ml-2 text-amber-500">Original source unavailable</span>}
                                     </div>
                                 </button>
                                 <TrackQuickActions track={playerTrack} className="shrink-0" />
