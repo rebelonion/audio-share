@@ -13,17 +13,15 @@ function MobileItemName({ item }: ItemNameProps) {
 
     return (
         <div className="flex min-h-16 items-start px-3 pt-3 pb-2">
-            <div className="mr-3 mt-0.5 flex items-center">
+            <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center">
                 {item.type === 'folder' ? (
                     item.posterImage && item.type === 'folder' && item.shareKey ? (
                         <PosterImage
                             shareKey={item.shareKey}
-                            className="w-8 h-8 rounded object-cover shadow-sm"
+                            className="h-8 w-8 rounded object-cover shadow-sm"
                         />
                     ) : (
-                        <div className="w-8 h-8 flex items-center justify-center">
-                            <Folder className="h-6 w-6 text-[var(--primary)]"/>
-                        </div>
+                        <Folder className="h-6 w-6 text-[var(--primary)]"/>
                     )
                 ) : (
                     <div className="relative">
@@ -41,7 +39,7 @@ function MobileItemName({ item }: ItemNameProps) {
                 {item.type === 'folder' ? (
                     <Link
                         to={folderHref}
-                        className="text-[var(--primary)] hover:text-[var(--primary-hover)] block w-full text-left"
+                        className="flex min-h-8 w-full items-center text-left text-[var(--primary)] hover:text-[var(--primary-hover)]"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="font-medium leading-snug line-clamp-2">
@@ -50,10 +48,12 @@ function MobileItemName({ item }: ItemNameProps) {
                     </Link>
                 ) : (
                     <div
-                        className="font-medium leading-snug line-clamp-2"
+                        className="flex min-h-8 items-center"
                         title={item.title || item.name}
                     >
-                        {item.title || item.name}
+                        <div className="font-medium leading-snug line-clamp-2">
+                            {item.title || item.name}
+                        </div>
                     </div>
                 )}
                 {item.type === 'audio' && item.removalRequestedAt && (

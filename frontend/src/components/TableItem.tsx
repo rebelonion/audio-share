@@ -41,27 +41,29 @@ function TableItem({ item, showDurationColumn, handleAudioSelect, copiedShareKey
                         className="flex items-center text-[var(--primary)] hover:text-[var(--primary-hover)]"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        {item.posterImage && item.type === 'folder' && item.shareKey ? (
-                            <PosterImage
-                                shareKey={item.shareKey}
-                                className="w-8 h-8 min-w-[32px] mr-2 rounded object-cover shadow-sm"
-                            />
-                        ) : (
-                            <div className="w-8 h-8 min-w-[32px] mr-2 flex items-center justify-center">
+                        <div className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center">
+                            {item.posterImage && item.type === 'folder' && item.shareKey ? (
+                                <PosterImage
+                                    shareKey={item.shareKey}
+                                    className="h-8 w-8 rounded object-cover shadow-sm"
+                                />
+                            ) : (
                                 <Folder className="h-6 w-6 text-[var(--primary)]"/>
-                            </div>
-                        )}
+                            )}
+                        </div>
                         <span className="truncate" title={item.name}>{item.name}</span>
                     </Link>
                 ) : (
                     <div className="flex items-center text-[var(--foreground)]">
-                        <div className="relative mr-2">
-                            <Music className="h-5 w-5 min-w-[20px] text-[var(--primary)]"/>
-                            {item.removalRequestedAt ? (
-                                <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested"/>
-                            ) : item.unavailableAt ? (
-                                <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
-                            ) : null}
+                        <div className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center">
+                            <div className="relative">
+                                <Music className="h-5 w-5 text-[var(--primary)]"/>
+                                {item.removalRequestedAt ? (
+                                    <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested"/>
+                                ) : item.unavailableAt ? (
+                                    <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
+                                ) : null}
+                            </div>
                         </div>
                         <span className="truncate" title={item.title || item.name}>{item.title || item.name}</span>
                         {item.removalRequestedAt && (
