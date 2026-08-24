@@ -43,6 +43,13 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+	if len(requestID) > 100 {
+		requestID = requestID[:100]
+	}
+	if requestID != "" {
+		log.Printf("share: request_id=%q received", requestID)
+	}
 
 	var req shareRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -108,6 +115,9 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return
+	}
+	if requestID != "" {
+		log.Printf("share: request_id=%q completed", requestID)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})

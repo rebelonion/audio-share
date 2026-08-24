@@ -42,6 +42,7 @@ describe('RequestSourceDialog', () => {
             requestUrl: 'https://youtube.com/@example',
             hasHigherRemovalRisk: true,
         });
+        expect(new Headers(init?.headers).get('X-Request-ID')).toBeTruthy();
         expect(trackMock).toHaveBeenCalledWith('artist-request');
     });
 
@@ -74,15 +75,18 @@ describe('RequestSourceDialog', () => {
         expect(await screen.findByText('This source is already in the archive.')).toBeTruthy();
         expect(screen.getByRole('link', { name: 'Browse' }).getAttribute('href'))
             .toBe('/browse/Audio/Mao%20Chika');
-        expect(trackMock).toHaveBeenCalledWith('artist-request-failed', {
-            reason: 'source_exists',
-            status: 409,
-            requestUrl: 'https://m.youtube.com/@example',
-        });
+        expect(trackMock).toHaveBeenCalledWith(
+            'artist-request-failed',
+            expect.objectContaining({
+                reason: 'source_exists',
+                status: 409,
+                requestUrl: 'https://m.youtube.com/@example',
+            }),
+        );
         expect(trackMock).not.toHaveBeenCalledWith('artist-request');
     });
 
-    it('tracks request errors with the requested URL', async () => {
+    it('shows a friendly message and tracks diagnostics for transport errors', async () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -94,12 +98,19 @@ describe('RequestSourceDialog', () => {
         fireEvent.click(screen.getByText('I understand these rules'));
         fireEvent.click(screen.getByRole('button', { name: 'Send request' }));
 
+        expect(await screen.findByText(
+            'We couldn\'t send your request right now. Please try again later.',
+        )).toBeTruthy();
+        expect(screen.queryByText('Failed to fetch')).toBeNull();
         await waitFor(() => expect(trackMock).toHaveBeenCalledWith(
             'artist-request-failed',
-            {
-                reason: 'request_error',
+            expect.objectContaining({
+                reason: 'network_error',
                 requestUrl: 'https://youtube.com/@example',
-            },
+                online: true,
+                errorName: 'TypeError',
+                errorMessage: 'Failed to fetch',
+            }),
         ));
     });
 });

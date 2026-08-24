@@ -3,11 +3,37 @@ import { Link } from 'react-router';
 import { AlertTriangle, Check, Folder, Loader2, X } from 'lucide-react';
 import { useRybbit } from '@/hooks/useRybbit';
 import { API_BASE } from '@/lib/api';
-import { appFetch } from '@/lib/cloudflareChallenge';
+import { appFetch, CloudflareChallengeError } from '@/lib/cloudflareChallenge';
+import { BUILD_ID } from '@/lib/config';
 
 interface RequestSourceDialogProps {
     isOpen: boolean;
     onCloseAction: () => void;
+}
+
+function createRequestId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function transportErrorMessage(error: unknown): string {
+    if (error instanceof CloudflareChallengeError) {
+        return 'Your security check expired. Reload to verify, then try again.';
+    }
+    if (!navigator.onLine) {
+        return 'You appear to be offline. Reconnect and try again.';
+    }
+    return 'We couldn\'t send your request right now. Please try again later.';
+}
+
+function getApiOrigin(): string {
+    try {
+        return new URL(API_BASE || window.location.origin, window.location.origin).origin;
+    } catch {
+        return 'invalid';
+    }
 }
 
 export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSourceDialogProps) {
@@ -51,12 +77,15 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
 
         setIsSubmitting(true);
         setStatus({});
+        const requestId = createRequestId();
+        const startedAt = performance.now();
 
         try {
             const response = await appFetch(`${API_BASE}/api/share`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Request-ID': requestId,
                 },
                 body: JSON.stringify({
                     requestUrl,
@@ -75,6 +104,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                 track('artist-request-failed', {
                     reason: typeof data.code === 'string' ? data.code : 'http_error',
                     status: response.status,
+                    requestId,
                     requestUrl: requestUrl.trim(),
                 });
                 return;
@@ -99,11 +129,23 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
             console.error('Error submitting request:', error);
             setStatus({
                 success: false,
-                message: error instanceof Error ? error.message : 'Could not send the request.'
+                message: transportErrorMessage(error),
             });
+            const apiOrigin = getApiOrigin();
             track('artist-request-failed', {
-                reason: 'request_error',
+                reason: error instanceof CloudflareChallengeError
+                    ? 'cloudflare_challenge'
+                    : navigator.onLine ? 'network_error' : 'offline',
+                requestId,
                 requestUrl: requestUrl.trim(),
+                durationMs: Math.round(performance.now() - startedAt),
+                online: navigator.onLine,
+                visibilityState: document.visibilityState,
+                apiOrigin,
+                sameOrigin: apiOrigin === window.location.origin,
+                errorName: error instanceof Error ? error.name : typeof error,
+                errorMessage: error instanceof Error ? error.message.slice(0, 200) : '',
+                buildId: BUILD_ID,
             });
         } finally {
             setIsSubmitting(false);
@@ -176,7 +218,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                         </div>
                         <ul className="space-y-1.5 pl-6 text-sm leading-relaxed text-[var(--muted-foreground)]">
                             <li className="list-disc">This artist does not already exist in the archive.</li>
-                            <li className="list-disc">NSFW or adult content will not be archived.</li>
+                            <li className="list-disc">NSFW, fetish or adult content will not be archived.</li>
                             <li className="list-disc">Requests can be rejected for any reason.</li>
                         </ul>
                         <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 transition-colors hover:bg-[var(--card-hover)]">
