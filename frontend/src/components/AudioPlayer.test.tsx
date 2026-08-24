@@ -37,6 +37,7 @@ const player = vi.hoisted(() => ({
         closePlayer: vi.fn(),
         togglePlay: vi.fn(),
         toggleMute: vi.fn(),
+        seekBy: vi.fn(),
         seekTo: vi.fn(),
         setVolume: vi.fn(),
     },
@@ -94,6 +95,21 @@ afterEach(() => {
 });
 
 describe('AudioPlayer sharing', () => {
+    it('seeks backward 10 seconds and forward 30 seconds', () => {
+        setMobile(false);
+        render(
+            <ToastProvider>
+                <AudioPlayer/>
+            </ToastProvider>,
+        );
+
+        fireEvent.click(screen.getByRole('button', {name: 'Seek backward 10 seconds'}));
+        fireEvent.click(screen.getByRole('button', {name: 'Seek forward 30 seconds'}));
+
+        expect(player.value.seekBy).toHaveBeenNthCalledWith(1, -10);
+        expect(player.value.seekBy).toHaveBeenNthCalledWith(2, 30);
+    });
+
     it('copies the current canonical link after autoplay advances', async () => {
         setMobile(false);
         const view = render(

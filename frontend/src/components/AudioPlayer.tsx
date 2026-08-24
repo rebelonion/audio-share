@@ -16,6 +16,8 @@ import {
     Heart,
     ListMusic,
     Share2,
+    RotateCcw,
+    RotateCw,
     SkipBack,
     SkipForward,
     X
@@ -61,6 +63,7 @@ export default function AudioPlayer() {
         closePlayer,
         togglePlay,
         toggleMute,
+        seekBy,
         seekTo,
         setVolume,
     } = useGlobalAudioPlayer();
@@ -310,6 +313,15 @@ export default function AudioPlayer() {
                             <div className="flex items-center gap-2">
                                 <button onClick={skipPrevious} className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Previous track" title="Previous track"><SkipBack className="h-4 w-4 fill-current" /></button>
                                 <button
+                                    onClick={() => seekBy(-10)}
+                                    className="relative p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                                    aria-label="Seek backward 10 seconds"
+                                    title="Seek backward 10 seconds"
+                                >
+                                    <RotateCcw className="h-5 w-5" />
+                                    <span className="absolute inset-0 flex items-center justify-center pt-0.5 text-[8px] font-bold" aria-hidden="true">10</span>
+                                </button>
+                                <button
                                     onClick={togglePlay}
                                     className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors duration-200 focus:outline-none"
                                     aria-label={isPlaying ? "Pause" : "Play"}
@@ -321,6 +333,15 @@ export default function AudioPlayer() {
                                     ) : (
                                         <Play className="h-6 w-6"/>
                                     )}
+                                </button>
+                                <button
+                                    onClick={() => seekBy(30)}
+                                    className="relative p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                                    aria-label="Seek forward 30 seconds"
+                                    title="Seek forward 30 seconds"
+                                >
+                                    <RotateCw className="h-5 w-5" />
+                                    <span className="absolute inset-0 flex items-center justify-center pt-0.5 text-[8px] font-bold" aria-hidden="true">30</span>
                                 </button>
                                 <button onClick={skipNext} className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Next track" title="Next track"><SkipForward className="h-4 w-4 fill-current" /></button>
                             </div>
