@@ -72,7 +72,7 @@ class FakeAudio {
         if (name === 'src') this.src = '';
     }
 
-    private emit(name: string) {
+    emit(name: string) {
         for (const listener of this.listeners.get(name) || []) listener();
     }
 }
@@ -99,6 +99,35 @@ afterEach(() => {
 });
 
 describe('useAudioEngine', () => {
+    it('starts newly loaded audio at an explicitly requested time', async () => {
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({
+            accessKey: 'signed-key',
+            expiresAt: Date.now() + 60_000,
+        });
+        const currentTrackRef = {
+            current: {
+                id: 'track-1',
+                src: '/audio/key/track-key',
+                shareKey: 'track-key',
+                name: 'Track',
+                source: 'share' as const,
+            },
+        };
+        const {result} = renderHook(() => useAudioEngine({
+            currentTrackRef,
+            metadataRef: {current: null},
+            onEndedRef: {current: vi.fn()},
+            waveformDuration: 0,
+        }));
+
+        act(() => result.current.play(75));
+        await waitFor(() => expect(FakeAudio.instances).toHaveLength(1));
+        act(() => FakeAudio.instances[0].emit('loadedmetadata'));
+
+        expect(FakeAudio.instances[0].currentTime).toBe(75);
+        expect(result.current.currentTime).toBe(75);
+    });
+
     it('retries blocked playback with the existing grant and audio element', async () => {
         mediaAccess.requestMediaAccess.mockResolvedValueOnce({
             accessKey: 'signed-key',

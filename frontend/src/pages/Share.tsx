@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react';
-import { useParams, Link } from 'react-router';
+import { useParams, Link, useSearchParams } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import { Calendar, Download, ExternalLink, FolderOpen, Home, Music, ShieldAlert, Unlink } from 'lucide-react';
 import SharePagePlayer from '@/components/SharePagePlayer';
@@ -16,6 +16,7 @@ import {
     type MediaAccessPhase,
 } from '@/lib/mediaAccess';
 import { appFetch } from '@/lib/cloudflareChallenge';
+import { parseAudioShareTime } from '@/lib/share';
 
 interface AudioMeta {
     title: string;
@@ -43,6 +44,8 @@ function formatUploadDate(value: string): string {
 
 export default function Share() {
     const { key } = useParams<{ key: string }>();
+    const [searchParams] = useSearchParams();
+    const startTime = parseAudioShareTime(searchParams.get('t'));
     const { track } = useRybbit();
     const [meta, setMeta] = useState<AudioMeta | null>(null);
     const [notFound, setNotFound] = useState(false);
@@ -327,7 +330,13 @@ export default function Share() {
                             </div>
 
                             <div className="mt-6">
-                                <SharePagePlayer src={`/audio/key/${key}`} name={displayTitle} artist={meta?.artist} ageLimit={meta?.ageLimit} />
+                                <SharePagePlayer
+                                    src={`/audio/key/${key}`}
+                                    name={displayTitle}
+                                    artist={meta?.artist}
+                                    ageLimit={meta?.ageLimit}
+                                    startTime={startTime}
+                                />
                             </div>
 
                             {(meta?.uploadDate || meta?.webpageUrl || meta?.description) && (

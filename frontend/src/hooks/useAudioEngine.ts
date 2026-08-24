@@ -147,6 +147,19 @@ export function useAudioEngine({
         resumableTrackRef.current = null;
     }, [currentTrackRef]);
 
+    const applyRequestedPosition = useCallback((audio: HTMLAudioElement, position?: number) => {
+        if (
+            position === undefined
+            || !Number.isFinite(position)
+            || !Number.isFinite(audio.duration)
+            || audio.duration <= 0
+        ) return;
+        const time = Math.min(audio.duration, Math.max(0, position));
+        audio.currentTime = time;
+        setCurrentTime(time);
+        persistedPositionRef.current = time;
+    }, []);
+
     const createAudio = useCallback((
         loadedTrack: PlayerTrack,
         grant: MediaAccessGrant,
@@ -192,10 +205,7 @@ export function useAudioEngine({
         });
         listen('loadedmetadata', () => {
             applyLoadedAudioMetadata(audio, loadedTrack);
-            if (resumeAt && resumeAt < audio.duration) {
-                audio.currentTime = resumeAt;
-                persistedPositionRef.current = resumeAt;
-            }
+            applyRequestedPosition(audio, resumeAt);
         });
         listen('ended', () => {
             if (audioRef.current !== audio) return;
@@ -223,7 +233,7 @@ export function useAudioEngine({
         });
 
         return audio;
-    }, [applyLoadedAudioMetadata, currentTrackRef, onEndedRef, removeAudioListeners]);
+    }, [applyLoadedAudioMetadata, applyRequestedPosition, currentTrackRef, onEndedRef, removeAudioListeners]);
 
     const requestStreamAccess = useCallback((track: PlayerTrack): Promise<MediaAccessGrant> => {
         const pending = accessRequestRef.current;
@@ -313,10 +323,7 @@ export function useAudioEngine({
             audioRef.current = audio;
             if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
                 applyLoadedAudioMetadata(audio, selectedTrack);
-                if (resumeAt && resumeAt < audio.duration) {
-                    audio.currentTime = resumeAt;
-                    persistedPositionRef.current = resumeAt;
-                }
+                applyRequestedPosition(audio, resumeAt);
             }
             playAudio(audio, selectedTrack);
         } catch (accessError) {
@@ -333,6 +340,7 @@ export function useAudioEngine({
         }
     }, [
         applyLoadedAudioMetadata,
+        applyRequestedPosition,
         createAudio,
         currentTrackRef,
         clearAudio,
@@ -345,7 +353,7 @@ export function useAudioEngine({
         void loadAuthorizedAudio(track, resumeAt);
     };
 
-    const play = useCallback(() => {
+    const play = useCallback((startTime?: number) => {
         const selectedTrack = currentTrackRef.current;
         if (!selectedTrack) return;
         const existingAudio = audioRef.current;
@@ -367,7 +375,7 @@ export function useAudioEngine({
         }
 
         const resumeAt = existingAudio && !existingAudio.ended ? existingAudio.currentTime : undefined;
-        void loadAuthorizedAudio(selectedTrack, resumeAt);
+        void loadAuthorizedAudio(selectedTrack, startTime ?? resumeAt);
     }, [
         audioLoaded,
         currentTrackRef,

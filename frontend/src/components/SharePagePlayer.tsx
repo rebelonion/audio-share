@@ -6,14 +6,25 @@ interface SharePagePlayerProps {
     name: string;
     artist?: string;
     ageLimit?: number;
+    startTime?: number;
 }
 
-export default function SharePagePlayer({src, name, artist, ageLimit}: SharePagePlayerProps) {
+function formatStartTime(seconds: number): string {
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const remainingSeconds = totalSeconds % 60;
+    return hours > 0
+        ? `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+        : `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+export default function SharePagePlayer({src, name, artist, ageLimit, startTime}: SharePagePlayerProps) {
     const {playTrack, currentTrack, isPlaying, isLoading, error} = useGlobalAudioPlayer();
     const isActiveTrack = currentTrack?.src === src;
 
     const handlePlay = () => {
-        playTrack({src, name, artist, ageLimit, source: 'share'});
+        playTrack({src, name, artist, ageLimit, source: 'share'}, {startTime});
     };
 
     let status = null;
@@ -54,7 +65,8 @@ export default function SharePagePlayer({src, name, artist, ageLimit}: SharePage
                         onClick={handlePlay}
                         className="flex min-w-52 items-center justify-center gap-3 rounded-full bg-[var(--primary)] px-7 py-3 font-medium text-white transition-[background-color,transform] duration-200 hover:scale-[1.02] hover:bg-[var(--primary-hover)]"
                     >
-                        <Play className="h-5 w-5 fill-current" /> Play this track
+                        <Play className="h-5 w-5 fill-current" />
+                        {startTime && startTime > 0 ? `Play from ${formatStartTime(startTime)}` : 'Play this track'}
                     </button>
                     {currentTrack && (
                         <p className="max-w-sm text-xs text-[var(--muted-foreground)]">

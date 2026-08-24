@@ -57,6 +57,10 @@ export interface AudioPlayerTrack {
     source?: TrackSource;
 }
 
+interface PlayTrackOptions {
+    startTime?: number;
+}
+
 type QueueActionResult = 'ignored' | 'ready' | 'queued' | 'playing';
 
 interface AudioPlayerContextValue {
@@ -78,7 +82,7 @@ interface AudioPlayerContextValue {
     upcoming: PlayerTrack[];
     contextLabel: string | null;
     autoplay: boolean;
-    playTrack: (track: AudioPlayerTrack) => void;
+    playTrack: (track: AudioPlayerTrack, options?: PlayTrackOptions) => void;
     playContext: (tracks: AudioPlayerTrack[], selectedIndex: number, label: string) => void;
     addToQueue: (track: AudioPlayerTrack) => QueueActionResult;
     playNext: (track: AudioPlayerTrack) => QueueActionResult;
@@ -182,6 +186,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
 
     const [showMatureDialog, setShowMatureDialog] = useState(false);
     const pendingPlayRef = useRef(false);
+    const pendingStartTimeRef = useRef<number | undefined>(undefined);
     const pendingMatureMetadataPlayRef = useRef<string | null>(null);
     const requestPlayCurrentRef = useRef<() => void>(() => {});
     const pauseCurrentRef = useRef<() => void>(() => {});
@@ -209,7 +214,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
 
     useEffect(() => () => recommendationControllerRef.current?.abort(), []);
 
-    const transitionQueue = useCallback((next: QueueState, shouldPlay = false) => {
+    const transitionQueue = useCallback((next: QueueState, shouldPlay = false, startTime?: number) => {
         if (queueRef.current.current?.id !== next.current?.id) {
             recommendationControllerRef.current?.abort();
             setShowMatureDialog(false);
@@ -218,11 +223,12 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         }
         updateQueue(next);
         pendingPlayRef.current = shouldPlay && !!next.current;
+        pendingStartTimeRef.current = shouldPlay ? startTime : undefined;
     }, [queueRef, resetForTrack, updateQueue]);
 
-    const playTrack = useCallback((track: AudioPlayerTrack) => {
+    const playTrack = useCallback((track: AudioPlayerTrack, options?: PlayTrackOptions) => {
         if (track.deleted) return;
-        transitionQueue(startSingleton(queueRef.current, normalizeTrack(track)), true);
+        transitionQueue(startSingleton(queueRef.current, normalizeTrack(track)), true, options?.startTime);
     }, [queueRef, transitionQueue]);
 
     const playContext = useCallback((tracks: AudioPlayerTrack[], selectedIndex: number, label: string) => {
@@ -305,6 +311,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
             contextLabel: null,
         });
         pendingPlayRef.current = false;
+        pendingStartTimeRef.current = undefined;
         pendingMatureMetadataPlayRef.current = null;
         removeLocalStorage(POSITION_STORAGE_KEY);
     }, [queueRef, resetForTrack, updateQueue]);
@@ -329,7 +336,9 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
             setShowMatureDialog(true);
             return;
         }
-        play();
+        const startTime = pendingStartTimeRef.current;
+        pendingStartTimeRef.current = undefined;
+        play(startTime);
     }, [play, queueRef]);
 
     const togglePlay = useCallback(() => {
@@ -530,7 +539,9 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
                     onConfirm={() => {
                         sessionStorage.setItem('mature-warning-ack', 'true');
                         setShowMatureDialog(false);
-                        play();
+                        const startTime = pendingStartTimeRef.current;
+                        pendingStartTimeRef.current = undefined;
+                        play(startTime);
                     }}
                 />
             </AudioPlayerContext.Provider>
