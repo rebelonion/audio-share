@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Search as SearchIcon, Folder, Music, ShieldAlert, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
+import { Search as SearchIcon, Folder, Music, Play, ShieldAlert, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
 import { searchAudio, getRandomAudio, getRandomAudioFromSearch, fetchDirectoryContents, SearchResult, SearchFilters, SearchField, isMatureAge } from '@/lib/api';
 import type { Folder as RootFolder } from '@/types';
 import { formatDate } from '@/lib/utils';
@@ -12,7 +12,7 @@ import { useMatureContentPreference } from '@/hooks/useMatureContentPreference';
 import RequestSourceDialog from '@/components/RequestSourceDialog';
 import CustomSelect from '@/components/CustomSelect';
 import TrackQuickActions from '@/components/TrackQuickActions';
-import type {AudioPlayerTrack} from '@/contexts/AudioPlayerContext';
+import {useAudioPlayerCommands, type AudioPlayerTrack} from '@/contexts/AudioPlayerContext';
 
 const RESULTS_PER_PAGE = 50;
 
@@ -79,6 +79,7 @@ function hasActiveFilters(filters: SearchFilters): boolean {
 
 export default function Search() {
     const { track } = useRybbit();
+    const {playTrack} = useAudioPlayerCommands();
     const maturePreference = useMatureContentPreference();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams({});
@@ -423,7 +424,25 @@ export default function Search() {
                                                 </Link>
                                             )}
                                             {playerTrack && (
-                                                <TrackQuickActions track={playerTrack} className="ml-auto shrink-0" />
+                                                <div className="ml-auto flex shrink-0 items-center gap-1">
+                                                    <TrackQuickActions track={playerTrack} />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            playTrack(playerTrack);
+                                                            track('search-result-play', {
+                                                                query,
+                                                                resultPath: result.path,
+                                                                title: result.title || result.name,
+                                                            });
+                                                        }}
+                                                        className="rounded-full bg-[var(--secondary)] p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--primary)]"
+                                                        title="Play"
+                                                        aria-label={`Play ${result.title || result.name}`}
+                                                    >
+                                                        <Play className="h-4 w-4 fill-current" />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     )}
