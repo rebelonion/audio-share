@@ -27,6 +27,7 @@ import (
 )
 
 type AudioHandler struct {
+	onMediaStart           func() func()
 	fs                     *services.FileSystemService
 	db                     *sql.DB
 	streamBytesPerSecond   int64
@@ -53,6 +54,7 @@ type AccessFailureLimiter interface {
 }
 
 type AudioHandlerOptions struct {
+	OnMediaStart           func() func()
 	StreamBytesPerSecond   int64
 	StreamBurstBytes       int64
 	DownloadBytesPerSecond int64
@@ -71,6 +73,7 @@ type AudioHandlerOptions struct {
 
 func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, options AudioHandlerOptions) *AudioHandler {
 	return &AudioHandler{
+		onMediaStart:           options.OnMediaStart,
 		fs:                     fs,
 		db:                     db,
 		streamBytesPerSecond:   options.StreamBytesPerSecond,
@@ -515,7 +518,12 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		h.recordMediaEvent(r, row.id, key, eventType, verifiedAccess.Nonce, info.Size())
 	}
 
+	if r.Method == http.MethodGet && h.onMediaStart != nil {
+		done := h.onMediaStart()
+		defer done()
+	}
 	reader := newThrottledReadSeeker(
+		r.Context(),
 		file,
 		h.bytesPerSecond(download),
 		h.burstBytes(download),

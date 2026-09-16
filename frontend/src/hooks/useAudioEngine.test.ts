@@ -29,6 +29,7 @@ class FakeAudio {
     currentTime = 0;
     duration = 120;
     ended = false;
+    error: {code: number} | null = null;
     muted = false;
     paused = true;
     preload = '';
@@ -96,6 +97,7 @@ afterEach(() => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
 });
 
 describe('useAudioEngine', () => {
@@ -206,5 +208,115 @@ describe('useAudioEngine', () => {
         await waitFor(() => expect(FakeAudio.instances).toHaveLength(1));
         expect(FakeAudio.instances[0].volume).toBe(0.2);
         expect(FakeAudio.instances[0].muted).toBe(true);
+    });
+});
+
+
+function renderRecoveryEngine() {
+    const currentTrackRef = {current: {
+        id: 'recovery-track', src: '/audio/key/recovery-track', shareKey: 'recovery-track',
+        name: 'Recovery track', source: 'share' as const,
+    }};
+    return renderHook(() => useAudioEngine({
+        currentTrackRef, metadataRef: {current: null}, onEndedRef: {current: vi.fn()}, waveformDuration: 0,
+    }));
+}
+
+describe('network recovery', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'valid-key', expiresAt: Date.now() + 60_000});
+    });
+
+    it('reuses authorization, restores position, and stops after two retries', async () => {
+        const {result} = renderRecoveryEngine();
+        await act(async () => result.current.play());
+        const audio = FakeAudio.instances[0];
+        act(() => { audio.emit('loadedmetadata'); audio.currentTime = 45; });
+        audio.error = {code: 2};
+        for (const delay of [500, 1000]) {
+            act(() => audio.emit('error'));
+            expect(result.current.notice).toBe('Reconnecting…');
+            await act(async () => { await vi.advanceTimersByTimeAsync(delay); });
+            act(() => audio.emit('loadedmetadata'));
+            expect(audio.currentTime).toBe(45);
+            expect(result.current.isPlaying).toBe(true);
+        }
+        act(() => audio.emit('error'));
+        expect(result.current.error).toContain('could not be loaded');
+        expect(result.current.isLoading).toBe(false);
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the original position if the first reconnect fails before metadata', async () => {
+        const {result} = renderRecoveryEngine();
+        await act(async () => result.current.play());
+        const audio = FakeAudio.instances[0];
+        act(() => { audio.emit('loadedmetadata'); audio.currentTime = 45; });
+        audio.error = {code: 2};
+        act(() => audio.emit('error'));
+        await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+        // Loading a new media source resets the element before metadata arrives.
+        audio.currentTime = 0;
+        act(() => audio.emit('error'));
+        await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+        act(() => audio.emit('loadedmetadata'));
+        expect(audio.currentTime).toBe(45);
+        expect(result.current.currentTime).toBe(45);
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels a scheduled reconnect when paused', async () => {
+        const {result} = renderRecoveryEngine();
+        await act(async () => result.current.play());
+        const audio = FakeAudio.instances[0];
+        audio.error = {code: 2};
+        act(() => audio.emit('error'));
+        act(() => result.current.pause());
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+        expect(audio.paused).toBe(true);
+        expect(result.current.isPlaying).toBe(false);
+        expect(result.current.notice).toBeNull();
+    });
+
+    it('reloads a failed source when resuming after pausing a reconnect', async () => {
+        const {result} = renderRecoveryEngine();
+        await act(async () => result.current.play());
+        const audio = FakeAudio.instances[0];
+        act(() => { audio.emit('loadedmetadata'); audio.currentTime = 45; });
+        const clearSource = vi.spyOn(audio, 'removeAttribute');
+        audio.error = {code: 2};
+        act(() => audio.emit('error'));
+        expect(result.current.notice).toBe('Reconnecting…');
+        act(() => result.current.pause());
+        await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+        expect(clearSource).not.toHaveBeenCalled();
+
+        await act(async () => result.current.play());
+        expect(clearSource).toHaveBeenCalledWith('src');
+        act(() => audio.emit('loadedmetadata'));
+        expect(audio.currentTime).toBe(45);
+        expect(result.current.isPlaying).toBe(true);
+    });
+
+    it('does not retry decoding or unsupported-source failures', async () => {
+        const {result} = renderRecoveryEngine();
+        await act(async () => result.current.play());
+        const audio = FakeAudio.instances[0];
+        audio.error = {code: 4};
+        act(() => audio.emit('error'));
+        expect(result.current.error).toContain('could not be loaded');
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('does not start playing when authorization completes after a pause', async () => {
+        const access = deferred<{accessKey: string; expiresAt: number}>();
+        mediaAccess.requestMediaAccess.mockReturnValueOnce(access.promise);
+        const {result} = renderRecoveryEngine();
+        act(() => result.current.play());
+        act(() => result.current.pause());
+        await act(async () => access.resolve({accessKey: 'later', expiresAt: Date.now() + 60_000}));
+        expect(FakeAudio.instances).toHaveLength(0);
+        expect(result.current.isPlaying).toBe(false);
     });
 });

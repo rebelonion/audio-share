@@ -2,15 +2,29 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"sync"
 	"testing"
 	"time"
 )
 
+func TestThrottleWaitCancelsWithoutReturningMoreBytes(t *testing.T) {
+	for _, burst := range []int64{0, 1} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		reader := newThrottledReadSeeker(ctx, bytes.NewReader(make([]byte, 100)), 1, burst, nil, "test")
+		_, err := io.ReadAll(reader)
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("burst %d: %v", burst, err)
+		}
+	}
+}
+
 func TestThrottledReadSeekerAllowsInitialBurst(t *testing.T) {
 	clock := &fakeThrottleClock{now: time.Unix(0, 0)}
-	reader := newThrottledReadSeekerWithClock(
+	reader := newThrottledReadSeekerWithClock(context.Background(),
 		bytes.NewReader(make([]byte, 250)),
 		100,
 		200,
@@ -32,7 +46,7 @@ func TestThrottledReadSeekerAllowsInitialBurst(t *testing.T) {
 
 func TestThrottledReadSeekerReturnsBurstBeforeOversizedRead(t *testing.T) {
 	clock := &fakeThrottleClock{now: time.Unix(0, 0)}
-	reader := newThrottledReadSeekerWithClock(
+	reader := newThrottledReadSeekerWithClock(context.Background(),
 		bytes.NewReader(make([]byte, 30)),
 		100,
 		10,
@@ -67,7 +81,7 @@ func TestThrottledReadSeekerReturnsBurstBeforeOversizedRead(t *testing.T) {
 
 func TestThrottledReadSeekerRefillDoesNotExceedBurst(t *testing.T) {
 	clock := &fakeThrottleClock{now: time.Unix(0, 0)}
-	reader := newThrottledReadSeekerWithClock(
+	reader := newThrottledReadSeekerWithClock(context.Background(),
 		bytes.NewReader(make([]byte, 401)),
 		100,
 		200,
@@ -87,7 +101,7 @@ func TestThrottledReadSeekerRefillDoesNotExceedBurst(t *testing.T) {
 
 func TestThrottledReadSeekerWithNoBurstPacesFirstRead(t *testing.T) {
 	clock := &fakeThrottleClock{now: time.Unix(0, 0)}
-	reader := newThrottledReadSeekerWithClock(
+	reader := newThrottledReadSeekerWithClock(context.Background(),
 		bytes.NewReader(make([]byte, 50)),
 		100,
 		0,
@@ -151,11 +165,12 @@ func (c *fakeThrottleClock) Now() time.Time {
 	return c.now
 }
 
-func (c *fakeThrottleClock) Sleep(duration time.Duration) {
+func (c *fakeThrottleClock) Sleep(ctx context.Context, duration time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.now = c.now.Add(duration)
 	c.slept += duration
+	return ctx.Err()
 }
 
 func (c *fakeThrottleClock) Advance(duration time.Duration) {

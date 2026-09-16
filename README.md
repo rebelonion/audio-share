@@ -120,7 +120,8 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `MAX_IMAGES_PER_WINDOW` | Thumbnail and poster requests allowed per client IP per window | `300` |
 | `CONTENT_DIR` | Directory for `about.md` | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
-| `DB_PATH` | Path to SQLite database file for search index | `./audio-share.db` |
+| `DATABASE_URL` | PostgreSQL connection URL; schema changes run with the `migrate` command | `postgres://audio_share:audio_share@localhost:5432/audio_share` |
+| `MANAGEMENT_ADDR` | Internal readiness, status, retire/resume/shutdown listener; never expose publicly | `127.0.0.1:9090` |
 | `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
 | `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen...` |
@@ -258,7 +259,7 @@ A folder is considered a "source" if it has an `original_url` in its `folder.jso
 
 ## Search Index
 
-The application indexes your audio library in SQLite. Build the index before browsing or searching the library.
+The application indexes your audio library in PostgreSQL. Run migrations and build the index before browsing or searching the library.
 
 ### Building the Index
 
@@ -266,6 +267,7 @@ Build the index before starting the server (or immediately after adding new file
 
 ```bash
 cd backend
+go run . migrate
 go run . reindex
 ```
 
@@ -278,11 +280,11 @@ This walks through all configured audio directories and indexes:
 Set the `INDEX_SCHEDULE` environment variable to a cron expression for automatic reindexing:
 
 ```bash
-INDEX_SCHEDULE="0 */6 * * *" go run .  # Reindex every 6 hours
-INDEX_SCHEDULE="0 0 * * *" go run .    # Reindex daily at midnight
+INDEX_SCHEDULE="0 */6 * * *" go run . worker  # Reindex every 6 hours
+INDEX_SCHEDULE="0 0 * * *" go run . worker    # Reindex daily at midnight
 ```
 
-If not set, the index is only rebuilt when you manually run the `reindex` command. A file lock prevents concurrent reindex attempts. If a scheduled reindex is already running, a manual reindex exits without doing any work.
+If not set, the index is only rebuilt when you manually run the `reindex` command. A PostgreSQL advisory lock prevents concurrent reindex attempts across containers. If a scheduled reindex is already running, a manual reindex exits without doing any work.
 
 ## Waveform Visualization
 
@@ -310,28 +312,28 @@ WAVEFORM_MAX_DURATION=4h go run . waveform
 Set `WAVEFORM_CRON` to run generation on a schedule. The job processes files until `WAVEFORM_MAX_DURATION` elapses, then stops cleanly and resumes at the next scheduled run:
 
 ```bash
-WAVEFORM_CRON="0 3 * * *" go run .              # Run nightly at 3am, up to 2h
-WAVEFORM_CRON="0 3 * * *" WAVEFORM_MAX_DURATION="4h" go run .
+WAVEFORM_CRON="0 3 * * *" go run . worker              # Run nightly at 3am, up to 2h
+WAVEFORM_CRON="0 3 * * *" WAVEFORM_MAX_DURATION="4h" go run . worker
 ```
 
 If `WAVEFORM_CRON` is not set, no automatic generation occurs.
 
-### Database Location
+### Database Connection
 
-By default, the database is stored at `./audio-share.db`. Override with:
+Set `DATABASE_URL` in `.env.local` to your PostgreSQL connection URL, then initialize or adopt its schema:
 
 ```bash
-DB_PATH=/path/to/audio-share.db go run .
+go run . migrate
 ```
 
 ## Development
 
-Run both the Go backend and Vite dev server:
+Build the frontend once (`npm --prefix frontend run build`) and run `go run . migrate` from `backend` before starting the Go backend and Vite dev server:
 
 ```bash
 # Terminal 1 - Go backend
 cd backend
-CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run .
+STATIC_DIR=../frontend/dist CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run . serve
 
 # Terminal 2 - Vite dev server (with hot reload)
 cd frontend
@@ -354,7 +356,8 @@ Run Go server with built frontend:
 
 ```bash
 cd backend
-STATIC_DIR=../frontend/dist CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run .
+go run . migrate
+STATIC_DIR=../frontend/dist CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run . serve
 ```
 
 Open http://localhost:8080 in your browser.

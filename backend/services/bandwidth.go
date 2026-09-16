@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"math"
 	"sync"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 type bandwidthClock interface {
 	Now() time.Time
-	Sleep(time.Duration)
+	Sleep(context.Context, time.Duration) error
 }
 
 type realBandwidthClock struct{}
@@ -17,8 +18,8 @@ func (realBandwidthClock) Now() time.Time {
 	return time.Now()
 }
 
-func (realBandwidthClock) Sleep(duration time.Duration) {
-	time.Sleep(duration)
+func (realBandwidthClock) Sleep(ctx context.Context, duration time.Duration) error {
+	return SleepContext(ctx, duration)
 }
 
 type IPBandwidthLimiter struct {
@@ -54,17 +55,20 @@ func newIPBandwidthLimiter(bytesPerSecond, burstBytes int64, clock bandwidthCloc
 	}
 }
 
-func (l *IPBandwidthLimiter) Wait(ip string, byteCount int) {
+func (l *IPBandwidthLimiter) Wait(ctx context.Context, ip string, byteCount int) error {
 	if l == nil || l.bytesPerSecond <= 0 || byteCount <= 0 {
-		return
+		return ctx.Err()
 	}
 	bucket := l.bucket(ip)
 	remaining := int64(byteCount)
 	for remaining > 0 {
 		chunk := min(remaining, l.burstBytes)
-		l.waitChunk(bucket, chunk)
+		if err := l.waitChunk(ctx, bucket, chunk); err != nil {
+			return err
+		}
 		remaining -= chunk
 	}
+	return nil
 }
 
 func (l *IPBandwidthLimiter) bucket(ip string) *bandwidthBucket {
@@ -84,8 +88,11 @@ func (l *IPBandwidthLimiter) bucket(ip string) *bandwidthBucket {
 	return bucket
 }
 
-func (l *IPBandwidthLimiter) waitChunk(bucket *bandwidthBucket, byteCount int64) {
+func (l *IPBandwidthLimiter) waitChunk(ctx context.Context, bucket *bandwidthBucket, byteCount int64) error {
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		now := l.clock.Now()
 		bucket.mu.Lock()
 		elapsed := now.Sub(bucket.last).Seconds()
@@ -101,13 +108,15 @@ func (l *IPBandwidthLimiter) waitChunk(bucket *bandwidthBucket, byteCount int64)
 			bucket.tokens -= float64(byteCount)
 			bucket.mu.Unlock()
 			l.maybeCleanup(now)
-			return
+			return nil
 		}
 		missing := float64(byteCount) - bucket.tokens
 		bucket.mu.Unlock()
 
 		wait := time.Duration(math.Ceil(missing / float64(l.bytesPerSecond) * float64(time.Second)))
-		l.clock.Sleep(wait)
+		if err := l.clock.Sleep(ctx, wait); err != nil {
+			return err
+		}
 	}
 }
 

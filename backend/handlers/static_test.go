@@ -175,6 +175,18 @@ func TestSPAHandlerCachesHashedAssetsImmutably(t *testing.T) {
 	}
 }
 
+func TestMissingAssetDoesNotReturnSPAHTML(t *testing.T) {
+	handler := NewSPAHandler(t.TempDir(), FrontendConfig{}, "", "", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/assets/old-build.js", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("missing asset status %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "<html") {
+		t.Fatal("returned HTML for a missing asset")
+	}
+}
+
 func TestVersionHandlerReturnsUncachedBuildID(t *testing.T) {
 	handler := &SPAHandler{config: FrontendConfig{BuildID: "build-456"}}
 	request := httptest.NewRequest(http.MethodGet, "https://example.test/api/version", nil)

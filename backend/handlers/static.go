@@ -96,6 +96,10 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
+		if strings.HasPrefix(path, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
 		h.serveRoute(w, r)
 		return
 	}

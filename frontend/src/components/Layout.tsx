@@ -7,6 +7,7 @@ import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
 import InfoBanner from './InfoBanner'
 import UpdateBanner from './UpdateBanner'
+import PageLoadBoundary from './PageLoadBoundary'
 import CloudflareChallengeRecovery from './CloudflareChallengeRecovery'
 import AudioPlayer from './AudioPlayer'
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config'
@@ -114,15 +115,17 @@ function LayoutContent() {
         <UpdateBanner />
 
         <main className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-          <Suspense
-            fallback={
-              <div className="flex min-h-[60vh] items-center justify-center text-[var(--muted-foreground)]">
-                Loading…
-              </div>
-            }
-          >
-            <Outlet />
-          </Suspense>
+          <PageLoadBoundary key={location.pathname}>
+            <Suspense
+              fallback={
+                <div className="flex min-h-[60vh] items-center justify-center text-[var(--muted-foreground)]">
+                  Loading…
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
+          </PageLoadBoundary>
         </main>
 
         <FloatingActionButton />

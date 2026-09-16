@@ -45,7 +45,7 @@ func loadEnvFile(filename string) {
 				}
 			}
 			// Only set if not already set (env vars take precedence)
-			if os.Getenv(key) == "" {
+			if _, exists := os.LookupEnv(key); !exists {
 				os.Setenv(key, value)
 			}
 		}
@@ -54,7 +54,8 @@ func loadEnvFile(filename string) {
 }
 
 type Config struct {
-	Port string
+	Port           string
+	ManagementAddr string
 
 	AudioDir string
 
@@ -131,6 +132,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:                      getEnv("PORT", "8080"),
+		ManagementAddr:            getEnv("MANAGEMENT_ADDR", "127.0.0.1:9090"),
 		AudioDir:                  getEnv("AUDIO_DIR", ""),
 		StreamBytesPerSecond:      getEnvInt64("STREAM_BYTES_PER_SECOND", 0),
 		StreamBurstBytes:          getEnvInt64("STREAM_BURST_BYTES", 0),

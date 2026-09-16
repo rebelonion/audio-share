@@ -1,18 +1,17 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
 
 const (
-	playbackClaimCleanupInterval = 15 * time.Minute
-	playbackClaimCleanupGrace    = 15 * time.Minute
-	playbackClaimCleanupBatch    = 10_000
-	playbackClaimCleanupBatches  = 10
+	playbackClaimCleanupGrace   = 15 * time.Minute
+	playbackClaimCleanupBatch   = 10_000
+	playbackClaimCleanupBatches = 10
 )
 
 const trackSummaryColumns = `
@@ -77,37 +76,23 @@ func NewPlaybackService(db *Database, legacyAccessKeyTTL time.Duration) *Playbac
 	}
 }
 
-func (s *PlaybackService) StartAccessKeyClaimCleanup() {
-	cleanup := func() {
-		var total int64
+func (s *PlaybackService) CleanupAccessKeyClaims() error {
+	return withJobLock(s.db.DB(), "playback-cleanup", func(conn *sql.Conn) error {
 		for range playbackClaimCleanupBatches {
-			deleted, err := s.cleanupExpiredAccessKeyClaims(playbackClaimCleanupBatch)
+			deleted, err := s.cleanupExpiredAccessKeyClaims(conn, playbackClaimCleanupBatch)
 			if err != nil {
-				log.Printf("Error cleaning expired playback access-key claims: %v", err)
-				return
+				return err
 			}
-			total += deleted
 			if deleted < playbackClaimCleanupBatch {
 				break
 			}
 		}
-		if total > 0 {
-			log.Printf("Removed %d expired playback access-key claims", total)
-		}
-	}
-
-	cleanup()
-	go func() {
-		ticker := time.NewTicker(playbackClaimCleanupInterval)
-		defer ticker.Stop()
-		for range ticker.C {
-			cleanup()
-		}
-	}()
+		return nil
+	})
 }
 
-func (s *PlaybackService) cleanupExpiredAccessKeyClaims(batchSize int) (int64, error) {
-	tx, err := s.db.DB().Begin()
+func (s *PlaybackService) cleanupExpiredAccessKeyClaims(conn *sql.Conn, batchSize int) (int64, error) {
+	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return 0, err
 	}
