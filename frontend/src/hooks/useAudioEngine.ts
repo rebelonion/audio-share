@@ -59,6 +59,15 @@ export function useAudioEngine({
         controller: AbortController;
         promise: Promise<MediaAccessGrant>;
     } | null>(null);
+    const wantsPlaybackRef = useRef(false);
+    const networkRetriesRef = useRef(0);
+    const pendingResumeAtRef = useRef<number | undefined>(undefined);
+    const networkRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const recoverNetworkRef = useRef<(audio: HTMLAudioElement, track: PlayerTrack, grant: MediaAccessGrant) => void>(() => {});
+    const cancelNetworkRetry = useCallback(() => {
+        if (networkRetryTimerRef.current !== null) clearTimeout(networkRetryTimerRef.current);
+        networkRetryTimerRef.current = null;
+    }, []);
     const recoveredExpiredKeyRef = useRef<string | null>(null);
     const recoverExpiredAccessRef = useRef<(audio: HTMLAudioElement, track: PlayerTrack) => void>(() => {});
 
@@ -84,6 +93,7 @@ export function useAudioEngine({
     }, []);
 
     const clearAudio = useCallback(() => {
+        cancelNetworkRetry();
         const audio = audioRef.current;
         if (!audio) return;
         removeAudioListeners(audio);
@@ -93,7 +103,7 @@ export function useAudioEngine({
         audio.pause();
         audio.removeAttribute('src');
         audio.load();
-    }, [removeAudioListeners]);
+    }, [cancelNetworkRetry, removeAudioListeners]);
 
     const destroyAudio = useCallback(() => {
         clearAudio();
@@ -107,6 +117,9 @@ export function useAudioEngine({
     }, [destroyAudio]);
 
     const resetForTrack = useCallback(() => {
+        wantsPlaybackRef.current = false;
+        networkRetriesRef.current = 0;
+        pendingResumeAtRef.current = undefined;
         accessRequestRef.current?.controller.abort();
         accessRequestRef.current = null;
         clearAudio();
@@ -158,6 +171,7 @@ export function useAudioEngine({
         audio.currentTime = time;
         setCurrentTime(time);
         persistedPositionRef.current = time;
+        pendingResumeAtRef.current = undefined;
     }, []);
 
     const createAudio = useCallback((
@@ -167,6 +181,7 @@ export function useAudioEngine({
     ) => {
         const audio = audioRef.current || new Audio();
         removeAudioListeners(audio);
+        pendingResumeAtRef.current = resumeAt;
 
         const listen = (name: string, listener: EventListener) => {
             audio.addEventListener(name, listener);
@@ -214,20 +229,40 @@ export function useAudioEngine({
         });
         listen('error', () => {
             if (audioRef.current !== audio) return;
+            setAudioLoaded(false);
             if (blockedPlaybackRef.current === audio) {
                 blockedPlaybackRef.current = null;
             }
             if (
-                Date.now() >= grant.expiresAt
+                wantsPlaybackRef.current
+                && Date.now() >= grant.expiresAt
                 && recoveredExpiredKeyRef.current !== grant.accessKey
             ) {
                 recoveredExpiredKeyRef.current = grant.accessKey;
                 recoverExpiredAccessRef.current(audio, loadedTrack);
                 return;
             }
+            if (
+                wantsPlaybackRef.current
+                && audio.error?.code === 2
+                && networkRetriesRef.current < 2
+                && Date.now() < grant.expiresAt
+            ) {
+                if (networkRetryTimerRef.current !== null) return;
+                const delay = 500 * 2 ** networkRetriesRef.current++;
+                playbackAttemptRef.current += 1;
+                setIsLoading(true);
+                setNotice('Reconnecting…');
+                networkRetryTimerRef.current = setTimeout(() => {
+                    networkRetryTimerRef.current = null;
+                    if (wantsPlaybackRef.current && audioRef.current === audio && currentTrackRef.current?.id === loadedTrack.id) {
+                        recoverNetworkRef.current(audio, loadedTrack, grant);
+                    }
+                }, delay);
+                return;
+            }
             setIsLoading(false);
             setIsPlaying(false);
-            setAudioLoaded(false);
             setNotice(null);
             setError('This track could not be loaded. You can skip it from the queue.');
         });
@@ -348,21 +383,32 @@ export function useAudioEngine({
         requestStreamAccess,
     ]);
 
+    recoverNetworkRef.current = (audio, track, grant) => {
+        const position = pendingResumeAtRef.current ?? audio.currentTime;
+        clearAudio();
+        createAudio(track, grant, position);
+        playAudio(audio, track);
+    };
+
     recoverExpiredAccessRef.current = (audio, track) => {
-        const resumeAt = audio.currentTime;
+        const resumeAt = pendingResumeAtRef.current ?? audio.currentTime;
         void loadAuthorizedAudio(track, resumeAt);
     };
 
     const play = useCallback((startTime?: number) => {
         const selectedTrack = currentTrackRef.current;
         if (!selectedTrack) return;
+        wantsPlaybackRef.current = true;
+        networkRetriesRef.current = 0;
+        cancelNetworkRetry();
         const existingAudio = audioRef.current;
-        if (existingAudio && !existingAudio.paused) return;
+        if (existingAudio && !existingAudio.paused && !existingAudio.error) return;
 
         const grant = activeGrantRef.current;
         const hasValidGrant = grant && Date.now() < grant.expiresAt;
         if (
             existingAudio
+            && !existingAudio.error
             && !existingAudio.ended
             && hasValidGrant
             && (
@@ -374,10 +420,13 @@ export function useAudioEngine({
             return;
         }
 
-        const resumeAt = existingAudio && !existingAudio.ended ? existingAudio.currentTime : undefined;
+        const resumeAt = existingAudio && !existingAudio.ended
+            ? pendingResumeAtRef.current ?? existingAudio.currentTime
+            : undefined;
         void loadAuthorizedAudio(selectedTrack, startTime ?? resumeAt);
     }, [
         audioLoaded,
+        cancelNetworkRetry,
         currentTrackRef,
         error,
         loadAuthorizedAudio,
@@ -385,14 +434,18 @@ export function useAudioEngine({
     ]);
 
     const pause = useCallback(() => {
-        const audio = audioRef.current;
-        if (!audio || audio.paused) return;
+        wantsPlaybackRef.current = false;
+        cancelNetworkRetry();
+        accessRequestRef.current?.controller.abort();
+        accessRequestRef.current = null;
+        loadAttemptRef.current += 1;
         playbackAttemptRef.current += 1;
         setIsPlaying(false);
         setIsLoading(false);
-        audio.pause();
+        setNotice(null);
+        audioRef.current?.pause();
         trackEvent('audio-pause');
-    }, [trackEvent]);
+    }, [cancelNetworkRetry, trackEvent]);
 
     const toggleMute = useCallback(() => {
         const muted = !isMutedRef.current;

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/onion/audio-share-backend/config"
@@ -25,59 +29,109 @@ func sourceNormalizerFromConfig(cfg *config.Config) (*services.ScriptSourceNorma
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	cfg := config.Load()
-
+	command := "serve"
+	if len(os.Args) > 1 {
+		command = os.Args[1]
+	}
+	if command == "export-assets" {
+		if len(os.Args) != 3 {
+			return fmt.Errorf("usage: audio-share-backend export-assets DESTINATION")
+		}
+		return services.ExportAssets(cfg.StaticDir, os.Args[2])
+	}
+	switch command {
+	case "serve", "worker", "migrate", "reindex", "waveform":
+	default:
+		return fmt.Errorf("unknown command %q (use serve, worker, migrate, reindex, waveform, export-assets)", command)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	db, err := services.OpenDatabase(startup, cfg.DatabaseURL)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("connect database: %w", err)
+	}
+	defer db.Close()
+	if command == "migrate" {
+		return db.Migrate(ctx)
+	}
+	startup, cancel = context.WithTimeout(ctx, 5*time.Second)
+	err = db.CheckSchema(startup)
+	cancel()
+	if err != nil {
+		return err
+	}
 	fsService := services.NewFileSystemService(cfg.AudioDir)
+	if err := validateAudioMounts(fsService); err != nil {
+		return err
+	}
 	webhookService := services.NewWebhookService(cfg.IndexWebhookURL, cfg.IndexWebhookToken)
-
-	if len(os.Args) > 1 && os.Args[1] == "reindex" {
-		db := services.NewDatabase(cfg.DatabaseURL)
-		defer db.Close()
-		searchService := services.NewSearchService(db, fsService, webhookService)
-		if err := searchService.RebuildIndex(); err != nil {
-			log.Fatalf("Reindex failed: %v", err)
-		}
-		os.Exit(0)
+	if command == "reindex" {
+		return services.NewSearchService(db, fsService, webhookService).RebuildIndex()
 	}
-
-	if len(os.Args) > 1 && os.Args[1] == "waveform" {
-		db := services.NewDatabase(cfg.DatabaseURL)
-		defer db.Close()
-		waveformService := services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers)
-		maxDuration, err := time.ParseDuration(cfg.WaveformMaxDuration)
+	if command == "waveform" {
+		duration, err := time.ParseDuration(cfg.WaveformMaxDuration)
+		if err != nil || duration <= 0 {
+			return fmt.Errorf("invalid WAVEFORM_MAX_DURATION %q", cfg.WaveformMaxDuration)
+		}
+		return services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers).RunJob(duration)
+	}
+	l := newLifecycle(db.CheckSchema)
+	admin, err := net.Listen("tcp", cfg.ManagementAddr)
+	if err != nil {
+		return fmt.Errorf("management listener: %w", err)
+	}
+	defer admin.Close()
+	if command == "worker" {
+		finish, err := startWorker(cfg, db, fsService, l)
 		if err != nil {
-			maxDuration = 2 * time.Hour
+			return err
 		}
-		waveformService.RunJob(maxDuration)
-		os.Exit(0)
+		log.Printf("Worker started; management on %s", admin.Addr())
+		return serveUntilStopped(ctx, nil, nil, admin, l, finish)
 	}
+	if err := validateWebFiles(cfg); err != nil {
+		return err
+	}
+	handler, err := appHandler(cfg, db, fsService, l)
+	if err != nil {
+		return err
+	}
+	listener, err := net.Listen("tcp", ":"+cfg.Port)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	log.Printf("Starting build %s on %s; management on %s", buildID, listener.Addr(), admin.Addr())
+	return serveUntilStopped(ctx, listener, l.public(handler), admin, l, nil)
+}
 
-	db := services.NewDatabase(cfg.DatabaseURL)
+func appHandler(cfg *config.Config, db *services.Database, fsService *services.FileSystemService, l *lifecycle) (http.Handler, error) {
+	webhookService := services.NewWebhookService(cfg.IndexWebhookURL, cfg.IndexWebhookToken)
 	searchService := services.NewSearchService(db, fsService, webhookService)
 
-	if cfg.IndexSchedule != "" {
-		searchService.StartScheduledReindex(cfg.IndexSchedule)
-	}
-
-	if cfg.WaveformCron != "" {
-		waveformService := services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers)
-		waveformService.StartScheduledJob(cfg.WaveformCron, cfg.WaveformMaxDuration)
-	}
-
 	if cfg.SessionSecret == "" {
-		log.Fatal("SESSION_SECRET is required but not set")
+		return nil, fmt.Errorf("SESSION_SECRET is required but not set")
 	}
 	streamKeyTTL, err := time.ParseDuration(cfg.StreamKeyTTL)
 	if err != nil || streamKeyTTL <= 0 {
-		log.Fatalf("Invalid STREAM_KEY_TTL %q", cfg.StreamKeyTTL)
+		return nil, fmt.Errorf("Invalid STREAM_KEY_TTL %q", cfg.StreamKeyTTL)
 	}
 	downloadKeyTTL, err := time.ParseDuration(cfg.DownloadKeyTTL)
 	if err != nil || downloadKeyTTL <= 0 {
-		log.Fatalf("Invalid DOWNLOAD_KEY_TTL %q", cfg.DownloadKeyTTL)
+		return nil, fmt.Errorf("Invalid DOWNLOAD_KEY_TTL %q", cfg.DownloadKeyTTL)
 	}
 	downloadSessionMinAge, err := time.ParseDuration(cfg.DownloadSessionMinAge)
 	if err != nil || downloadSessionMinAge < 0 {
-		log.Fatalf("Invalid DOWNLOAD_SESSION_MIN_AGE %q", cfg.DownloadSessionMinAge)
+		return nil, fmt.Errorf("Invalid DOWNLOAD_SESSION_MIN_AGE %q", cfg.DownloadSessionMinAge)
 	}
 	accessKeys, err := services.NewAccessKeyManager(
 		cfg.SessionSecret,
@@ -87,32 +141,32 @@ func main() {
 		downloadKeyTTL,
 	)
 	if err != nil {
-		log.Fatalf("Invalid audio access key configuration: %v", err)
+		return nil, fmt.Errorf("Invalid audio access key configuration: %v", err)
 	}
 	if err := accessKeys.SetCaptchaPolicy(services.MediaPurposeStream, cfg.StreamCaptchaLimits); err != nil {
-		log.Fatalf("Invalid STREAM_CAPTCHA_LIMITS %q: %v", cfg.StreamCaptchaLimits, err)
+		return nil, fmt.Errorf("Invalid STREAM_CAPTCHA_LIMITS %q: %v", cfg.StreamCaptchaLimits, err)
 	}
 	captchaEnforcement := strings.ToLower(strings.TrimSpace(cfg.CapEnforcement))
 	if captchaEnforcement != "off" && captchaEnforcement != "observe" && captchaEnforcement != "enforce" {
-		log.Fatalf("Invalid CAP_ENFORCEMENT %q", cfg.CapEnforcement)
+		return nil, fmt.Errorf("Invalid CAP_ENFORCEMENT %q", cfg.CapEnforcement)
 	}
 	downloadCaptchaMode := strings.ToLower(strings.TrimSpace(cfg.DownloadCaptchaMode))
 	if downloadCaptchaMode != "off" && downloadCaptchaMode != "always" {
-		log.Fatalf("Invalid DOWNLOAD_CAPTCHA_MODE %q", cfg.DownloadCaptchaMode)
+		return nil, fmt.Errorf("Invalid DOWNLOAD_CAPTCHA_MODE %q", cfg.DownloadCaptchaMode)
 	}
 	streamClearanceTTL, err := time.ParseDuration(cfg.StreamCaptchaClearanceTTL)
 	if err != nil || streamClearanceTTL <= 0 {
-		log.Fatalf("Invalid STREAM_CAPTCHA_CLEARANCE_TTL %q", cfg.StreamCaptchaClearanceTTL)
+		return nil, fmt.Errorf("Invalid STREAM_CAPTCHA_CLEARANCE_TTL %q", cfg.StreamCaptchaClearanceTTL)
 	}
 	capVerifyTimeout, err := time.ParseDuration(cfg.CapVerifyTimeout)
 	if err != nil || capVerifyTimeout <= 0 {
-		log.Fatalf("Invalid CAP_VERIFY_TIMEOUT %q", cfg.CapVerifyTimeout)
+		return nil, fmt.Errorf("Invalid CAP_VERIFY_TIMEOUT %q", cfg.CapVerifyTimeout)
 	}
 	var captchaVerifier services.CaptchaVerifier
 	captchaConfigured := downloadCaptchaMode == "always" || cfg.StreamCaptchaLimits != ""
 	if captchaEnforcement == "enforce" && captchaConfigured {
 		if cfg.CapPublicEndpoint == "" {
-			log.Fatal("CAP_PUBLIC_ENDPOINT is required when Cap enforcement is enabled")
+			return nil, fmt.Errorf("CAP_PUBLIC_ENDPOINT is required when Cap enforcement is enabled")
 		}
 		verifier, err := services.NewCapVerifier(
 			cfg.CapVerifyEndpoint,
@@ -120,7 +174,7 @@ func main() {
 			capVerifyTimeout,
 		)
 		if err != nil {
-			log.Fatalf("Invalid Cap verification configuration: %v", err)
+			return nil, fmt.Errorf("Invalid Cap verification configuration: %v", err)
 		}
 		captchaVerifier = verifier
 	}
@@ -140,16 +194,16 @@ func main() {
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
 	playbackService := services.NewPlaybackService(db, streamKeyTTL)
-	playbackService.StartAccessKeyClaimCleanup()
 	libraryService := services.NewLibraryService(db)
 	requestsService := services.NewRequestsService(db)
 	sourceNormalizer, err := sourceNormalizerFromConfig(cfg)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	rateLimiter := middleware.NewRateLimiter(cfg)
 
 	audioHandler := handlers.NewAudioHandler(fsService, db.DB(), handlers.AudioHandlerOptions{
+		OnMediaStart:           l.startMedia,
 		StreamBytesPerSecond:   cfg.StreamBytesPerSecond,
 		StreamBurstBytes:       cfg.StreamBurstBytes,
 		DownloadBytesPerSecond: cfg.DownloadBytesPerSecond,
@@ -242,24 +296,9 @@ func main() {
 	mux.HandleFunc("/robots.txt", contentHandler.RobotsHandler())
 	mux.HandleFunc("/site.webmanifest", contentHandler.ManifestHandler())
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-
 	mux.Handle("/", spaHandler)
 
-	handler := securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, mux)))
-
-	log.Printf("Starting server on :%s", cfg.Port)
-	log.Printf("Audio directories: %v", fsService.GetSlugToDirectoryMap())
-	log.Printf("Content directory: %s", cfg.ContentDir)
-	log.Printf("Static directory: %s", cfg.StaticDir)
-	log.Printf("Build ID: %s", buildID)
-
-	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
-		log.Fatal(err)
-	}
+	return securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, mux))), nil
 }
 
 func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {

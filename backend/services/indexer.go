@@ -1,17 +1,16 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
-
-	"github.com/robfig/cron/v3"
 )
 
 type FolderRecord struct {
@@ -79,19 +78,19 @@ func nullIfEmpty(s string) interface{} {
 }
 
 func (s *SearchService) RebuildIndex() error {
-	lockFile, err := os.OpenFile(s.lockPath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer lockFile.Close()
+	return withJobLock(s.db.DB(), "reindex", func(conn *sql.Conn) error {
+		job := &indexJob{conn: conn, fs: s.fs, webhookService: s.webhookService}
+		return job.rebuildIndex()
+	})
+}
 
-	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-	if err != nil {
-		log.Println("Reindex already in progress, skipping")
-		return nil
-	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+type indexJob struct {
+	conn           *sql.Conn
+	fs             *FileSystemService
+	webhookService *WebhookService
+}
 
+func (s *indexJob) rebuildIndex() error {
 	log.Println("Starting index rebuild...")
 	start := time.Now().UTC().Truncate(time.Second)
 
@@ -109,22 +108,22 @@ func (s *SearchService) RebuildIndex() error {
 			Name:       dirConfig.Name,
 			UploadDate: uploadDate,
 		}); err != nil {
-			log.Printf("Error indexing root folder %s: %v", slug, err)
+			return err
 		}
 
 		if err := s.indexDirectory(slug, dirConfig.Path, "", ""); err != nil {
-			log.Printf("Error indexing %s: %v", slug, err)
+			return err
 		}
 	}
 
-	if _, err := s.db.DB().Exec("DELETE FROM folders WHERE indexed_at < $1", start); err != nil {
-		log.Printf("Error cleaning up stale folders: %v", err)
+	if _, err := s.conn.ExecContext(context.Background(), "DELETE FROM folders WHERE indexed_at < $1", start); err != nil {
+		return err
 	}
-	if _, err := s.db.DB().Exec("UPDATE audio_files SET deleted = 1 WHERE indexed_at < $1 AND deleted = 0", start); err != nil {
-		log.Printf("Error soft-deleting stale audio files: %v", err)
+	if _, err := s.conn.ExecContext(context.Background(), "UPDATE audio_files SET deleted = 1 WHERE indexed_at < $1 AND deleted = 0", start); err != nil {
+		return err
 	}
 
-	if _, err := s.db.DB().Exec(`
+	if _, err := s.conn.ExecContext(context.Background(), `
 		UPDATE folders SET item_count = (
 			SELECT COUNT(*) FROM folders f2
 			WHERE f2.path LIKE folders.path || '/%'
@@ -134,10 +133,10 @@ func (s *SearchService) RebuildIndex() error {
 			AND deleted = 0
 		)
 	`); err != nil {
-		log.Printf("Error updating folder item counts: %v", err)
+		return err
 	}
 
-	if _, err := s.db.DB().Exec(`
+	if _, err := s.conn.ExecContext(context.Background(), `
 		UPDATE folders SET
 			directory_size_bytes = COALESCE(
 				(SELECT SUM(size) FROM audio_files
@@ -165,7 +164,7 @@ func (s *SearchService) RebuildIndex() error {
 				folders.upload_date
 			)
 	`); err != nil {
-		log.Printf("Error updating folder computed fields: %v", err)
+		return err
 	}
 
 	elapsed := time.Since(start)
@@ -188,8 +187,8 @@ func (s *SearchService) RebuildIndex() error {
 // getIndexedFoldersWithURLForWebhook returns all folders with an original_url that were
 // present (or re-indexed) during this run. The name reflects that this includes both
 // newly added and re-indexed folders — the webhook consumer needs all of them.
-func (s *SearchService) getIndexedFoldersWithURLForWebhook(start time.Time) ([]NewFolder, error) {
-	rows, err := s.db.DB().Query(`
+func (s *indexJob) getIndexedFoldersWithURLForWebhook(start time.Time) ([]NewFolder, error) {
+	rows, err := s.conn.QueryContext(context.Background(), `
 		SELECT share_key, name, original_url
 		FROM folders
 		WHERE original_url IS NOT NULL AND original_url != ''
@@ -225,7 +224,7 @@ func (s *SearchService) getIndexedFoldersWithURLForWebhook(start time.Time) ([]N
 	return folders, nil
 }
 
-func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath string) error {
+func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath string) error {
 	fullPath := filepath.Join(basePath, relativePath)
 
 	entries, err := os.ReadDir(fullPath)
@@ -287,7 +286,7 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 			}
 
 			if err := s.insertFolder(record); err != nil {
-				log.Printf("Error indexing folder %s: %v", virtualPath, err)
+				return err
 			}
 
 			childSourcePath := sourcePath
@@ -300,7 +299,7 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 				subRelativePath = relativePath + "/" + name
 			}
 			if err := s.indexDirectory(slug, basePath, subRelativePath, childSourcePath); err != nil {
-				log.Printf("Error indexing subdirectory %s: %v", subRelativePath, err)
+				return err
 			}
 		} else {
 			ext := strings.ToLower(filepath.Ext(name))
@@ -347,7 +346,7 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 				}
 
 				if err := s.insertAudioFile(record); err != nil {
-					log.Printf("Error indexing audio %s: %v", virtualPath, err)
+					return err
 				}
 			}
 		}
@@ -356,7 +355,7 @@ func (s *SearchService) indexDirectory(slug, basePath, relativePath, sourcePath 
 	return nil
 }
 
-func (s *SearchService) getParentPath(path string) string {
+func (s *indexJob) getParentPath(path string) string {
 	parts := strings.Split(path, "/")
 	if len(parts) <= 1 {
 		return ""
@@ -364,13 +363,13 @@ func (s *SearchService) getParentPath(path string) string {
 	return strings.Join(parts[:len(parts)-1], "/")
 }
 
-func (s *SearchService) insertFolder(f FolderRecord) error {
+func (s *indexJob) insertFolder(f FolderRecord) error {
 	shareKey, err := generateShareKey()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.db.DB().Exec(`
+	_, err = s.conn.ExecContext(context.Background(), `
 		INSERT INTO folders
 		(path, parent_path, folder_name, name, original_url,
 		 poster_image, upload_date, share_key, indexed_at)
@@ -389,13 +388,13 @@ func (s *SearchService) insertFolder(f FolderRecord) error {
 	return err
 }
 
-func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
+func (s *indexJob) insertAudioFile(a AudioFileRecord) error {
 	shareKey, err := generateShareKey()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.db.DB().Exec(`
+	_, err = s.conn.ExecContext(context.Background(), `
 		INSERT INTO audio_files
 		(path, parent_path, filename, size, mime_type,
 		 title, meta_artist, upload_date, webpage_url, description,
@@ -422,21 +421,4 @@ func (s *SearchService) insertAudioFile(a AudioFileRecord) error {
 		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
 		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, shareKey)
 	return err
-}
-
-func (s *SearchService) StartScheduledReindex(schedule string) {
-	log.Printf("Starting scheduled reindex with schedule: %s", schedule)
-
-	c := cron.New()
-	_, err := c.AddFunc(schedule, func() {
-		log.Println("Running scheduled reindex...")
-		if err := s.RebuildIndex(); err != nil {
-			log.Printf("Scheduled reindex error: %v", err)
-		}
-	})
-	if err != nil {
-		log.Printf("Error setting up reindex schedule: %v", err)
-		return
-	}
-	c.Start()
 }

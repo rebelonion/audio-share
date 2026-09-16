@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"io"
 	"math"
 	"time"
@@ -10,7 +11,7 @@ import (
 
 type throttleClock interface {
 	Now() time.Time
-	Sleep(time.Duration)
+	Sleep(context.Context, time.Duration) error
 }
 
 type realThrottleClock struct{}
@@ -19,11 +20,12 @@ func (realThrottleClock) Now() time.Time {
 	return time.Now()
 }
 
-func (realThrottleClock) Sleep(duration time.Duration) {
-	time.Sleep(duration)
+func (realThrottleClock) Sleep(ctx context.Context, duration time.Duration) error {
+	return services.SleepContext(ctx, duration)
 }
 
 type throttledReadSeeker struct {
+	ctx            context.Context
 	reader         io.ReadSeeker
 	bytesPerSecond int64
 	burstBytes     int64
@@ -35,6 +37,7 @@ type throttledReadSeeker struct {
 }
 
 func newThrottledReadSeeker(
+	ctx context.Context,
 	reader io.ReadSeeker,
 	bytesPerSecond int64,
 	burstBytes int64,
@@ -42,6 +45,7 @@ func newThrottledReadSeeker(
 	clientIP string,
 ) io.ReadSeeker {
 	return newThrottledReadSeekerWithClock(
+		ctx,
 		reader,
 		bytesPerSecond,
 		burstBytes,
@@ -52,6 +56,7 @@ func newThrottledReadSeeker(
 }
 
 func newThrottledReadSeekerWithClock(
+	ctx context.Context,
 	reader io.ReadSeeker,
 	bytesPerSecond int64,
 	burstBytes int64,
@@ -64,6 +69,7 @@ func newThrottledReadSeekerWithClock(
 	}
 	burstBytes = max(burstBytes, 0)
 	return &throttledReadSeeker{
+		ctx:            ctx,
 		reader:         reader,
 		bytesPerSecond: bytesPerSecond,
 		burstBytes:     burstBytes,
@@ -76,10 +82,17 @@ func newThrottledReadSeekerWithClock(
 }
 
 func (t *throttledReadSeeker) Read(p []byte) (int, error) {
+	if err := t.ctx.Err(); err != nil {
+		return 0, err
+	}
 	readBuffer := p
 	burstLimited := t.bytesPerSecond > 0 && t.burstBytes > 0 && len(p) > 0
 	if burstLimited {
-		readBuffer = p[:t.readLimit(len(p))]
+		limit, err := t.readLimit(len(p))
+		if err != nil {
+			return 0, err
+		}
+		readBuffer = p[:limit]
 	}
 
 	n, err := t.reader.Read(readBuffer)
@@ -87,11 +100,15 @@ func (t *throttledReadSeeker) Read(p []byte) (int, error) {
 		if burstLimited {
 			t.tokens = math.Max(0, t.tokens-float64(n))
 		} else {
-			t.wait(n)
+			if err := t.wait(n); err != nil {
+				return 0, err
+			}
 		}
 	}
 	if n > 0 && t.ipLimiter != nil {
-		t.ipLimiter.Wait(t.clientIP, n)
+		if err := t.ipLimiter.Wait(t.ctx, t.clientIP, n); err != nil {
+			return 0, err
+		}
 	}
 	return n, err
 }
@@ -112,32 +129,37 @@ func (t *throttledReadSeeker) refill() {
 	t.lastRefill = now
 }
 
-func (t *throttledReadSeeker) readLimit(maxBytes int) int {
+func (t *throttledReadSeeker) readLimit(maxBytes int) (int, error) {
 	t.refill()
 	if available := min(int64(t.tokens), int64(maxBytes)); available >= 1 {
-		return int(available)
+		return int(available), nil
 	}
 
 	target := min(int64(maxBytes), t.burstBytes)
 	delay := time.Duration(math.Ceil(
 		(float64(target) - t.tokens) / float64(t.bytesPerSecond) * float64(time.Second),
 	))
-	t.clock.Sleep(delay)
+	if err := t.clock.Sleep(t.ctx, delay); err != nil {
+		return 0, err
+	}
 	t.refill()
-	return int(target)
+	return int(target), nil
 }
 
-func (t *throttledReadSeeker) wait(byteCount int) {
+func (t *throttledReadSeeker) wait(byteCount int) error {
 	t.refill()
 	t.tokens -= float64(byteCount)
 	if t.tokens >= 0 {
-		return
+		return nil
 	}
 
 	delay := time.Duration(math.Ceil(
 		-t.tokens / float64(t.bytesPerSecond) * float64(time.Second),
 	))
-	t.clock.Sleep(delay)
+	if err := t.clock.Sleep(t.ctx, delay); err != nil {
+		return err
+	}
 	t.tokens = 0
 	t.lastRefill = t.clock.Now()
+	return nil
 }

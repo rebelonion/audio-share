@@ -1,3 +1,19 @@
+x-app: &app
+  image: ${APP_IMAGE:-ghcr.io/rebelonion/audio-share:latest}
+  environment:
+    - PORT=8080
+    - AUDIO_DIR=/audio:Audio
+    - CONTENT_DIR=/app/content
+    - STATIC_DIR=/app/static
+    - DATABASE_URL=postgres://${DB_USER:-audio_share}:${DB_PASSWORD:-audio_share}@postgres:5432/${DB_NAME:-audio_share}
+    - SOURCE_NORMALIZER_SCRIPT=/app/config/source_normalizer.py
+  env_file:
+    - .env.local
+  volumes:
+    - ${AUDIO_PATH:-./audio}:/audio:ro
+    - ${CONTENT_PATH:-./content}:/app/content:ro
+    - ${SOURCE_NORMALIZER_PATH:-/scripts/source_normalizer.py}:/app/config/source_normalizer.py:ro
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -14,31 +30,44 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    image: ghcr.io/rebelonion/audio-share:latest
-    restart: unless-stopped
+  migrate:
+    image: ${APP_IMAGE:-ghcr.io/rebelonion/audio-share:latest}
+    command: ["./audio-share-backend", "migrate"]
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-audio_share}:${DB_PASSWORD:-audio_share}@postgres:5432/${DB_NAME:-audio_share}
+    restart: "no"
+
+  app:
+    <<: *app
+    command: ["./audio-share-backend", "serve"]
+    restart: unless-stopped
+    stop_grace_period: 24h
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "${PORT:-8080}:8080"
-    environment:
-      - PORT=8080
-      - AUDIO_DIR=/audio:Audio
-      - CONTENT_DIR=/app/content
-      - STATIC_DIR=/app/static
-      - DATABASE_URL=postgres://${DB_USER:-audio_share}:${DB_PASSWORD:-audio_share}@postgres:5432/${DB_NAME:-audio_share}
-      - SOURCE_NORMALIZER_SCRIPT=/app/config/source_normalizer.py
-    env_file:
-      - .env.local
-    volumes:
-      - ${AUDIO_PATH:-./audio}:/audio:ro
-      - ${CONTENT_PATH:-./content}:/app/content:ro
-      - ${SOURCE_NORMALIZER_PATH:-/scripts/source_normalizer.py}:/app/config/source_normalizer.py:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["./audio-share-backend", "worker"]
+    restart: unless-stopped
+    stop_grace_period: 24h
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/ready"]
       interval: 30s
-      timeout: 10s
+      timeout: 3s
       retries: 3
 
   cap:

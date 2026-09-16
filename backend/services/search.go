@@ -63,7 +63,6 @@ type SearchService struct {
 	db             *Database
 	fs             *FileSystemService
 	webhookService *WebhookService
-	lockPath       string
 }
 
 func NewSearchService(db *Database, fs *FileSystemService, webhookService *WebhookService) *SearchService {
@@ -71,7 +70,6 @@ func NewSearchService(db *Database, fs *FileSystemService, webhookService *Webho
 		db:             db,
 		fs:             fs,
 		webhookService: webhookService,
-		lockPath:       "/tmp/audio-share.reindex.lock",
 	}
 }
 

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -150,7 +151,12 @@ func TestCleanupExpiredAccessKeyClaimsBackfillsAndDeletesABatch(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 3))
 	mock.ExpectCommit()
 
-	deleted, err := service.cleanupExpiredAccessKeyClaims(100)
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	deleted, err := service.cleanupExpiredAccessKeyClaims(conn, 100)
 	if err != nil {
 		t.Fatalf("cleanupExpiredAccessKeyClaims returned error: %v", err)
 	}

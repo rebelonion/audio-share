@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
@@ -14,8 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/robfig/cron/v3"
 )
 
 const waveformNumPeaks = 500
@@ -26,8 +25,6 @@ type WaveformService struct {
 	db      *sql.DB
 	fs      *FileSystemService
 	workers int
-	mu      sync.Mutex // guards running flag
-	running bool
 }
 
 func NewWaveformService(db *sql.DB, fs *FileSystemService, workers int) *WaveformService {
@@ -49,46 +46,17 @@ func (s *WaveformService) GetByShareKey(shareKey string) (string, float64, error
 	return peaks, duration.Float64, err
 }
 
-func (s *WaveformService) StartScheduledJob(cronExpr, maxDurationStr string) {
-	maxDuration, err := time.ParseDuration(maxDurationStr)
-	if err != nil {
-		log.Printf("Waveform: invalid WAVEFORM_MAX_DURATION %q: %v, defaulting to 2h", maxDurationStr, err)
-		maxDuration = 2 * time.Hour
-	}
-
-	log.Printf("Waveform: scheduling job cron=%q maxDuration=%v", cronExpr, maxDuration)
-
-	c := cron.New()
-	_, err = c.AddFunc(cronExpr, func() {
-		s.mu.Lock()
-		if s.running {
-			s.mu.Unlock()
-			log.Println("Waveform: job already running, skipping")
-			return
-		}
-		s.running = true
-		s.mu.Unlock()
-
-		defer func() {
-			s.mu.Lock()
-			s.running = false
-			s.mu.Unlock()
-		}()
-
-		s.RunJob(maxDuration)
-	})
-	if err != nil {
-		log.Printf("Waveform: error setting up schedule: %v", err)
-		return
-	}
-	c.Start()
+func (s *WaveformService) RunJob(maxDuration time.Duration) error {
+	return withJobLock(s.db, "waveform", func(conn *sql.Conn) error { return s.runJob(conn, maxDuration) })
 }
 
-func (s *WaveformService) RunJob(maxDuration time.Duration) {
+func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) error {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 	start := time.Now()
 	log.Println("Waveform: starting generation job")
 
-	rows, err := s.db.Query(`
+	rows, err := conn.QueryContext(ctx, `
 		SELECT af.id, af.path
 		FROM audio_files af
 		LEFT JOIN waveform_cache wc ON wc.audio_file_id = af.id
@@ -96,8 +64,7 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 		ORDER BY af.downloaded_at DESC NULLS LAST, af.id DESC
 	`)
 	if err != nil {
-		log.Printf("Waveform: query error: %v", err)
-		return
+		return fmt.Errorf("waveform query: %w", err)
 	}
 
 	type fileRow struct {
@@ -112,6 +79,10 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 		}
 		files = append(files, f)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
 	rows.Close()
 
 	log.Printf("Waveform: %d files pending, workers=%d", len(files), s.workers)
@@ -122,6 +93,7 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 
 	nextLog := start.Add(15 * time.Minute)
 
+dispatch:
 	for i, f := range files {
 		if time.Since(start) >= maxDuration {
 			log.Printf("Waveform: max duration reached after dispatching %d files", i)
@@ -134,7 +106,11 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 			nextLog = now.Add(15 * time.Minute)
 		}
 
-		sem <- struct{}{}
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case sem <- struct{}{}:
+		}
 		wg.Add(1)
 		go func(f fileRow) {
 			defer wg.Done()
@@ -145,19 +121,19 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 				return
 			}
 
-			peaks, duration, err := generateWaveform(fullPath)
+			peaks, duration, err := generateWaveform(ctx, fullPath)
 			if err != nil {
 				log.Printf("Waveform: failed %s: %v", f.path, err)
 				return
 			}
 
 			encoded := base64.StdEncoding.EncodeToString(peaks)
-			_, err = s.db.Exec(`
+			_, err = conn.ExecContext(ctx, `
 				INSERT INTO waveform_cache (audio_file_id, peaks, duration_seconds) VALUES ($1, $2, $3)
 				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, duration_seconds = excluded.duration_seconds, generated_at = CURRENT_TIMESTAMP
 			`, f.id, encoded, duration)
 			if err != nil {
-				log.Printf("Waveform: store error %s: %v", f.path, err)
+				cancel(fmt.Errorf("waveform store %s: %w", f.path, err))
 				return
 			}
 			processed.Add(1)
@@ -166,6 +142,7 @@ func (s *WaveformService) RunJob(maxDuration time.Duration) {
 
 	wg.Wait()
 	log.Printf("Waveform: job done — processed %d files in %v", processed.Load(), time.Since(start).Round(time.Second))
+	return context.Cause(ctx)
 }
 
 func (s *WaveformService) resolvePath(virtualPath string) (string, bool) {
@@ -176,8 +153,8 @@ func (s *WaveformService) resolvePath(virtualPath string) (string, bool) {
 	return s.fs.ValidatePath(parts[0], parts[1])
 }
 
-func getAudioDuration(filePath string) (float64, error) {
-	cmd := exec.Command("ffprobe",
+func getAudioDuration(ctx context.Context, filePath string) (float64, error) {
+	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
 		"-show_entries", "format=duration",
 		"-of", "csv=p=0",
@@ -190,8 +167,8 @@ func getAudioDuration(filePath string) (float64, error) {
 	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 }
 
-func generateWaveform(filePath string) ([]byte, float64, error) {
-	duration, err := getAudioDuration(filePath)
+func generateWaveform(ctx context.Context, filePath string) ([]byte, float64, error) {
+	duration, err := getAudioDuration(ctx, filePath)
 	if err != nil {
 		return nil, 0, fmt.Errorf("ffprobe: %w", err)
 	}
@@ -205,7 +182,7 @@ func generateWaveform(filePath string) ([]byte, float64, error) {
 		samplesPerPeak = 1
 	}
 
-	cmd := exec.Command("ffmpeg",
+	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", filePath,
 		"-af", fmt.Sprintf("aformat=channel_layouts=mono,aresample=%d", waveformSampleRate),
 		"-f", "s16le",
