@@ -85,11 +85,20 @@ type Config struct {
 
 	StaticDir string
 
-	NtfyURL       string
-	NtfyTopic     string
-	NtfyToken     string
-	NtfyPriority  int
-	NtfyReviewURL string
+	NtfyURL             string
+	NtfyTopic           string
+	NtfyToken           string
+	NtfyPriority        int
+	NtfyReviewURL       string
+	NtfyErrorTopic      string
+	ErrorWindow         string
+	ErrorCooldown       string
+	ErrorRetention      string
+	ErrorBrowserCount   int
+	ErrorBrowserSources int
+	ErrorServerCount    int
+	ErrorMutationCount  int
+	ErrorJobCount       int
 
 	SourceNormalizerScript  string
 	SourceNormalizerTimeout string
@@ -156,11 +165,20 @@ func Load() *Config {
 		ContentDir:                getEnv("CONTENT_DIR", "./content"),
 		StaticDir:                 getEnv("STATIC_DIR", "./static"),
 
-		NtfyURL:       getEnv("NTFY_URL", "https://ntfy.sh"),
-		NtfyTopic:     getEnv("NTFY_TOPIC", ""),
-		NtfyToken:     getEnv("NTFY_TOKEN", ""),
-		NtfyPriority:  getEnvInt("NTFY_PRIORITY", 1),
-		NtfyReviewURL: getEnv("NTFY_REVIEW_URL", ""),
+		NtfyURL:             getEnv("NTFY_URL", "https://ntfy.sh"),
+		NtfyTopic:           getEnv("NTFY_TOPIC", ""),
+		NtfyToken:           getEnv("NTFY_TOKEN", ""),
+		NtfyPriority:        getEnvInt("NTFY_PRIORITY", 1),
+		NtfyReviewURL:       getEnv("NTFY_REVIEW_URL", ""),
+		NtfyErrorTopic:      getEnv("NTFY_ERROR_TOPIC", ""),
+		ErrorWindow:         getEnv("ERROR_REPORT_WINDOW", "5m"),
+		ErrorCooldown:       getEnv("ERROR_ALERT_COOLDOWN", "30m"),
+		ErrorRetention:      getEnv("ERROR_REPORT_RETENTION", "168h"),
+		ErrorBrowserCount:   getEnvInt("ERROR_BROWSER_THRESHOLD", 10),
+		ErrorBrowserSources: getEnvInt("ERROR_BROWSER_MIN_SOURCES", 3),
+		ErrorServerCount:    getEnvInt("ERROR_SERVER_THRESHOLD", 5),
+		ErrorMutationCount:  getEnvInt("ERROR_MUTATION_THRESHOLD", 3),
+		ErrorJobCount:       getEnvInt("ERROR_JOB_THRESHOLD", 1),
 
 		SourceNormalizerScript:  getEnv("SOURCE_NORMALIZER_SCRIPT", ""),
 		SourceNormalizerTimeout: getEnv("SOURCE_NORMALIZER_TIMEOUT", "15s"),

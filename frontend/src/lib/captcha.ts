@@ -3,6 +3,7 @@ import type {CapErrorEvent} from '@cap.js/widget';
 import capWasmUrl from '@cap.js/wasm/browser/cap_wasm_bg.wasm?url';
 import pakoUrl from 'pako/dist/pako_inflate.min.js?url';
 import {CAP_PUBLIC_ENDPOINT} from '@/lib/config';
+import {reportError} from '@/lib/errorReporting';
 
 let capInstance: Cap | null = null;
 let solveQueue: Promise<void> = Promise.resolve();
@@ -67,7 +68,13 @@ export function solveCaptcha(signal?: AbortSignal): Promise<string> {
         const abortError = aborted(signal);
         if (abortError) throw abortError;
 
-        const cap = await getCap();
+        let cap: Cap;
+        try {
+            cap = await getCap();
+        } catch (error) {
+            if (!signal?.aborted) reportError({operation: 'captcha', stage: 'setup', cause: 'unavailable'}, error);
+            throw error;
+        }
         let cancelled = false;
         const cancelSolve = () => {
             if (cancelled) return;
@@ -96,6 +103,7 @@ export function solveCaptcha(signal?: AbortSignal): Promise<string> {
         } catch (error) {
             const solveAbort = aborted(signal);
             if (solveAbort) throw solveAbort;
+            reportError({operation: 'captcha', stage: 'solve', cause: 'unavailable', code: lastCapError?.code}, error);
             throw error;
         } finally {
             signal?.removeEventListener('abort', cancelSolve);

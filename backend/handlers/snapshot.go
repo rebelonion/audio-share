@@ -166,16 +166,16 @@ func (h *SPAHandler) renderSnapshotBody(r *http.Request, meta pageMeta, shareRow
 
 	switch {
 	case path == "/about":
-		return h.renderAboutSnapshot(responses)
+		return h.renderAboutSnapshot(r, responses)
 	case path == "/contact":
 		return executeSnapshotTemplate(snapshotListTemplate, snapshotListPage{
 			Heading:     "Contact us",
 			Description: "Send us a comment, question, or report. The interactive contact form is available when JavaScript is enabled.",
 		})
 	case path == "/stats":
-		return h.renderStatsSnapshot(responses)
+		return h.renderStatsSnapshot(r, responses)
 	case path == "/requests":
-		return h.renderRequestsSnapshot(responses)
+		return h.renderRequestsSnapshot(r, responses)
 	case path == "/search":
 		return h.renderSearchSnapshot(r, responses)
 	case path == "/likes":
@@ -208,7 +208,7 @@ func (h *SPAHandler) renderSnapshotBody(r *http.Request, meta pageMeta, shareRow
 	}
 }
 
-func (h *SPAHandler) renderAboutSnapshot(responses initialResponses) template.HTML {
+func (h *SPAHandler) renderAboutSnapshot(r *http.Request, responses initialResponses) template.HTML {
 	content := []byte("# About\n\nPlease create a `content/about.md` file to customize this page.")
 	if h.contentDir != "" {
 		if fileContent, err := os.ReadFile(filepath.Join(h.contentDir, "about.md")); err == nil {
@@ -220,6 +220,7 @@ func (h *SPAHandler) renderAboutSnapshot(responses initialResponses) template.HT
 	var output bytes.Buffer
 	if err := snapshotMarkdown.Convert(content, &output); err != nil {
 		log.Printf("server snapshot markdown failed: %v", err)
+		services.AnnotateError(r.Context(), "render", "unexpected", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, snapshotListPage{Heading: "About"})
 	}
 	return template.HTML(`<article class="snapshot-markdown max-w-4xl mx-auto">` + output.String() + `</article>`)
@@ -241,6 +242,7 @@ func (h *SPAHandler) renderDirectorySnapshot(r *http.Request, path, heading, des
 	contents, err := browseDirectoryContentsForAccess(h.searchService, path, isLocalRequest(r))
 	if err != nil {
 		log.Printf("server snapshot browse failed for %q: %v", path, err)
+		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
 	responses.add(browseAPIPath(path), http.StatusOK, contents)
@@ -262,7 +264,7 @@ func (h *SPAHandler) renderDirectorySnapshot(r *http.Request, path, heading, des
 	return executeSnapshotTemplate(snapshotListTemplate, page)
 }
 
-func (h *SPAHandler) renderStatsSnapshot(responses initialResponses) template.HTML {
+func (h *SPAHandler) renderStatsSnapshot(r *http.Request, responses initialResponses) template.HTML {
 	page := snapshotListPage{
 		Heading:     "Statistics",
 		Description: "Summary statistics for this audio collection.",
@@ -274,6 +276,7 @@ func (h *SPAHandler) renderStatsSnapshot(responses initialResponses) template.HT
 	stats, err := loadStats(h.searchService)
 	if err != nil {
 		log.Printf("server snapshot stats failed: %v", err)
+		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
 	responses.add("/api/stats", http.StatusOK, stats)
@@ -287,7 +290,7 @@ func (h *SPAHandler) renderStatsSnapshot(responses initialResponses) template.HT
 	return executeSnapshotTemplate(snapshotListTemplate, page)
 }
 
-func (h *SPAHandler) renderRequestsSnapshot(responses initialResponses) template.HTML {
+func (h *SPAHandler) renderRequestsSnapshot(r *http.Request, responses initialResponses) template.HTML {
 	page := snapshotListPage{
 		Heading:     "Source requests",
 		Description: "Public requests for sources to add to this audio collection.",
@@ -299,6 +302,7 @@ func (h *SPAHandler) renderRequestsSnapshot(responses initialResponses) template
 	requests, err := h.requestsService.GetAllGroupedByStatus()
 	if err != nil {
 		log.Printf("server snapshot requests failed: %v", err)
+		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
 	responses.add("/api/requests", http.StatusOK, requests)
@@ -406,6 +410,7 @@ func (h *SPAHandler) renderSearchSnapshot(r *http.Request, responses initialResp
 	response, err := searchResponseForValues(h.searchService, values, isLocalRequest(r))
 	if err != nil {
 		log.Printf("server snapshot search failed: %v", err)
+		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
 	}
 	responses.add("/api/search?"+values.Encode(), http.StatusOK, response)

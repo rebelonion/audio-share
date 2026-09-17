@@ -285,6 +285,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 					writeJSON(w, http.StatusForbidden, map[string]string{"error": "captcha_invalid"})
 				} else {
 					w.Header().Set("Retry-After", "5")
+					services.AnnotateError(r.Context(), "verify", "unavailable", "blocked")
 					writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "captcha_unavailable"})
 				}
 				return
@@ -485,6 +486,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
+		services.AnnotateError(r.Context(), "read", "missing-file", "blocked")
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -497,6 +499,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 
 	file, err := os.Open(fullPath)
 	if err != nil {
+		services.AnnotateError(r.Context(), "read", "io", "blocked")
 		http.Error(w, "Error opening file", http.StatusInternalServerError)
 		return
 	}
@@ -524,7 +527,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	}
 	reader := newThrottledReadSeeker(
 		r.Context(),
-		file,
+		reportingReadSeeker{ReadSeeker: file, ctx: r.Context()},
 		h.bytesPerSecond(download),
 		h.burstBytes(download),
 		h.ipLimiter(download),
@@ -624,6 +627,7 @@ func (h *AudioHandler) recordMediaEvent(
 		r.Referer(), r.Header.Get("Range"), r.Method, fileSize, requestedBytes, accessKeyNonce)
 	if err != nil {
 		log.Printf("Error recording %s event for audio_file_id=%d: %v", eventType, audioFileID, err)
+		services.AnnotateError(r.Context(), "store", "unavailable", "degraded")
 	}
 }
 
@@ -755,6 +759,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
+		services.AnnotateError(r.Context(), "read", "missing-file", "degraded")
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}

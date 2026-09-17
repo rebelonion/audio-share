@@ -21,6 +21,7 @@ func startWorker(cfg *config.Config, db *services.Database, fs *services.FileSys
 	}
 	search := services.NewSearchService(db, fs, services.NewWebhookService(cfg.IndexWebhookURL, cfg.IndexWebhookToken))
 	waveforms := services.NewWaveformService(db.DB(), fs, cfg.WaveformWorkers)
+	waveforms.Errors = db.Errors
 	playback := services.NewPlaybackService(db, ttl)
 	scheduler := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
 	for _, job := range []struct {
@@ -30,6 +31,7 @@ func startWorker(cfg *config.Config, db *services.Database, fs *services.FileSys
 		{"reindex", cfg.IndexSchedule, search.RebuildIndex},
 		{"waveform", cfg.WaveformCron, func() error { return waveforms.RunJob(maxDuration) }},
 		{"playback-cleanup", "@every 15m", playback.CleanupAccessKeyClaims},
+		{"error-alerts", "@every 30s", db.Errors.Process},
 	} {
 		if job.schedule == "" {
 			continue
@@ -37,6 +39,9 @@ func startWorker(cfg *config.Config, db *services.Database, fs *services.FileSys
 		_, err := scheduler.AddFunc(job.schedule, l.job(func() {
 			if err := job.run(); err != nil {
 				log.Printf("Worker %s: %v", job.name, err)
+				if job.name == "playback-cleanup" {
+					db.Errors.Report("worker", services.ErrorEvent{Operation: job.name, Stage: "run", Cause: "unexpected", Outcome: "blocked"})
+				}
 			}
 		}))
 		if err != nil {

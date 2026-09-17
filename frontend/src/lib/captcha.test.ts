@@ -27,8 +27,13 @@ const capState = vi.hoisted(() => ({
     instances: [] as CapInstance[],
 }));
 
+const reportErrorMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/errorReporting', () => ({reportError: reportErrorMock}));
+
 vi.mock('@/lib/config', () => ({
     CAP_PUBLIC_ENDPOINT: 'https://cap.example/',
+    ERROR_REPORTING: false,
+    BUILD_ID: 'test',
 }));
 
 vi.mock('@cap.js/widget', () => ({
@@ -124,6 +129,7 @@ describe('solveCaptcha', () => {
         await expect(first).resolves.toBe('active-token');
         await queuedResult;
         expect(capState.instances).toHaveLength(1);
+        expect(reportErrorMock).not.toHaveBeenCalled();
         expect(capState.instances[0].widget.remove).not.toHaveBeenCalled();
     });
 
@@ -177,5 +183,9 @@ describe('solveCaptcha', () => {
             code: 'instr_timeout',
             message: 'Instrumentation timed out',
         });
+        expect(reportErrorMock).toHaveBeenCalledOnce();
+        expect(reportErrorMock).toHaveBeenCalledWith(expect.objectContaining({
+            operation: 'captcha', stage: 'solve', code: 'instr_timeout',
+        }), expect.any(Error));
     });
 });

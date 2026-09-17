@@ -70,6 +70,9 @@ func run() error {
 		return err
 	}
 	fsService := services.NewFileSystemService(cfg.AudioDir)
+	if err := configureErrorReporting(cfg, db); err != nil {
+		return err
+	}
 	if err := validateAudioMounts(fsService); err != nil {
 		return err
 	}
@@ -82,7 +85,9 @@ func run() error {
 		if err != nil || duration <= 0 {
 			return fmt.Errorf("invalid WAVEFORM_MAX_DURATION %q", cfg.WaveformMaxDuration)
 		}
-		return services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers).RunJob(duration)
+		waveforms := services.NewWaveformService(db.DB(), fsService, cfg.WaveformWorkers)
+		waveforms.Errors = db.Errors
+		return waveforms.RunJob(duration)
 	}
 	l := newLifecycle(db.CheckSchema)
 	admin, err := net.Listen("tcp", cfg.ManagementAddr)
@@ -240,6 +245,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 		BannerLinkURL:      cfg.BannerLinkURL,
 		CapPublicEndpoint:  cfg.CapPublicEndpoint,
 		BuildID:            buildID,
+		ErrorReporting:     db.Errors != nil,
 	}
 	spaHandler := handlers.NewSPAHandler(
 		cfg.StaticDir,
@@ -262,6 +268,9 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	}
 
 	mux := http.NewServeMux()
+	if db.Errors != nil {
+		mux.Handle("/api/errors", handlers.NewErrorHandler(db.Errors, cfg.SessionSecret))
+	}
 
 	mux.HandleFunc("/api/version", spaHandler.VersionHandler())
 	mux.Handle("/api/session", handlers.NewSessionBootstrapHandler(cfg.SessionSecret))
@@ -298,7 +307,11 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 
 	mux.Handle("/", spaHandler)
 
-	return securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, mux))), nil
+	var handler http.Handler = mux
+	if db.Errors != nil {
+		handler = handlers.ReportHTTPErrors(db.Errors, handler)
+	}
+	return securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, handler))), nil
 }
 
 func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
@@ -313,7 +326,7 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range, X-API-Key, X-Request-ID")
-			w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length, Date, Retry-After")
+			w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length, Date, Retry-After, X-Error-Reporting")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 

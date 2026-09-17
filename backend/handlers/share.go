@@ -87,6 +87,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			log.Printf("share: failed to normalize source; sending unnormalized request: %v", err)
+			services.AnnotateError(r.Context(), "normalize", "unavailable", "degraded")
 		} else {
 			notificationURL = normalized.CanonicalURL
 			normalizationFailed = false
@@ -113,6 +114,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.HasHigherRemovalRisk,
 		normalizationFailed,
 	); err != nil {
+		services.AnnotateError(r.Context(), "deliver", "unavailable", "blocked")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return
 	}

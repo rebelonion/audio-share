@@ -4,6 +4,7 @@ import {Link} from 'react-router';
 import {createRecoveryKey} from '@/lib/api';
 import {useLikes} from '@/contexts/LikesContext';
 import {useRybbit} from '@/hooks/useRybbit';
+import {reportError} from '@/lib/errorReporting';
 
 type RecoveryErrorSource = 'create' | 'copy-key' | 'copy-link';
 
@@ -72,7 +73,8 @@ export default function RecoveryPanel() {
                     color: {dark: '#131109', light: '#ece7de'},
                     errorCorrectionLevel: 'M',
                 }));
-            } catch {
+            } catch (error) {
+                reportError({operation: 'recovery', stage: 'render', cause: 'unexpected', outcome: 'degraded'}, error);
                 setError({
                     message: 'Recovery key created, but the QR code could not be generated. Save the text key or recovery link below.',
                     source: 'create',

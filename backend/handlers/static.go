@@ -19,6 +19,7 @@ type FrontendConfig struct {
 	BannerLinkURL      string `json:"bannerLinkUrl,omitempty"`
 	CapPublicEndpoint  string `json:"capPublicEndpoint,omitempty"`
 	BuildID            string `json:"buildId,omitempty"`
+	ErrorReporting     bool   `json:"errorReporting,omitempty"`
 }
 
 type SPAHandler struct {

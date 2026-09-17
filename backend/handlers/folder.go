@@ -70,6 +70,7 @@ func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
+		services.AnnotateError(r.Context(), "read", "missing-file", "degraded")
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}

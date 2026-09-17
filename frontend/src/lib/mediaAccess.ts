@@ -1,6 +1,7 @@
 import {API_BASE} from '@/lib/api';
 import {solveCaptcha} from '@/lib/captcha';
 import {appFetch} from '@/lib/cloudflareChallenge';
+import {reportError} from '@/lib/errorReporting';
 
 export type MediaAccessPurpose = 'stream' | 'download';
 
@@ -125,6 +126,7 @@ export async function requestMediaAccess(
     }
 
     if (!body.accessKey) {
+        reportError({operation: 'media-access', stage: 'parse', cause: 'invalid-response'});
         throw new MediaAccessError(response.status, 'invalid_media_access_response', null);
     }
     if (typeof body.expiresInMs === 'number' && Number.isFinite(body.expiresInMs) && body.expiresInMs >= 0) {
@@ -136,6 +138,7 @@ export async function requestMediaAccess(
     }
     const serverExpiresAt = Date.parse(body.expiresAt || '');
     if (!Number.isFinite(serverExpiresAt)) {
+        reportError({operation: 'media-access', stage: 'parse', cause: 'invalid-response'});
         throw new MediaAccessError(response.status, 'invalid_media_access_response', null);
     }
     const serverNow = Date.parse(response.headers.get('Date') || '');
@@ -150,7 +153,10 @@ async function mediaAccessBody(response: Response): Promise<MediaAccessErrorBody
     expiresAt?: string;
     expiresInMs?: number;
 }> {
-    return response.json().catch(() => ({})) as Promise<MediaAccessErrorBody & {
+    return response.json().catch(error => {
+        if (response.ok) throw error;
+        return {};
+    }) as Promise<MediaAccessErrorBody & {
         accessKey?: string;
         expiresAt?: string;
         expiresInMs?: number;

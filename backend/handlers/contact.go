@@ -110,6 +110,10 @@ func (h *ContactHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	diagnostics.SessionID = sessionID
 
 	if err := h.ntfy.SendContactNotification(req.Topic, req.Email, req.Message, diagnostics, attachment); err != nil {
+		services.AnnotateError(r.Context(), "deliver", "unavailable", "blocked")
+		if errors.Is(err, services.ErrContactAttachmentDelivery) {
+			services.AnnotateError(r.Context(), "deliver", "partial-failure", "degraded")
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return
 	}

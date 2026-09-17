@@ -1,5 +1,6 @@
 import {API_BASE} from '@/lib/api';
 import {appFetch} from '@/lib/cloudflareChallenge';
+import {reportError} from '@/lib/errorReporting';
 
 export interface TargetedMessage {
     id: number;
@@ -27,7 +28,9 @@ export function fetchTargetedMessage(): Promise<TargetedMessage | null> {
             || typeof message.title !== 'string'
             || typeof message.message !== 'string'
         ) {
-            throw new Error('Invalid targeted message response');
+            const error = new Error('Invalid targeted message response');
+            reportError({operation: 'targeted-message', stage: 'parse', cause: 'invalid-response'}, error);
+            throw error;
         }
         return message as TargetedMessage;
     });

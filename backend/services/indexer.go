@@ -78,19 +78,31 @@ func nullIfEmpty(s string) interface{} {
 }
 
 func (s *SearchService) RebuildIndex() error {
-	return withJobLock(s.db.DB(), "reindex", func(conn *sql.Conn) error {
-		job := &indexJob{conn: conn, fs: s.fs, webhookService: s.webhookService}
+	err := withJobLock(s.db.DB(), "reindex", func(conn *sql.Conn) error {
+		job := &indexJob{conn: conn, fs: s.fs, webhookService: s.webhookService, reporter: s.db.Errors}
 		return job.rebuildIndex()
 	})
+	if err != nil {
+		s.db.Errors.Report("worker", ErrorEvent{Operation: "reindex", Stage: "run", Cause: "unexpected", Outcome: "blocked"})
+	}
+	return err
 }
 
 type indexJob struct {
-	conn           *sql.Conn
-	fs             *FileSystemService
-	webhookService *WebhookService
+	conn             *sql.Conn
+	fs               *FileSystemService
+	webhookService   *WebhookService
+	reporter         *ErrorReporter
+	metadataFailures int
+	skippedFiles     int
 }
 
 func (s *indexJob) rebuildIndex() error {
+	defer func() {
+		if s.metadataFailures+s.skippedFiles > 0 {
+			s.reporter.Report("worker", ErrorEvent{Operation: "reindex", Stage: "parse", Cause: "partial-failure", Outcome: "degraded", FailedItems: s.metadataFailures + s.skippedFiles})
+		}
+	}()
 	log.Println("Starting index rebuild...")
 	start := time.Now().UTC().Truncate(time.Second)
 
@@ -174,8 +186,10 @@ func (s *indexJob) rebuildIndex() error {
 		folders, err := s.getIndexedFoldersWithURLForWebhook(start)
 		if err != nil {
 			log.Printf("Error fetching folders for webhook: %v", err)
+			s.reporter.Report("worker", ErrorEvent{Operation: "index-webhook", Stage: "request", Cause: "unavailable", Outcome: "blocked"})
 		} else if err := s.webhookService.SendIndexComplete(elapsed, folders); err != nil {
 			log.Printf("Error sending webhook: %v", err)
+			s.reporter.Report("worker", ErrorEvent{Operation: "index-webhook", Stage: "deliver", Cause: "unavailable", Outcome: "blocked"})
 		} else {
 			log.Printf("Webhook sent successfully with %d folders", len(folders))
 		}
@@ -235,7 +249,11 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 	var folderMetadataList []FolderMetadata
 	metadataPath := filepath.Join(fullPath, "folder.json")
 	if data, err := os.ReadFile(metadataPath); err == nil {
-		json.Unmarshal(data, &folderMetadataList)
+		if json.Unmarshal(data, &folderMetadataList) != nil {
+			s.metadataFailures++
+		}
+	} else if !os.IsNotExist(err) {
+		s.metadataFailures++
 	}
 	metadataMap := make(map[string]FolderMetadata)
 	for _, m := range folderMetadataList {
@@ -251,6 +269,7 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 		info, err := entry.Info()
 		if err != nil {
 			log.Printf("Skipping %s: %v", name, err)
+			s.skippedFiles++
 			continue
 		}
 
@@ -339,7 +358,11 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 							record.DownloadedAt = time.Unix(int64(infoJSON.Epoch), 0).Format("2006-01-02T15:04:05Z")
 						}
 						record.AgeLimit = infoJSON.AgeLimit
+					} else {
+						s.metadataFailures++
 					}
+				} else if !os.IsNotExist(err) {
+					s.metadataFailures++
 				}
 				if record.UploadDate == "" {
 					record.UploadDate = info.ModTime().Format("20060102")

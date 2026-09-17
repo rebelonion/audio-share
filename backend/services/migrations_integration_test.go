@@ -67,16 +67,16 @@ func TestIntegrationMigrationsFreshConcurrentAndCompatible(t *testing.T) {
 	}
 	var count int
 	db.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count)
-	if count != 1 {
+	if count != SchemaVersion {
 		t.Fatalf("ledger count %d", count)
 	}
-	if _, err := db.db.Exec(`INSERT INTO schema_migrations(version,min_app_version,checksum) VALUES(2,1,'future')`); err != nil {
+	if _, err := db.db.Exec(`INSERT INTO schema_migrations(version,min_app_version,checksum) VALUES($1,1,'future')`, SchemaVersion+1); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.CheckSchema(ctx); err != nil {
 		t.Fatalf("additive future migration broke overlap: %v", err)
 	}
-	db.db.Exec(`UPDATE schema_migrations SET min_app_version = 2 WHERE version = 2`)
+	db.db.Exec(`UPDATE schema_migrations SET min_app_version = $1 WHERE version = $1`, SchemaVersion+1)
 	if err := db.CheckSchema(ctx); err == nil {
 		t.Fatal("breaking future schema accepted")
 	}

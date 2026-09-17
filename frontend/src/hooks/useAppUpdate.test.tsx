@@ -6,6 +6,7 @@ import {useAppUpdate} from './useAppUpdate';
 
 vi.mock('@/lib/config', () => ({
     BUILD_ID: 'build-current',
+    ERROR_REPORTING: false,
 }));
 
 function UpdateProbe() {

@@ -8,7 +8,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-type Database struct{ db *sql.DB }
+type Database struct {
+	db     *sql.DB
+	Errors *ErrorReporter
+}
 
 // OpenDatabase connects without changing the schema.
 func OpenDatabase(ctx context.Context, dsn string) (*Database, error) {

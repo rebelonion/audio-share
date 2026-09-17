@@ -134,6 +134,15 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |
 | `NTFY_TOPIC` | Ntfy topic for notifications | - |
 | `NTFY_TOKEN` | Ntfy authentication token | - |
+| `NTFY_ERROR_TOPIC` | Separate operational-error topic; blank disables error reporting | - |
+| `ERROR_REPORT_WINDOW` | Error counting window | `5m` |
+| `ERROR_ALERT_COOLDOWN` | Minimum time between alerts for the same error group | `30m` |
+| `ERROR_REPORT_RETENTION` | Raw report retention | `168h` |
+| `ERROR_BROWSER_THRESHOLD` | Browser reports required per group/window | `10` |
+| `ERROR_BROWSER_MIN_SOURCES` | Distinct browser sources required (signed session, or IP fallback) | `3` |
+| `ERROR_SERVER_THRESHOLD` | Server reports required per group/window | `5` |
+| `ERROR_MUTATION_THRESHOLD` | Lower threshold for failed likes/preferences writes, recovery, contact, source submissions | `3` |
+| `ERROR_JOB_THRESHOLD` | Failed or degraded job runs required | `1` |
 | `SOURCE_NORMALIZER_SCRIPT` | In-container path to the mounted Python source normalizer | - |
 | `SOURCE_NORMALIZER_TIMEOUT` | Maximum time allowed to resolve a creator URL | `15s` |
 | `WAVEFORM_CRON` | Cron expression for waveform generation (e.g., `0 3 * * *`) | - (disabled) |

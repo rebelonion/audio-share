@@ -132,7 +132,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
 		}
 
-		if strings.HasPrefix(path, "/api/admin/") || rl.isProtectedAudioRequest(path) {
+		if path == "/api/errors" || strings.HasPrefix(path, "/api/admin/") || rl.isProtectedAudioRequest(path) {
 			next.ServeHTTP(w, r)
 			return
 		}

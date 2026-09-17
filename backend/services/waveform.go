@@ -25,6 +25,7 @@ type WaveformService struct {
 	db      *sql.DB
 	fs      *FileSystemService
 	workers int
+	Errors  *ErrorReporter
 }
 
 func NewWaveformService(db *sql.DB, fs *FileSystemService, workers int) *WaveformService {
@@ -47,7 +48,11 @@ func (s *WaveformService) GetByShareKey(shareKey string) (string, float64, error
 }
 
 func (s *WaveformService) RunJob(maxDuration time.Duration) error {
-	return withJobLock(s.db, "waveform", func(conn *sql.Conn) error { return s.runJob(conn, maxDuration) })
+	err := withJobLock(s.db, "waveform", func(conn *sql.Conn) error { return s.runJob(conn, maxDuration) })
+	if err != nil {
+		s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "unexpected", Outcome: "blocked"})
+	}
+	return err
 }
 
 func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) error {
@@ -72,9 +77,16 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 		path string
 	}
 	var files []fileRow
+	var failed, attempted atomic.Int64
+	defer func() {
+		if failed.Load() > 0 {
+			s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "partial-failure", Outcome: "degraded", FailedItems: int(failed.Load()), AttemptedItems: int(attempted.Load())})
+		}
+	}()
 	for rows.Next() {
 		var f fileRow
 		if err := rows.Scan(&f.id, &f.path); err != nil {
+			failed.Add(1)
 			continue
 		}
 		files = append(files, f)
@@ -112,18 +124,23 @@ dispatch:
 		case sem <- struct{}{}:
 		}
 		wg.Add(1)
+		attempted.Add(1)
 		go func(f fileRow) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
 			fullPath, valid := s.resolvePath(f.path)
 			if !valid {
+				failed.Add(1)
 				return
 			}
 
 			peaks, duration, err := generateWaveform(ctx, fullPath)
 			if err != nil {
 				log.Printf("Waveform: failed %s: %v", f.path, err)
+				if ctx.Err() == nil {
+					failed.Add(1)
+				}
 				return
 			}
 

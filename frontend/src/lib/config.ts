@@ -8,6 +8,7 @@ interface RuntimeConfig {
     bannerLinkUrl?: string;
     capPublicEndpoint?: string;
     buildId?: string;
+    errorReporting?: boolean;
 }
 
 declare global {
@@ -24,6 +25,7 @@ export const CAP_PUBLIC_ENDPOINT = config.capPublicEndpoint?.trim()
     || import.meta.env.VITE_CAP_PUBLIC_ENDPOINT?.trim()
     || '';
 export const BUILD_ID = config.buildId?.trim() || '';
+export const ERROR_REPORTING = config.errorReporting === true || import.meta.env.VITE_ERROR_REPORTING === 'true';
 
 export type BannerVariant = 'info' | 'warning' | 'success';
 

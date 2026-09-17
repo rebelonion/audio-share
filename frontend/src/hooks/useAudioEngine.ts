@@ -10,6 +10,7 @@ import {
     type MediaAccessGrant,
 } from '@/lib/mediaAccess';
 import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
+import {reportError as reportOperationalError} from '@/lib/errorReporting';
 
 export const POSITION_STORAGE_KEY = 'audio-share:position';
 const VOLUME_STORAGE_KEY = 'audio-share:volume';
@@ -265,6 +266,10 @@ export function useAudioEngine({
             setIsPlaying(false);
             setNotice(null);
             setError('This track could not be loaded. You can skip it from the queue.');
+            if (audio.error?.code !== 1) {
+                reportOperationalError({operation: 'playback', stage: 'play', cause: audio.error?.code === 2
+                    ? 'media-network' : audio.error?.code === 3 ? 'media-decode' : 'media-source'});
+            }
         });
 
         return audio;
@@ -332,6 +337,7 @@ export function useAudioEngine({
                 blockedPlaybackRef.current = null;
                 setNotice(null);
                 setError('Could not play this audio. Try the next track or try again.');
+                reportOperationalError({operation: 'playback', stage: 'play', cause: 'unexpected'}, playError);
             }
         });
     }, [currentTrackRef, metadataRef, trackEvent]);

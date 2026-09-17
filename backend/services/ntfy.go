@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +25,8 @@ type NtfyAttachment struct {
 	ContentType string
 	Reader      io.Reader
 }
+
+var ErrContactAttachmentDelivery = errors.New("contact sent but attachment delivery failed")
 
 type ContactDiagnostics struct {
 	SessionID  string
@@ -120,7 +124,9 @@ func (n *NtfyService) SendContactNotification(
 	}
 
 	if attachment != nil {
-		return n.sendAttachment(attachment)
+		if err := n.sendAttachment(attachment); err != nil {
+			return fmt.Errorf("%w: %v", ErrContactAttachmentDelivery, err)
+		}
 	}
 
 	return nil
@@ -153,9 +159,19 @@ func contactDiagnosticLines(diagnostics ContactDiagnostics) []string {
 }
 
 func (n *NtfyService) send(body, title, tags, actions string) error {
+	return n.sendContext(context.Background(), body, title, tags, actions)
+}
+
+func (n *NtfyService) SendErrorNotification(ctx context.Context, body string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return n.sendContext(ctx, body, "Audio Share error alert", "warning", "")
+}
+
+func (n *NtfyService) sendContext(ctx context.Context, body, title, tags, actions string) error {
 	endpoint := fmt.Sprintf("%s/%s", n.url, n.topic)
 
-	req, err := http.NewRequest("POST", endpoint, strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(body))
 	if err != nil {
 		return err
 	}

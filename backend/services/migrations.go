@@ -11,7 +11,10 @@ import (
 //go:embed migrations/001_initial.sql
 var initialSchema string
 
-const SchemaVersion = 1
+//go:embed migrations/002_error_reporting.sql
+var errorReportingSchema string
+
+const SchemaVersion = 2
 
 type schemaMigration struct {
 	version       int
@@ -19,7 +22,7 @@ type schemaMigration struct {
 	sql           string
 }
 
-var schemaMigrations = []schemaMigration{{1, 1, initialSchema}}
+var schemaMigrations = []schemaMigration{{1, 1, initialSchema}, {2, 1, errorReportingSchema}}
 
 // Migrate adopts the current legacy schema or creates a fresh one. All changes,
 // including the ledger, commit together; a failed baseline leaves no ledger.

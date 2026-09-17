@@ -3,6 +3,7 @@ import {API_BASE} from '@/lib/api';
 import {MATURE_PREFERENCE_EVENT} from '@/lib/matureContentPreference';
 import type {PlayerTrack} from '@/lib/playerQueue';
 import {appFetch} from '@/lib/cloudflareChallenge';
+import {reportError} from '@/lib/errorReporting';
 
 export interface PlayerMetadata {
     title: string;
@@ -101,6 +102,7 @@ export function usePlayerMetadata(track: PlayerTrack | null) {
             })
             .catch(error => {
                 if (signal.aborted || error.name === 'AbortError') return;
+                reportError({operation: 'metadata', stage: 'parse', cause: 'invalid-response', outcome: 'degraded'}, error);
                 setState({
                     trackID: track.id,
                     preferenceVersion,

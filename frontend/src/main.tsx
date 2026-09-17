@@ -6,6 +6,9 @@ import { ToastProvider } from './contexts/ToastContext'
 import { detectAdBlocking } from './lib/adBlockProbe'
 import { setRybbitAdBlockTraits } from './lib/rybbitIdentity'
 import './index.css'
+import {installErrorReporting} from './lib/errorReporting'
+
+installErrorReporting()
 
 void detectAdBlocking()
   .then(result => setRybbitAdBlockTraits(result.status, result.adDeliveryStatus))
