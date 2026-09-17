@@ -16,7 +16,7 @@ func TestSearchExcludesRemovalRequestsBeforePagination(t *testing.T) {
 	defer db.Close()
 
 	mock.ExpectQuery("removal_requested_at IS NULL").
-		WithArgs("%track%", "%track%", "%track%", "%track%", "%track%", "%track%", 50, 0).
+		WithArgs("%track%", "%track%", "%track%", "%track%", "%track%", "%track%", "%track%", 50, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
 	service := &SearchService{db: &Database{db: db}}
@@ -26,6 +26,27 @@ func TestSearchExcludesRemovalRequestsBeforePagination(t *testing.T) {
 	}
 	if len(results) != 0 || total != 0 {
 		t.Fatalf("results = %#v, total = %d", results, total)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSearchMatchesWebpageURLBySourceID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	const sourceID = "sbMWc0J30SQ"
+	mock.ExpectQuery(`webpage_url ILIKE \$5`).
+		WithArgs("%"+sourceID+"%", "%"+sourceID+"%", "%"+sourceID+"%", "%"+sourceID+"%", "%"+sourceID+"%", "%"+sourceID+"%", "%"+sourceID+"%", 50, 0).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	service := &SearchService{db: &Database{db: db}}
+	if _, _, err := service.Search(sourceID, 50, 0, SearchOptions{}); err != nil {
+		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

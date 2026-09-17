@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -193,6 +194,7 @@ func (h *PlaybackHandler) RecommendationsHandler() http.HandlerFunc {
 
 		tracks, err := h.playbackService.GetRecommendations(key, 30, isLocalRequest(r))
 		if err != nil {
+			log.Printf("Recommendations failed: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
 			return
 		}

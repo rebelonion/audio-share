@@ -240,14 +240,15 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int, include
 		JOIN audio_files af ON af.id = co.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
 		LEFT JOIN folders f ON f.path = af.parent_path
 		JOIN candidate_totals ct ON ct.audio_file_id = co.audio_file_id
-		ORDER BY RANDOM() ^ (1.0 / GREATEST(
+		-- Logarithmic weighted sampling avoids underflow for low-scoring candidates.
+		ORDER BY -LN(1.0 - RANDOM()) / GREATEST(
 			co.co_count::float / ct.total_sessions,
 			0.001
-		)) DESC
+		) ASC
 		LIMIT $2
 	`, shareKey, limit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query recommendations: %w", err)
 	}
 	defer rows.Close()
 
@@ -255,9 +256,12 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int, include
 	for rows.Next() {
 		var track TrackSummary
 		if err := rows.Scan(trackSummaryScanDest(&track)...); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan recommendation: %w", err)
 		}
 		results = append(results, track)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read recommendations: %w", err)
 	}
 
 	// Fill remainder with random tracks
