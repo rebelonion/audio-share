@@ -175,6 +175,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 	if h.accessKeys == nil {
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "configure", Message: "Access key manager is not configured"})
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "access_keys_unavailable"})
 		return
 	}
@@ -224,6 +225,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return
 	}
@@ -234,6 +236,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 
 	clientAddress := clientIP(r)
 	if err := h.accessKeys.CheckLimit(sessionID, clientAddress, request.Purpose); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if !h.writeKeyLimitError(w, request.Purpose, err) {
 			log.Printf("Error checking %s access key limit: %v", request.Purpose, err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
@@ -277,10 +280,12 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 				return
 			}
 			if h.captchaVerifier == nil {
+				services.AddErrorContext(r.Context(), services.ErrorContext{Step: "configure", Message: "CAPTCHA verifier is not configured"})
 				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "captcha_unavailable"})
 				return
 			}
 			if verifyErr := h.captchaVerifier.Verify(r.Context(), request.CapToken); verifyErr != nil {
+				services.AddErrorContext(r.Context(), services.ErrorDetails(verifyErr))
 				if errors.Is(verifyErr, services.ErrCaptchaInvalid) {
 					writeJSON(w, http.StatusForbidden, map[string]string{"error": "captcha_invalid"})
 				} else {
@@ -301,6 +306,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 	}
 
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if h.writeKeyLimitError(w, request.Purpose, err) {
 			return
 		}
@@ -432,6 +438,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		return
 	}
 	if h.accessKeys == nil {
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "configure", Message: "Access key manager is not configured"})
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "access_keys_unavailable"})
 		return
 	}
@@ -446,6 +453,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		purpose,
 	)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if h.accessFailureLimiter != nil {
 			h.accessFailureLimiter.RecordAccessFailure(clientAddress)
 		}
@@ -463,6 +471,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -486,7 +495,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
-		services.AnnotateError(r.Context(), "read", "missing-file", "blocked")
+		services.AnnotateFileError(r.Context(), err, fullPath, "blocked")
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -499,6 +508,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 
 	file, err := os.Open(fullPath)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		services.AnnotateError(r.Context(), "read", "io", "blocked")
 		http.Error(w, "Error opening file", http.StatusInternalServerError)
 		return
@@ -626,6 +636,7 @@ func (h *AudioHandler) recordMediaEvent(
 	`, audioFileID, eventType, shareKey, sessionID, clientIP(r), r.UserAgent(),
 		r.Referer(), r.Header.Get("Range"), r.Method, fileSize, requestedBytes, accessKeyNonce)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("Error recording %s event for audio_file_id=%d: %v", eventType, audioFileID, err)
 		services.AnnotateError(r.Context(), "store", "unavailable", "degraded")
 	}
@@ -726,6 +737,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -744,6 +756,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 
 	parts := strings.SplitN(row.path, "/", 2)
 	if len(parts) < 2 {
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "resolve", Resource: row.path, Message: "Invalid artwork path"})
 		http.Error(w, "Invalid path", http.StatusInternalServerError)
 		return
 	}
@@ -759,7 +772,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
-		services.AnnotateError(r.Context(), "read", "missing-file", "degraded")
+		services.AnnotateFileError(r.Context(), err, fullPath, "degraded")
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -790,6 +803,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 
 	file, err := os.Open(fullPath)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error opening file", http.StatusInternalServerError)
 		return
 	}
@@ -818,6 +832,7 @@ func (h *AudioHandler) serveBlurredThumbnail(
 	}
 	cacheDir := filepath.Join(os.TempDir(), "audio-share-mature-thumbnails")
 	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error preparing thumbnail", http.StatusInternalServerError)
 		return
 	}
@@ -836,7 +851,9 @@ func (h *AudioHandler) serveBlurredThumbnail(
 	}
 
 	if err := generateBlurredThumbnail(fullPath, cachePath); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if err := generateMaturePlaceholder(cachePath); err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			http.Error(w, "Error generating thumbnail", http.StatusInternalServerError)
 			return
 		}
@@ -844,11 +861,13 @@ func (h *AudioHandler) serveBlurredThumbnail(
 
 	cachedInfo, err := os.Stat(cachePath)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error reading thumbnail", http.StatusInternalServerError)
 		return
 	}
 	file, err := os.Open(cachePath)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error opening thumbnail", http.StatusInternalServerError)
 		return
 	}
@@ -1037,6 +1056,7 @@ func (h *AudioHandler) handleMeta(w http.ResponseWriter, r *http.Request, key st
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -1103,6 +1123,7 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -1125,6 +1146,7 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -1201,6 +1223,7 @@ func (h *BrowseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	contents, err := browseDirectoryContentsForAccess(h.search, path, isLocalRequest(r))
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error reading directory", http.StatusInternalServerError)
 		return
 	}

@@ -1,12 +1,12 @@
-import {Component, type ReactNode} from 'react';
+import {Component, type ReactNode, type ErrorInfo} from 'react';
 import {reportError} from '@/lib/errorReporting';
 
 // Keep route failures inside the page so the surrounding player stays mounted.
 export default class PageLoadBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
     state = {failed: false};
 
-    componentDidCatch(error: Error) {
-        reportError({operation: 'page', stage: 'render', cause: 'unexpected'}, error);
+    componentDidCatch(error: Error, info: ErrorInfo) {
+        reportError({operation: 'page', stage: 'render', cause: 'unexpected', context: {componentStack: info.componentStack || ''}}, error);
     }
 
     static getDerivedStateFromError() {

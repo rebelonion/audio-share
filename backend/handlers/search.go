@@ -151,6 +151,7 @@ func (h *SearchHandler) RandomHandler() http.HandlerFunc {
 		}
 		shareKey, err := h.searchService.RandomAudio(isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			http.Error(w, "No audio found", http.StatusNotFound)
 			return
 		}
@@ -168,6 +169,7 @@ func (h *SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	response, err := searchResponseForValues(h.searchService, r.URL.Query(), isLocalRequest(r))
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Search error", http.StatusInternalServerError)
 		return
 	}

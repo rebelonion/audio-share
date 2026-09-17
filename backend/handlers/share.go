@@ -64,6 +64,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.ntfy.IsConfigured() {
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "configure", Message: "Notification service is not configured"})
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server configuration error"})
 		return
 	}
@@ -75,6 +76,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		normalized, err := h.normalizer.Normalize(r.Context(), req.RequestURL)
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			var normalizationError *services.SourceNormalizationError
 			if errors.As(err, &normalizationError) {
 				switch normalizationError.Code {
@@ -94,6 +96,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			existing, err := h.requests.FindExistingSource(normalized.SourceKey, normalized.CanonicalURL)
 			if err != nil {
+				services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 				log.Printf("share: failed to check existing source: %v", err)
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check existing requests"})
 				return
@@ -114,6 +117,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.HasHigherRemovalRisk,
 		normalizationFailed,
 	); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		services.AnnotateError(r.Context(), "deliver", "unavailable", "blocked")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send notification"})
 		return

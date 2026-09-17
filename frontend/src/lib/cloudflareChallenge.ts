@@ -26,17 +26,23 @@ export async function appFetch(
     const outcome = ['recommendations', 'recent', 'popular', 'new-tracks', 'unavailable-tracks',
         'metadata', 'waveform', 'version', 'playback-record'].includes(operation) ? 'degraded' : 'blocked';
     let response: Response;
+    const started = performance.now();
+    const requestContext = () => ({
+        endpoint: input instanceof Request ? input.url : input.toString(),
+        durationMs: performance.now() - started,
+    });
     try {
         response = await fetch(input, init);
     } catch (error) {
         if (!init?.signal?.aborted && !(input instanceof Request && input.signal.aborted)) {
-            reportError({operation, method, outcome, stage: 'request', cause: 'network'}, error);
+            reportError({operation, method, outcome, stage: 'request', cause: 'network', context: requestContext()}, error);
         }
         throw error;
     }
     if (!isCloudflareChallengeResponse(response)) {
         if (response.status >= 500 && response.headers.get('X-Error-Reporting') !== 'persisted') {
-            reportError({operation, method, outcome, stage: 'response', cause: 'unavailable', status: response.status});
+            reportError({operation, method, outcome, stage: 'response', cause: 'unavailable', status: response.status,
+                context: {...requestContext(), message: `HTTP ${response.status} ${response.statusText}`}});
         }
         const json = response.json.bind(response);
         response.json = async () => {
@@ -44,7 +50,7 @@ export async function appFetch(
                 return await json();
             } catch (error) {
                 if (response.ok && !init?.signal?.aborted) {
-                    reportError({operation, method, outcome, stage: 'parse', cause: 'invalid-response', status: response.status}, error);
+                    reportError({operation, method, outcome, stage: 'parse', cause: 'invalid-response', status: response.status, context: requestContext()}, error);
                 }
                 throw error;
             }

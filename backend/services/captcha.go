@@ -59,7 +59,7 @@ func (v *CapVerifier) Verify(ctx context.Context, token string) error {
 
 	response, err := v.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrCaptchaUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrCaptchaUnavailable, err)
 	}
 	defer response.Body.Close()
 
@@ -68,10 +68,10 @@ func (v *CapVerifier) Verify(ctx context.Context, token string) error {
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 4096))
 	if err := decoder.Decode(&result); err != nil {
-		return fmt.Errorf("%w: invalid response", ErrCaptchaUnavailable)
+		return fmt.Errorf("%w: invalid response (HTTP %d): %w", ErrCaptchaUnavailable, response.StatusCode, err)
 	}
 	if response.StatusCode >= http.StatusInternalServerError {
-		return ErrCaptchaUnavailable
+		return fmt.Errorf("%w: HTTP %d", ErrCaptchaUnavailable, response.StatusCode)
 	}
 	if !result.Success {
 		return ErrCaptchaInvalid

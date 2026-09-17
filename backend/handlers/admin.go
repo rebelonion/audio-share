@@ -87,6 +87,7 @@ func (h *AdminHandler) handleAudioSources(w http.ResponseWriter, r *http.Request
 		ORDER BY indexed_at DESC
 	`)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("admin: audio sources query failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
 		return
@@ -100,6 +101,7 @@ func (h *AdminHandler) handleAudioSources(w http.ResponseWriter, r *http.Request
 		var removalRequestedAt sql.NullTime
 		if err := rows.Scan(&item.ShareKey, &item.WebpageURL, &item.Title, &item.Filename,
 			&unavailableAt, &removalRequestedAt); err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			log.Printf("admin: audio sources scan failed: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
 			return
@@ -140,6 +142,7 @@ func (h *AdminHandler) handleAudioUnavailable(w http.ResponseWriter, r *http.Req
 		UPDATE audio_files SET unavailable_at = $1 WHERE share_key = $2 AND deleted = 0
 	`, unavailableAt, key)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("admin: set unavailable failed for key=%s: %v", key, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
 		return
@@ -175,6 +178,7 @@ func (h *AdminHandler) handleAudioRemovalRequest(w http.ResponseWriter, r *http.
 		UPDATE audio_files SET removal_requested_at = $1 WHERE share_key = $2 AND deleted = 0
 	`, requestedAt, key)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("admin: set removal request failed for key=%s: %v", key, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
 		return
@@ -231,6 +235,7 @@ func (h *AdminHandler) handleRequestCreate(w http.ResponseWriter, r *http.Reques
 
 	request, err := h.requests.Create(body.Title, body.SubmittedURL, body.SourceKey, body.Tags, body.Status)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("admin: failed to create request: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create request"})
 		return
@@ -261,6 +266,7 @@ func (h *AdminHandler) handleRequestUpdateStatus(w http.ResponseWriter, r *http.
 	}
 
 	if err := h.requests.UpdateStatus(id, body.Status, body.FolderShareKey); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if errors.Is(err, services.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
 			return
@@ -298,6 +304,7 @@ func (h *AdminHandler) handleRequestUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.requests.Update(id, body.Title, body.Tags); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if errors.Is(err, services.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
 			return
@@ -318,6 +325,7 @@ func (h *AdminHandler) handleRequestDelete(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.requests.Delete(id); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if errors.Is(err, services.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})
 			return

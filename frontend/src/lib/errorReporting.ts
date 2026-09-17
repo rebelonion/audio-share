@@ -16,6 +16,27 @@ export interface ErrorReport {
     status?: number;
     method?: string;
     code?: string;
+    context?: {
+        endpoint?: string;
+        resource?: string;
+        step?: string;
+        message?: string;
+        componentStack?: string;
+        durationMs?: number;
+    };
+}
+
+export function diagnosticText(value: string, limit = 1000): string {
+    return value
+        .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s<>"']+/gi, raw => {
+            try { return new URL(raw).pathname; } catch { return '[invalid URL]'; }
+        })
+        .replace(/[?#][^\s<>"']*/g, '')
+        .replace(/(\b(?:authorization|proxy-authorization|cookie|set-cookie)["']?\s*[=:]\s*)[^\r\n]*/gi, '$1[redacted]')
+        .replace(/(\b(?:bearer|basic)\s+)[^\s,;"'}]+/gi, '$1[redacted]')
+        .replace(/(\b(?:password|passwd|token|secret|access[_-]?key|recovery[_-]?key|api[_-]?key|cap[_-]?token|access[_-]?token|refresh[_-]?token|session[_-]?secret|client[_-]?secret)["']?\s*[=:]\s*)(?:"(?:\\.|[^"\\])*(?:"|$)|'(?:\\.|[^'\\])*(?:'|$)|[^\s,;"'}]+)/gi, '$1[redacted]')
+        .replace(/\p{Cc}/gu, char => char === '\n' || char === '\t' ? char : '')
+        .slice(0, limit);
 }
 
 const reportedErrors = new WeakSet<object>();
@@ -58,12 +79,25 @@ export function reportError(report: ErrorReport, error?: unknown): void {
         const ua = navigator.userAgent;
         const browser = /Firefox\//.test(ua) ? 'firefox' : /Chrome\/|Chromium\/|Edg\//.test(ua)
             ? 'chromium' : /Safari\//.test(ua) ? 'safari' : 'other';
+        const details = report.context;
+        const context = {
+            route: diagnosticText(window.location.pathname, 300),
+            endpoint: diagnosticText(details?.endpoint || '', 300),
+            resource: diagnosticText(details?.resource || '', 300),
+            step: diagnosticText(details?.step || report.stage, 100),
+            message: diagnosticText(details?.message || (error instanceof Error ? error.message
+                : typeof error === 'string' ? error : `${report.operation}: ${report.cause}`)),
+            stack: diagnosticText(error instanceof Error ? error.stack || '' : '', 3000),
+            componentStack: diagnosticText(details?.componentStack || '', 1500),
+            durationMs: Math.max(0, Math.round(details?.durationMs || 0)),
+            online: navigator.onLine,
+        };
         // Explicit fields keep callers from accidentally sending URLs or secrets.
         queue.push({attempts: 0, body: JSON.stringify({
             eventId: createEventId(), operation: report.operation, stage: report.stage,
             cause: report.cause, outcome: report.outcome || 'blocked', status: report.status || 0,
             method: report.method || '', code,
-            buildId: /^[a-zA-Z0-9._-]{1,100}$/.test(BUILD_ID) ? BUILD_ID : 'unknown', browser,
+            buildId: /^[a-zA-Z0-9._-]{1,100}$/.test(BUILD_ID) ? BUILD_ID : 'unknown', browser, context,
         })});
         if (!retryTimer) void flush();
     } catch {

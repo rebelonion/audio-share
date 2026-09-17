@@ -46,6 +46,7 @@ func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -70,7 +71,7 @@ func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
-		services.AnnotateError(r.Context(), "read", "missing-file", "degraded")
+		services.AnnotateFileError(r.Context(), err, fullPath, "degraded")
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
@@ -87,6 +88,7 @@ func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	file, err := os.Open(fullPath)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error opening file", http.StatusInternalServerError)
 		return
 	}

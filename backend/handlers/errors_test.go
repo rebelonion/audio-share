@@ -36,6 +36,38 @@ func (m *memoryErrors) Record(_ context.Context, origin, sourceHash string, e se
 
 const validReport = `{"eventId":"00000000-0000-4000-8000-000000000001","operation":"captcha","stage":"solve","cause":"unavailable","outcome":"blocked","browser":"firefox"}`
 
+func TestHTTPErrorIncludesDiagnosticContext(t *testing.T) {
+	recorder := &memoryErrors{}
+	h := ReportHTTPErrors(recorder, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(errors.New("open source/poster.jpg: permission denied")))
+		w.WriteHeader(500)
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/audio/key/track/thumbnail?token=private", nil))
+	if len(recorder.events) != 1 {
+		t.Fatal("missing report")
+	}
+	e := recorder.events[0].event
+	if e.EventID == "" || e.Context.Route != "/api/audio/key/track/thumbnail" || !strings.Contains(e.Context.Message, "permission denied") || e.Context.Step == "" {
+		t.Fatalf("missing context: %+v", e)
+	}
+}
+
+func TestHTTPErrorPreservesDiagnosticCode(t *testing.T) {
+	recorder := &memoryErrors{}
+	h := ReportHTTPErrors(recorder, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		services.AnnotateErrorCode(r.Context(), "db_numeric_out_of_range")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/playback/recommendations/track", nil))
+	if len(recorder.events) != 1 {
+		t.Fatalf("got %d reports", len(recorder.events))
+	}
+	event := recorder.events[0].event
+	if event.Code != "db_numeric_out_of_range" || event.Operation != "recommendations" || event.Status != 500 || event.Cause != "unavailable" {
+		t.Fatalf("unexpected event: %+v", event)
+	}
+}
+
 func TestErrorIngestionValidationSessionAndLimits(t *testing.T) {
 	recorder := &memoryErrors{}
 	h := NewErrorHandler(recorder, "secret")

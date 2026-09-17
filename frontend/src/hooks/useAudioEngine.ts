@@ -268,7 +268,8 @@ export function useAudioEngine({
             setError('This track could not be loaded. You can skip it from the queue.');
             if (audio.error?.code !== 1) {
                 reportOperationalError({operation: 'playback', stage: 'play', cause: audio.error?.code === 2
-                    ? 'media-network' : audio.error?.code === 3 ? 'media-decode' : 'media-source'});
+                    ? 'media-network' : audio.error?.code === 3 ? 'media-decode' : 'media-source',
+                    context: {resource: loadedTrack.shareKey, message: audio.error?.message || `Media error ${audio.error?.code ?? 'unknown'}; readyState=${audio.readyState}; networkState=${audio.networkState}`}});
             }
         });
 
@@ -337,7 +338,7 @@ export function useAudioEngine({
                 blockedPlaybackRef.current = null;
                 setNotice(null);
                 setError('Could not play this audio. Try the next track or try again.');
-                reportOperationalError({operation: 'playback', stage: 'play', cause: 'unexpected'}, playError);
+                reportOperationalError({operation: 'playback', stage: 'play', cause: 'unexpected', context: {resource: selectedTrack.shareKey}}, playError);
             }
         });
     }, [currentTrackRef, metadataRef, trackEvent]);

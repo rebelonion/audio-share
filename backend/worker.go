@@ -40,7 +40,7 @@ func startWorker(cfg *config.Config, db *services.Database, fs *services.FileSys
 			if err := job.run(); err != nil {
 				log.Printf("Worker %s: %v", job.name, err)
 				if job.name == "playback-cleanup" {
-					db.Errors.Report("worker", services.ErrorEvent{Operation: job.name, Stage: "run", Cause: "unexpected", Outcome: "blocked"})
+					db.Errors.Report("worker", services.ErrorEvent{Operation: job.name, Stage: "run", Cause: "unexpected", Outcome: "blocked", Context: services.ErrorDetails(err)})
 				}
 			}
 		}))

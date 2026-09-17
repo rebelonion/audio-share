@@ -126,7 +126,7 @@ export async function requestMediaAccess(
     }
 
     if (!body.accessKey) {
-        reportError({operation: 'media-access', stage: 'parse', cause: 'invalid-response'});
+        reportError({operation: 'media-access', stage: 'parse', cause: 'invalid-response', context: {resource: shareKey, message: 'Access response missing accessKey'}});
         throw new MediaAccessError(response.status, 'invalid_media_access_response', null);
     }
     if (typeof body.expiresInMs === 'number' && Number.isFinite(body.expiresInMs) && body.expiresInMs >= 0) {
@@ -138,7 +138,7 @@ export async function requestMediaAccess(
     }
     const serverExpiresAt = Date.parse(body.expiresAt || '');
     if (!Number.isFinite(serverExpiresAt)) {
-        reportError({operation: 'media-access', stage: 'parse', cause: 'invalid-response'});
+        reportError({operation: 'media-access', stage: 'parse', cause: 'invalid-response', context: {resource: shareKey, message: 'Access response has invalid expiry'}});
         throw new MediaAccessError(response.status, 'invalid_media_access_response', null);
     }
     const serverNow = Date.parse(response.headers.get('Date') || '');

@@ -3,28 +3,34 @@ package services
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// ErrorEvent deliberately contains no free-form message, URL, token, or stack.
-// The same vocabulary is used for client reports and trusted server reports.
+// Context accompanies each report but does not affect alert grouping.
 type ErrorEvent struct {
-	EventID        string `json:"eventId"`
-	Operation      string `json:"operation"`
-	Method         string `json:"method"`
-	Stage          string `json:"stage"`
-	Cause          string `json:"cause"`
-	Code           string `json:"code"`
-	Outcome        string `json:"outcome"`
-	BuildID        string `json:"buildId"`
-	Browser        string `json:"browser"`
-	Status         int    `json:"status"`
-	FailedItems    int    `json:"-"`
-	AttemptedItems int    `json:"-"`
+	EventID        string       `json:"eventId"`
+	Operation      string       `json:"operation"`
+	Method         string       `json:"method"`
+	Stage          string       `json:"stage"`
+	Cause          string       `json:"cause"`
+	Code           string       `json:"code"`
+	Outcome        string       `json:"outcome"`
+	BuildID        string       `json:"buildId"`
+	Browser        string       `json:"browser"`
+	Status         int          `json:"status"`
+	FailedItems    int          `json:"-"`
+	AttemptedItems int          `json:"-"`
+	Context        ErrorContext `json:"context,omitempty"`
 }
 
 func member(value, options string) bool {
@@ -39,8 +45,40 @@ func (e ErrorEvent) Valid() bool {
 }
 
 func SafeErrorCode(code string) string {
-	if member(code, "Error|TypeError|RangeError|ReferenceError|SyntaxError|URIError|EvalError|TimeoutError|NotSupportedError|missing_endpoint|network_error|challenge_parse_error|challenge_unsupported|solve_failed|instr_timeout|instr_blocked|redeem_failed|invalid_solution|invalid_expires|wasm_load_failed|worker_spawn_failed") {
+	if member(code, "Error|TypeError|RangeError|ReferenceError|SyntaxError|URIError|EvalError|TimeoutError|NotSupportedError|missing_endpoint|network_error|challenge_parse_error|challenge_unsupported|solve_failed|instr_timeout|instr_blocked|redeem_failed|invalid_solution|invalid_expires|wasm_load_failed|worker_spawn_failed|db_numeric_out_of_range|db_timeout|db_connection_failed|db_query_canceled|db_query_failed") {
 		return code
+	}
+	return "unknown"
+}
+
+// DatabaseErrorCode classifies wrapped database errors without exposing messages or SQL.
+func DatabaseErrorCode(err error) string {
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || pgconn.Timeout(err) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		return "db_timeout"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "db_query_canceled"
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "22003":
+			return "db_numeric_out_of_range"
+		case "57014":
+			// PostgreSQL uses the same SQLSTATE for statement timeouts and other cancellations.
+			return "db_query_canceled"
+		case "57P01", "57P02", "57P03", "53300":
+			return "db_connection_failed"
+		}
+		if strings.HasPrefix(pgErr.Code, "08") {
+			return "db_connection_failed"
+		}
+		return "db_query_failed"
+	}
+	var connectErr *pgconn.ConnectError
+	if errors.As(err, &netErr) || errors.As(err, &connectErr) || errors.Is(err, driver.ErrBadConn) || errors.Is(err, sql.ErrConnDone) {
+		return "db_connection_failed"
 	}
 	return "unknown"
 }
@@ -92,13 +130,27 @@ func (r *ErrorReporter) Record(ctx context.Context, origin, sourceHash string, e
 	if origin != "browser" {
 		e.BuildID = r.build
 	}
+	if e.EventID == "" {
+		e.EventID = NewDiagnosticID()
+	}
+	e.Context = e.Context.sanitized()
+	if e.Context.Message == "" && e.Context.Route == "" && len(e.Context.Failures) == 0 {
+		e.Context.Message = "Legacy report without diagnostics; update the reporting caller"
+	}
+	details, err := json.Marshal(e.Context)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	_, err := r.db.ExecContext(ctx, `INSERT INTO error_reports
-		(event_id,fingerprint,origin,operation,stage,cause,outcome,source_hash,build_id,browser,status,failed_items,attempted_items,method,code)
-		VALUES(NULLIF($1,''),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(event_id) DO NOTHING`,
+	_, err = r.db.ExecContext(ctx, `INSERT INTO error_reports
+		(event_id,fingerprint,origin,operation,stage,cause,outcome,source_hash,build_id,browser,status,failed_items,attempted_items,method,code,context)
+		VALUES(NULLIF($1,''),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(event_id) DO NOTHING`,
 		e.EventID, e.fingerprint(origin), origin, e.Operation, e.Stage, e.Cause, e.Outcome, sourceHash,
-		SafeDiagnosticLabel(e.BuildID), e.Browser, e.Status, e.FailedItems, e.AttemptedItems, e.Method, SafeErrorCode(e.Code))
+		SafeDiagnosticLabel(e.BuildID), e.Browser, e.Status, e.FailedItems, e.AttemptedItems, e.Method, SafeErrorCode(e.Code), string(details))
+	if err == nil {
+		log.Printf("Error event id=%s operation=%s origin=%s context=%s", e.EventID, e.Operation, origin, details)
+	}
 	return err
 }
 
@@ -165,7 +217,14 @@ func (r *ErrorReporter) Process() error {
 			if !r.policy.exceeded(origin, operation, method, count, sources) {
 				continue
 			}
-			body := fmt.Sprintf("%s %s: %s / %s (%s)\nOrigin: %s\n%d reports, %d distinct sources in %s\nBuilds: %.300s\nBrowsers: %.100s", method, operation, stage, cause, outcome, origin, count, sources, r.policy.Window, builds, browsers.String)
+			body := fmt.Sprintf("%s: %s / %s (%s)\nOrigin: %s\n%d reports in %s", strings.TrimSpace(method+" "+operation), stage, cause, outcome, origin, count, r.policy.Window)
+			if origin == "browser" {
+				body += fmt.Sprintf("\n%d distinct sources", sources)
+			}
+			body += fmt.Sprintf("\nBuilds: %.300s", builds)
+			if browsers.Valid {
+				body += fmt.Sprintf("\nBrowsers: %.100s", browsers.String)
+			}
 			if failed > 0 {
 				body += fmt.Sprintf("\nFailed items: %d", failed)
 			}
@@ -189,6 +248,30 @@ func (r *ErrorReporter) Process() error {
 			return err
 		}
 		for _, c := range candidates {
+			examples, err := conn.QueryContext(ctx, `SELECT e.event_id, e.created_at, e.context FROM error_reports e
+				LEFT JOIN error_alerts a ON a.fingerprint=e.fingerprint
+				WHERE e.fingerprint=$1 AND e.created_at <= $2
+				AND e.created_at > clock_timestamp()-($3 * interval '1 second')
+				AND (a.covered_through IS NULL OR e.created_at > a.covered_through)
+				ORDER BY e.created_at DESC, e.id DESC LIMIT 2`, c.key, c.through, r.policy.Window.Seconds())
+			if err != nil {
+				return err
+			}
+			for examples.Next() {
+				var id sql.NullString
+				var at time.Time
+				var details []byte
+				if err := examples.Scan(&id, &at, &details); err != nil {
+					examples.Close()
+					return err
+				}
+				c.body += fmt.Sprintf("\n\nEvent: %s at %s\n%s", id.String, at.UTC().Format(time.RFC3339), diagnosticSummary(details))
+			}
+			err = examples.Err()
+			examples.Close()
+			if err != nil {
+				return err
+			}
 			if _, err := conn.ExecContext(ctx, `INSERT INTO error_alerts(fingerprint,pending_body,pending_through) VALUES($1,$2,$3)
 				ON CONFLICT(fingerprint) DO UPDATE SET pending_body=$2,pending_through=$3,attempts=0,next_attempt=NOW()`, c.key, c.body, c.through); err != nil {
 				return err
@@ -247,5 +330,14 @@ func AnnotateError(ctx context.Context, stage, cause, outcome string) {
 	}
 	if e, ok := ctx.Value(errorContextKey{}).(*ErrorEvent); ok {
 		e.Stage, e.Cause, e.Outcome = stage, cause, outcome
+	}
+}
+
+func AnnotateErrorCode(ctx context.Context, code string) {
+	if ctx.Err() != nil {
+		return
+	}
+	if e, ok := ctx.Value(errorContextKey{}).(*ErrorEvent); ok {
+		e.Code = SafeErrorCode(code)
 	}
 }

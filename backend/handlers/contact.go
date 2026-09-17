@@ -87,6 +87,7 @@ func (h *ContactHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.ntfy.IsConfigured() {
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "configure", Message: "Notification service is not configured"})
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server configuration error"})
 		return
 	}
@@ -110,6 +111,7 @@ func (h *ContactHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	diagnostics.SessionID = sessionID
 
 	if err := h.ntfy.SendContactNotification(req.Topic, req.Email, req.Message, diagnostics, attachment); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		services.AnnotateError(r.Context(), "deliver", "unavailable", "blocked")
 		if errors.Is(err, services.ErrContactAttachmentDelivery) {
 			services.AnnotateError(r.Context(), "deliver", "partial-failure", "degraded")
@@ -126,6 +128,7 @@ func parseContactRequest(w http.ResponseWriter, r *http.Request) (contactRequest
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		r.Body = http.MaxBytesReader(w, r.Body, maxContactImageSize+(1<<20))
 		if err := r.ParseMultipartForm(maxContactImageSize); err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			return contactRequest{}, nil, nil, err
 		}
 		cleanupForm := func() {
@@ -153,6 +156,7 @@ func parseContactRequest(w http.ResponseWriter, r *http.Request) (contactRequest
 			return req, nil, cleanupForm, nil
 		}
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			return contactRequest{}, nil, cleanupForm, err
 		}
 
@@ -171,6 +175,7 @@ func parseContactRequest(w http.ResponseWriter, r *http.Request) (contactRequest
 			return contactRequest{}, nil, cleanup, err
 		}
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			return contactRequest{}, nil, cleanup, err
 		}
 
@@ -195,6 +200,7 @@ func parseContactRequest(w http.ResponseWriter, r *http.Request) (contactRequest
 
 	var req contactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		return contactRequest{}, nil, nil, err
 	}
 

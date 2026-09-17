@@ -66,6 +66,7 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			return
 		}
 		if h.accessKeys == nil {
+			services.AddErrorContext(r.Context(), services.ErrorContext{Step: "configure", Message: "Access key manager is not configured"})
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Playback authorization unavailable"})
 			return
 		}
@@ -76,6 +77,7 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			services.MediaPurposeStream,
 		)
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "Invalid access key"})
 			return
 		}
@@ -88,6 +90,7 @@ func (h *PlaybackHandler) RecordHandler() http.HandlerFunc {
 			verifiedAccess.Nonce,
 			verifiedAccess.ExpiresAt,
 		); err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record play event"})
 			return
 		}
@@ -115,6 +118,7 @@ func (h *PlaybackHandler) RecentHandler() http.HandlerFunc {
 
 		tracks, err := h.playbackService.GetRecentlyPlayed(30, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recent tracks"})
 			return
 		}
@@ -133,6 +137,7 @@ func (h *PlaybackHandler) PopularHandler() http.HandlerFunc {
 
 		tracks, err := h.playbackService.GetPopularTracks(30, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch popular tracks"})
 			return
 		}
@@ -151,6 +156,7 @@ func (h *PlaybackHandler) NewHandler() http.HandlerFunc {
 
 		tracks, err := h.playbackService.GetRecentlyAdded(30, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch new tracks"})
 			return
 		}
@@ -169,6 +175,7 @@ func (h *PlaybackHandler) UnavailableHandler() http.HandlerFunc {
 
 		tracks, err := h.playbackService.GetRecentlyUnavailable(10, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch unavailable tracks"})
 			return
 		}
@@ -194,7 +201,9 @@ func (h *PlaybackHandler) RecommendationsHandler() http.HandlerFunc {
 
 		tracks, err := h.playbackService.GetRecommendations(key, 30, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			log.Printf("Recommendations failed: %v", err)
+			services.AnnotateErrorCode(r.Context(), services.DatabaseErrorCode(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
 			return
 		}

@@ -57,6 +57,7 @@ func (h *LibraryHandler) resolveProfile(w http.ResponseWriter, r *http.Request) 
 		sessionID = generateSessionID()
 	}
 	if err := h.library.EnsureProfile(sessionID); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to initialize browser profile"})
 		return "", false
 	}
@@ -77,6 +78,7 @@ func (h *LibraryHandler) RecoveryKeyHandler() http.HandlerFunc {
 		}
 		key, err := h.library.RotateRecoveryKey(sessionID)
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create recovery key"})
 			return
 		}
@@ -108,6 +110,7 @@ func (h *LibraryHandler) RecoverHandler() http.HandlerFunc {
 			return
 		}
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to recover browser profile"})
 			return
 		}
@@ -130,11 +133,13 @@ func (h *LibraryHandler) LikesHandler() http.HandlerFunc {
 		}
 		shareKeys, err := h.library.LikedTrackKeys(sessionID, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load likes"})
 			return
 		}
 		hasRecoveryKey, err := h.library.ProfileHasRecoveryKey(sessionID)
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load recovery settings"})
 			return
 		}
@@ -159,6 +164,7 @@ func (h *LibraryHandler) LikedTracksHandler() http.HandlerFunc {
 		}
 		tracks, err := h.library.LikedTracks(sessionID, isLocalRequest(r))
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load liked tracks"})
 			return
 		}
@@ -190,6 +196,7 @@ func (h *LibraryHandler) LikeItemHandler() http.HandlerFunc {
 			err = h.library.Unlike(sessionID, shareKey)
 		}
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			if errors.Is(err, services.ErrTrackNotFound) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "Track not found"})
 				return

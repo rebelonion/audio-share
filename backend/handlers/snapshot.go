@@ -219,6 +219,7 @@ func (h *SPAHandler) renderAboutSnapshot(r *http.Request, responses initialRespo
 
 	var output bytes.Buffer
 	if err := snapshotMarkdown.Convert(content, &output); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("server snapshot markdown failed: %v", err)
 		services.AnnotateError(r.Context(), "render", "unexpected", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, snapshotListPage{Heading: "About"})
@@ -241,6 +242,7 @@ func (h *SPAHandler) renderDirectorySnapshot(r *http.Request, path, heading, des
 
 	contents, err := browseDirectoryContentsForAccess(h.searchService, path, isLocalRequest(r))
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("server snapshot browse failed for %q: %v", path, err)
 		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
@@ -275,6 +277,7 @@ func (h *SPAHandler) renderStatsSnapshot(r *http.Request, responses initialRespo
 
 	stats, err := loadStats(h.searchService)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("server snapshot stats failed: %v", err)
 		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
@@ -301,6 +304,7 @@ func (h *SPAHandler) renderRequestsSnapshot(r *http.Request, responses initialRe
 
 	requests, err := h.requestsService.GetAllGroupedByStatus()
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("server snapshot requests failed: %v", err)
 		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)
@@ -409,6 +413,7 @@ func (h *SPAHandler) renderSearchSnapshot(r *http.Request, responses initialResp
 	}
 	response, err := searchResponseForValues(h.searchService, values, isLocalRequest(r))
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("server snapshot search failed: %v", err)
 		services.AnnotateError(r.Context(), "render", "unavailable", "degraded")
 		return executeSnapshotTemplate(snapshotListTemplate, page)

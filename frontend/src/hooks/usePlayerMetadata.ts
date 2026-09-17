@@ -102,7 +102,7 @@ export function usePlayerMetadata(track: PlayerTrack | null) {
             })
             .catch(error => {
                 if (signal.aborted || error.name === 'AbortError') return;
-                reportError({operation: 'metadata', stage: 'parse', cause: 'invalid-response', outcome: 'degraded'}, error);
+                reportError({operation: 'metadata', stage: 'parse', cause: 'invalid-response', outcome: 'degraded', context: {resource: track.shareKey}}, error);
                 setState({
                     trackID: track.id,
                     preferenceVersion,

@@ -7,7 +7,45 @@ beforeEach(() => { vi.resetModules(); vi.useFakeTimers(); });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('error reporting', () => {
-    it('sends only structured fields, suppresses duplicates and ignores cancellations', async () => {
+    it('redacts complete credential values', async () => {
+        const {diagnosticText} = await import('./errorReporting');
+        const redactionFixtures = [
+            {input: "password=\"two secret words\" failed", expected: "password=[redacted] failed"},
+            {input: "password='two secret words' failed", expected: "password=[redacted] failed"},
+            {input: "password=\"two \\\"secret\\\" words\" failed", expected: "password=[redacted] failed"},
+            {input: "password=\"unterminated secret words", expected: "password=[redacted]"},
+            {input: "Authorization: Basic dXNlcjpwYXNz\nrequest failed", expected: "Authorization: [redacted]\nrequest failed"},
+            {input: "Authorization: Digest username=\"alice\", response=\"private\"", expected: "Authorization: [redacted]"},
+            {input: "Proxy-Authorization: Bearer private-token", expected: "Proxy-Authorization: [redacted]"},
+            {input: "Cookie: session=private; another=private", expected: "Cookie: [redacted]"},
+            {input: "accessKey=private recoveryKey=private capToken=private", expected: "accessKey=[redacted] recoveryKey=[redacted] capToken=[redacted]"},
+            {input: "access_key=private recovery-key=private API_KEY=private", expected: "access_key=[redacted] recovery-key=[redacted] API_KEY=[redacted]"},
+            {input: "{\"accessKey\":\"two secret words\",\"recoveryKey\":\"private\"}", expected: "{\"accessKey\":[redacted],\"recoveryKey\":[redacted]}"},
+            {input: "Basic dXNlcjpwYXNz Bearer private-token", expected: "Basic [redacted] Bearer [redacted]"},
+            {input: "refreshToken=private sessionSecret=private clientSecret=private", expected: "refreshToken=[redacted] sessionSecret=[redacted] clientSecret=[redacted]"},
+            {input: "open source/poster.jpg: permission denied", expected: "open source/poster.jpg: permission denied"},
+        ];
+        for (const fixture of redactionFixtures) {
+            expect(diagnosticText(fixture.input)).toBe(fixture.expected);
+        }
+    });
+    it('captures bounded browser context without URL credentials or tokens', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, {status: 204}));
+        vi.stubGlobal('fetch', fetchMock);
+        const {reportError} = await import('./errorReporting');
+        const error = new Error('Cannot render player; token=private-token');
+        error.stack = 'at https://user:private-password@example.com/assets/app.js?key=private-query#private-fragment:1:2';
+        reportError({operation: 'page', stage: 'render', cause: 'unexpected', context: {
+            endpoint: '/api/search?q=private-search', durationMs: 123.4, componentStack: 'Player\nPage',
+        }}, error);
+        await vi.advanceTimersByTimeAsync(0);
+        const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+        expect(body.context).toMatchObject({route: '/', endpoint: '/api/search', durationMs: 123, online: true, componentStack: 'Player\nPage'});
+        expect(body.context.message).toContain('Cannot render player');
+        expect(body.context.stack).toContain('/assets/app.js');
+        expect(JSON.stringify(body)).not.toContain('private-');
+    });
+    it('sends redacted diagnostics, suppresses duplicates and ignores cancellations', async () => {
         const fetchMock = vi.fn().mockResolvedValue(new Response(null, {status: 204}));
         vi.stubGlobal('fetch', fetchMock);
         const {reportError} = await import('./errorReporting');
@@ -22,7 +60,7 @@ describe('error reporting', () => {
         const [url, options] = fetchMock.mock.calls[0];
         expect(url).toBe('/api/errors');
         expect(JSON.parse(options.body)).toMatchObject({operation: 'captcha', code: 'TypeError', buildId: 'test-build'});
-        expect(options.body).not.toMatch(/secret|recover|do-not-send|another failure/);
+        expect(options.body).not.toMatch(/secret|do-not-send|another failure/);
     });
 
     it('retries with the same event ID and stops after three failed attempts', async () => {

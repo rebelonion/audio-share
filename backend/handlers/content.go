@@ -81,6 +81,7 @@ func (h *ContentHandler) AboutHandler() http.HandlerFunc {
 		aboutPath := filepath.Join(h.contentDir, "about.md")
 		content, err := os.ReadFile(aboutPath)
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			// Return default content if file doesn't exist
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{
@@ -110,6 +111,7 @@ func (h *ContentHandler) SitemapHandler() http.HandlerFunc {
 
 		folderPaths, err := h.searchService.GetAllFolderPaths()
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			log.Printf("Error getting folder paths for sitemap: %v", err)
 			folderPaths = nil
 		}
@@ -207,6 +209,7 @@ func (h *ContentHandler) StatsHandler() http.HandlerFunc {
 
 		result, err := loadStats(h.searchService)
 		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 			log.Printf("Error getting stats: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

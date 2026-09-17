@@ -7,12 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"mime"
 	"net"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -83,7 +85,7 @@ func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	var event services.ErrorEvent
@@ -185,6 +187,7 @@ type reportingReadSeeker struct {
 func (r reportingReadSeeker) Read(p []byte) (int, error) {
 	n, err := r.ReadSeeker.Read(p)
 	if err != nil && err != io.EOF && !isClientDisconnect(err) {
+		services.AddErrorContext(r.ctx, services.ErrorDetails(err))
 		services.AnnotateError(r.ctx, "read", "io", "blocked")
 	}
 	return n, err
@@ -193,6 +196,7 @@ func (r reportingReadSeeker) Read(p []byte) (int, error) {
 func (r reportingReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	n, err := r.ReadSeeker.Seek(offset, whence)
 	if err != nil && !isClientDisconnect(err) {
+		services.AddErrorContext(r.ctx, services.ErrorDetails(err))
 		services.AnnotateError(r.ctx, "read", "io", "blocked")
 	}
 	return n, err
@@ -204,7 +208,9 @@ func ReportHTTPErrors(recorder ErrorRecorder, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		event := services.ErrorEvent{Operation: ErrorOperation(r.URL.Path), Method: r.Method, Outcome: "blocked"}
+		event := services.ErrorEvent{EventID: services.NewDiagnosticID(), Operation: ErrorOperation(r.URL.Path), Method: r.Method, Outcome: "blocked",
+			Context: services.ErrorContext{Route: services.DiagnosticText(r.URL.Path, 300)}}
+		started := time.Now()
 		switch event.Operation {
 		case "recommendations", "recent", "popular", "new-tracks", "unavailable-tracks", "metadata", "waveform", "artwork", "version", "playback-record":
 			event.Outcome = "degraded"
@@ -214,6 +220,10 @@ func ReportHTTPErrors(recorder ErrorRecorder, next http.Handler) http.Handler {
 		persist := func(status int) bool {
 			attempted = true
 			event.Status = status
+			event.Context.DurationMS = time.Since(started).Milliseconds()
+			if event.Context.Message == "" {
+				event.Context.Message = http.StatusText(status)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			if err := recorder.Record(ctx, "server", "", event); err != nil {
@@ -237,10 +247,12 @@ func ReportHTTPErrors(recorder ErrorRecorder, next http.Handler) http.Handler {
 		defer func() {
 			panicValue := recover()
 			if panicValue != nil && panicValue != http.ErrAbortHandler {
+				services.AddErrorContext(r.Context(), services.ErrorContext{Message: fmt.Sprint(panicValue), Stack: string(debug.Stack())})
 				event.Stage = "request"
 				event.Cause = "panic"
 			}
 			if writer.writeError != nil && event.Cause == "" {
+				services.AddErrorContext(r.Context(), services.ErrorDetails(writer.writeError))
 				event.Stage = "deliver"
 				event.Cause = "io"
 			}

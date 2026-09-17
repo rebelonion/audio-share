@@ -63,6 +63,7 @@ func (h *RequestsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *RequestsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.GetAllGroupedByStatus()
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		log.Printf("requests: failed to fetch: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch requests"})
 		return

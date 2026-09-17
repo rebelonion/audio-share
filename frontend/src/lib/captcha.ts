@@ -65,6 +65,7 @@ function disposeCap(cap: Cap) {
 
 export function solveCaptcha(signal?: AbortSignal): Promise<string> {
     const solve = solveQueue.then(async () => {
+        const started = performance.now();
         const abortError = aborted(signal);
         if (abortError) throw abortError;
 
@@ -72,7 +73,7 @@ export function solveCaptcha(signal?: AbortSignal): Promise<string> {
         try {
             cap = await getCap();
         } catch (error) {
-            if (!signal?.aborted) reportError({operation: 'captcha', stage: 'setup', cause: 'unavailable'}, error);
+            if (!signal?.aborted) reportError({operation: 'captcha', stage: 'setup', cause: 'unavailable', context: {endpoint: CAP_PUBLIC_ENDPOINT, durationMs: performance.now() - started}}, error);
             throw error;
         }
         let cancelled = false;
@@ -103,7 +104,8 @@ export function solveCaptcha(signal?: AbortSignal): Promise<string> {
         } catch (error) {
             const solveAbort = aborted(signal);
             if (solveAbort) throw solveAbort;
-            reportError({operation: 'captcha', stage: 'solve', cause: 'unavailable', code: lastCapError?.code}, error);
+            reportError({operation: 'captcha', stage: 'solve', cause: 'unavailable', code: lastCapError?.code,
+                context: {endpoint: CAP_PUBLIC_ENDPOINT, step: lastCapError?.code || 'solve', message: lastCapError?.message, durationMs: performance.now() - started}}, error);
             throw error;
         } finally {
             signal?.removeEventListener('abort', cancelSolve);

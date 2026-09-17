@@ -50,7 +50,7 @@ func (s *WaveformService) GetByShareKey(shareKey string) (string, float64, error
 func (s *WaveformService) RunJob(maxDuration time.Duration) error {
 	err := withJobLock(s.db, "waveform", func(conn *sql.Conn) error { return s.runJob(conn, maxDuration) })
 	if err != nil {
-		s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "unexpected", Outcome: "blocked"})
+		s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "unexpected", Outcome: "blocked", Context: ErrorDetails(err)})
 	}
 	return err
 }
@@ -78,14 +78,16 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 	}
 	var files []fileRow
 	var failed, attempted atomic.Int64
+	var examples FailureExamples
 	defer func() {
 		if failed.Load() > 0 {
-			s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "partial-failure", Outcome: "degraded", FailedItems: int(failed.Load()), AttemptedItems: int(attempted.Load())})
+			s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "partial-failure", Outcome: "degraded", FailedItems: int(failed.Load()), AttemptedItems: int(attempted.Load()), Context: examples.Context()})
 		}
 	}()
 	for rows.Next() {
 		var f fileRow
 		if err := rows.Scan(&f.id, &f.path); err != nil {
+			examples.Add("scan", "", err)
 			failed.Add(1)
 			continue
 		}
@@ -131,6 +133,7 @@ dispatch:
 
 			fullPath, valid := s.resolvePath(f.path)
 			if !valid {
+				examples.Add("resolve", f.path, fmt.Errorf("invalid media path"))
 				failed.Add(1)
 				return
 			}
@@ -139,6 +142,7 @@ dispatch:
 			if err != nil {
 				log.Printf("Waveform: failed %s: %v", f.path, err)
 				if ctx.Err() == nil {
+					examples.Add("generate", f.path, err)
 					failed.Add(1)
 				}
 				return
@@ -172,14 +176,16 @@ func (s *WaveformService) resolvePath(virtualPath string) (string, bool) {
 
 func getAudioDuration(ctx context.Context, filePath string) (float64, error) {
 	cmd := exec.CommandContext(ctx, "ffprobe",
-		"-v", "quiet",
+		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "csv=p=0",
 		filePath,
 	)
+	stderr := &limitedBuffer{limit: 2048}
+	cmd.Stderr = stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("%w: %s", err, stderr.String())
 	}
 	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 }
@@ -200,13 +206,15 @@ func generateWaveform(ctx context.Context, filePath string) ([]byte, float64, er
 	}
 
 	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-v", "error",
 		"-i", filePath,
 		"-af", fmt.Sprintf("aformat=channel_layouts=mono,aresample=%d", waveformSampleRate),
 		"-f", "s16le",
 		"-ac", "1",
 		"pipe:1",
 	)
-	cmd.Stderr = io.Discard
+	stderr := &limitedBuffer{limit: 2048}
+	cmd.Stderr = stderr
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -261,7 +269,7 @@ func generateWaveform(ctx context.Context, filePath string) ([]byte, float64, er
 	}
 
 	if err := cmd.Wait(); err != nil && peakIdx < waveformNumPeaks/2 {
-		return nil, 0, fmt.Errorf("ffmpeg: %w", err)
+		return nil, 0, fmt.Errorf("ffmpeg: %w: %s", err, stderr.String())
 	}
 
 	if samplesInBucket > 0 && peakIdx < waveformNumPeaks {

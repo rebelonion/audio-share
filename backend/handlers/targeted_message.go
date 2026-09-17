@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/onion/audio-share-backend/services"
 	"time"
 )
 
@@ -57,6 +59,7 @@ func (h *TargetedMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		RETURNING id, title, message
 	`, sessionID).Scan(&message.ID, &message.Title, &message.Message)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -119,6 +122,7 @@ func (h *AdminHandler) handleTargetedMessageCreate(w http.ResponseWriter, r *htt
 		&message.CreatedAt,
 	)
 	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if err == sql.ErrNoRows {
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "A pending message already exists for this session",

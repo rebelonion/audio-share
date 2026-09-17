@@ -1,0 +1,1 @@
+ALTER TABLE error_reports ADD COLUMN context JSONB NOT NULL DEFAULT '{}';
