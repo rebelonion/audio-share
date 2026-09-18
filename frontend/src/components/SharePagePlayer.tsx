@@ -32,25 +32,29 @@ export default function SharePagePlayer({src, name, artist, ageLimit, startTime}
         if (error) {
             status = (
                 <div className="flex items-center justify-center gap-2 text-sm text-[var(--error-text)]" role="status">
-                    <AlertCircle className="h-4 w-4" /> Playback failed. Use the player to retry.
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Playback failed. Use the player to retry.</span>
                 </div>
             );
         } else if (isLoading) {
             status = (
                 <div className="flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]" role="status">
-                    <Loader2 className="h-4 w-4 animate-spin text-[var(--primary)]" /> Loading in player…
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--primary)]" />
+                    <span>Loading in player…</span>
                 </div>
             );
         } else if (isPlaying) {
             status = (
                 <div className="flex items-center justify-center gap-2 text-sm text-[var(--foreground)]" role="status">
-                    <Radio className="h-4 w-4 text-[var(--primary)]" /> Currently playing
+                    <Radio className="h-4 w-4 text-[var(--primary)]" />
+                    <span>Currently playing</span>
                 </div>
             );
         } else {
             status = (
                 <div className="flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]" role="status">
-                    <Pause className="h-4 w-4 text-[var(--primary)]" /> Paused in player
+                    <Pause className="h-4 w-4 text-[var(--primary)]" />
+                    <span>Paused in player</span>
                 </div>
             );
         }
@@ -66,7 +70,7 @@ export default function SharePagePlayer({src, name, artist, ageLimit, startTime}
                         className="flex min-w-52 items-center justify-center gap-3 rounded-full bg-[var(--primary)] px-7 py-3 font-medium text-white transition-[background-color,transform] duration-200 hover:scale-[1.02] hover:bg-[var(--primary-hover)]"
                     >
                         <Play className="h-5 w-5 fill-current" />
-                        {startTime && startTime > 0 ? `Play from ${formatStartTime(startTime)}` : 'Play this track'}
+                        <span>{startTime && startTime > 0 ? `Play from ${formatStartTime(startTime)}` : 'Play this track'}</span>
                     </button>
                     {currentTrack && (
                         <p className="max-w-sm text-xs text-[var(--muted-foreground)]">
