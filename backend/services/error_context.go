@@ -46,7 +46,6 @@ func DiagnosticText(value string, limit int) string {
 		}
 		return diagnosticQuery.ReplaceAllString(raw, "")
 	})
-	value = diagnosticQuery.ReplaceAllString(value, "")
 	value = diagnosticAuthorization.ReplaceAllString(value, "${1}[redacted]")
 	value = diagnosticAuthScheme.ReplaceAllString(value, "${1}[redacted]")
 	value = diagnosticSecret.ReplaceAllString(value, "${1}[redacted]")
@@ -68,8 +67,8 @@ func DiagnosticText(value string, limit int) string {
 }
 
 func (c ErrorContext) sanitized() ErrorContext {
-	c.Route = DiagnosticText(c.Route, 300)
-	c.Endpoint = DiagnosticText(c.Endpoint, 300)
+	c.Route = DiagnosticText(diagnosticQuery.ReplaceAllString(c.Route, ""), 300)
+	c.Endpoint = DiagnosticText(diagnosticQuery.ReplaceAllString(c.Endpoint, ""), 300)
 	c.Resource = DiagnosticText(c.Resource, 300)
 	c.Step = DiagnosticText(c.Step, 100)
 	c.Message = DiagnosticText(c.Message, 1000)

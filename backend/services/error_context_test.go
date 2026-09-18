@@ -58,6 +58,34 @@ func TestDiagnosticContextRedactionAndBounds(t *testing.T) {
 	}
 }
 
+func TestDiagnosticContextPreservesFilePaths(t *testing.T) {
+	for _, path := range []string{
+		"/mnt/asmr/ささがにえんも Enmo Ch#/【 雑談ASMR配信 】耳元でおしゃべりするよ。【 ささがにえんも ⧸ Vtuber 】 [XzV8iu-5VG4].jpg",
+		"source/cover?original#1.jpg",
+	} {
+		t.Run(path, func(t *testing.T) {
+			details := ErrorDetails(&fs.PathError{Op: "stat", Path: path, Err: fs.ErrNotExist})
+			details.Route = "/api/audio/key/track/thumbnail?arbitrary=private-query#private-fragment"
+			details.Endpoint = "/api/artwork#private-fragment"
+			safe := details.sanitized()
+			if safe.Resource != path || safe.Message != "stat "+path+": "+fs.ErrNotExist.Error() {
+				t.Fatalf("file path changed: %+v", safe)
+			}
+			if safe.Route != "/api/audio/key/track/thumbnail" || safe.Endpoint != "/api/artwork" {
+				t.Fatalf("URL fields not redacted: %+v", safe)
+			}
+			raw, err := json.Marshal(safe)
+			if err != nil {
+				t.Fatal(err)
+			}
+			summary := diagnosticSummary(raw)
+			if !strings.Contains(summary, "Resource: "+path) || !strings.Contains(summary, "Error: "+safe.Message) || strings.Contains(summary, "private-") {
+				t.Fatalf("bad alert summary: %s", summary)
+			}
+		})
+	}
+}
+
 func TestFileErrorContextDistinguishesPermissions(t *testing.T) {
 	for _, tc := range []struct {
 		err   error
