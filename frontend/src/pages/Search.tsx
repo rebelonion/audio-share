@@ -306,7 +306,7 @@ export default function Search() {
 
                 {hasSearched && (
                     <div className="mb-4 text-[var(--muted-foreground)]">
-                        Found {total} result{total !== 1 ? 's' : ''} for "{query}"
+                        <span>{`Found ${total} result${total !== 1 ? 's' : ''} for "${query}"`}</span>
                         {totalPages > 1 && (
                             <span> (page {currentPage} of {totalPages})</span>
                         )}
