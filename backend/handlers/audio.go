@@ -4,12 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	_ "image/gif"
-	"image/jpeg"
 	_ "image/png"
 	"io"
 	"log"
@@ -787,11 +785,19 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 	}
 
 	if row.isMature() && view == "blurred" {
-		h.serveBlurredThumbnail(w, r, key, fullPath, info, row.removalRequestedAt.Valid)
+		h.serveBlurredThumbnail(w, r, fullPath, info, row.removalRequestedAt.Valid)
 		return
 	}
 	if row.isMature() && view == "original" && !maturePreferenceEnabled(r, h.sessionSecret) {
 		http.Error(w, "Mature content preference required", http.StatusForbidden)
+		return
+	}
+
+	cacheControl := "private, max-age=86400"
+	if row.removalRequestedAt.Valid {
+		cacheControl = "private, no-store"
+	}
+	if serveCardArtwork(w, r, fullPath, info, cacheControl) {
 		return
 	}
 
@@ -822,7 +828,7 @@ func (h *AudioHandler) handleThumbnail(w http.ResponseWriter, r *http.Request, k
 func (h *AudioHandler) serveBlurredThumbnail(
 	w http.ResponseWriter,
 	r *http.Request,
-	key, fullPath string,
+	fullPath string,
 	info os.FileInfo,
 	removalRequested bool,
 ) {
@@ -830,74 +836,29 @@ func (h *AudioHandler) serveBlurredThumbnail(
 	if removalRequested {
 		cacheControl = "private, no-store"
 	}
-	cacheDir := filepath.Join(os.TempDir(), "audio-share-mature-thumbnails")
-	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+	data, err := cachedArtwork.get(r.Context(), fullPath, info, "blur-v2")
+	if err != nil {
 		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		http.Error(w, "Error preparing thumbnail", http.StatusInternalServerError)
 		return
 	}
-
-	cacheName := fmt.Sprintf("%s-blur-v1-%d-%d.jpg", key, info.ModTime().Unix(), info.Size())
-	cachePath := filepath.Join(cacheDir, cacheName)
-	if cachedInfo, err := os.Stat(cachePath); err == nil && !cachedInfo.IsDir() {
-		file, err := os.Open(cachePath)
-		if err == nil {
-			defer file.Close()
-			w.Header().Set("Content-Type", "image/jpeg")
-			w.Header().Set("Cache-Control", cacheControl)
-			http.ServeContent(w, r, cacheName, cachedInfo.ModTime(), file)
-			return
-		}
-	}
-
-	if err := generateBlurredThumbnail(fullPath, cachePath); err != nil {
-		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
-		if err := generateMaturePlaceholder(cachePath); err != nil {
-			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
-			http.Error(w, "Error generating thumbnail", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	cachedInfo, err := os.Stat(cachePath)
-	if err != nil {
-		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
-		http.Error(w, "Error reading thumbnail", http.StatusInternalServerError)
-		return
-	}
-	file, err := os.Open(cachePath)
-	if err != nil {
-		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
-		http.Error(w, "Error opening thumbnail", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", cacheControl)
-	http.ServeContent(w, r, cacheName, cachedInfo.ModTime(), file)
+	serveGeneratedArtwork(w, r, data, cacheControl)
 }
 
-func generateBlurredThumbnail(srcPath, dstPath string) error {
-	file, err := os.Open(srcPath)
+func generateBlurredThumbnail(srcPath string) ([]byte, error) {
+	src, err := decodeArtwork(srcPath)
 	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	src, _, err := image.Decode(file)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	bounds := src.Bounds()
 	width, height := scaledDimensions(bounds.Dx(), bounds.Dy(), 360)
 	scaled := resizeNearest(src, width, height)
 	blurred := boxBlur(scaled, 14, 3)
-	return writeJPEG(dstPath, blurred)
+	return encodeArtworkJPEG(blurred)
 }
 
-func generateMaturePlaceholder(dstPath string) error {
+func generateMaturePlaceholder() ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, 360, 360))
 	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 30, G: 28, B: 24, A: 255}}, image.Point{}, draw.Src)
 	for y := 0; y < 360; y++ {
@@ -907,7 +868,7 @@ func generateMaturePlaceholder(dstPath string) error {
 			}
 		}
 	}
-	return writeJPEG(dstPath, img)
+	return encodeArtworkJPEG(img)
 }
 
 func resizeNearest(src image.Image, width, height int) *image.RGBA {
@@ -1012,24 +973,6 @@ func scaledDimensions(width, height, maxSide int) (int, int) {
 	}
 	scaledWidth := max(1, width*maxSide/height)
 	return scaledWidth, maxSide
-}
-
-func writeJPEG(path string, img image.Image) error {
-	tmp := path + ".tmp"
-	file, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	if err := jpeg.Encode(file, img, &jpeg.Options{Quality: 72}); err != nil {
-		file.Close()
-		os.Remove(tmp)
-		return err
-	}
-	if err := file.Close(); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return os.Rename(tmp, path)
 }
 
 type AudioMeta struct {

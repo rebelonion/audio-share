@@ -15,7 +15,7 @@ export default function PosterImage({ shareKey, className }: PosterImageProps) {
 
     return (
         <img
-            src={`${API_BASE}/api/folder/key/${shareKey}/poster`}
+            src={`${API_BASE}/api/folder/key/${shareKey}/poster?size=card`}
             alt=""
             width={32}
             height={32}

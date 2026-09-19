@@ -16,10 +16,10 @@ export function trackArtworkUrl(track: TrackArtwork): string | null {
 export function trackArtworkUrls(track: TrackArtwork): string[] {
     const urls: string[] = [];
     if (track.audioImage) {
-        urls.push(`${API_BASE}/api/audio/key/${track.shareKey}/thumbnail`);
+        urls.push(`${API_BASE}/api/audio/key/${track.shareKey}/thumbnail?size=card`);
     }
     if (track.parentShareKey && track.posterImage) {
-        urls.push(`${API_BASE}/api/folder/key/${track.parentShareKey}/poster`);
+        urls.push(`${API_BASE}/api/folder/key/${track.parentShareKey}/poster?size=card`);
     }
     return urls;
 }

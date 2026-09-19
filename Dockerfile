@@ -51,11 +51,12 @@ COPY --from=backend-builder /audio-share-backend .
 COPY --from=frontend-builder /app/dist ./static
 
 # Create the normalizer mount point and non-root user
-RUN mkdir -p /app/config && adduser -D -g '' appuser
+RUN mkdir -p /app/config /app/cache/artwork && adduser -D -g '' appuser && chown -R appuser:appuser /app/cache
 USER appuser
 
 EXPOSE 8080
 
+ENV ARTWORK_CACHE_DIR=/app/cache/artwork
 ENV PORT=8080
 ENV STATIC_DIR=/app/static
 ENV CONTENT_DIR=/app/content

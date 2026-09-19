@@ -38,12 +38,12 @@ describe('playback track availability', () => {
 describe('track artwork URLs', () => {
     it('prefers track artwork and falls back to folder artwork', () => {
         expect(trackArtworkUrl(playbackTrack({audioImage: 'thumbnail.jpg'})))
-            .toBe('/api/audio/key/track-key/thumbnail');
+            .toBe('/api/audio/key/track-key/thumbnail?size=card');
         expect(trackArtworkUrl(playbackTrack({
             audioImage: null,
             parentShareKey: 'folder-key',
             posterImage: 'poster.jpg',
-        }))).toBe('/api/folder/key/folder-key/poster');
+        }))).toBe('/api/folder/key/folder-key/poster?size=card');
     });
 
     it('returns null without indexed artwork', () => {
@@ -56,8 +56,8 @@ describe('track artwork URLs', () => {
             parentShareKey: 'folder-key',
             posterImage: 'poster.jpg',
         }))).toEqual([
-            '/api/audio/key/track-key/thumbnail',
-            '/api/folder/key/folder-key/poster',
+            '/api/audio/key/track-key/thumbnail?size=card',
+            '/api/folder/key/folder-key/poster?size=card',
         ]);
     });
 });

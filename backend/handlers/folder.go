@@ -76,6 +76,10 @@ func (h *FolderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if serveCardArtwork(w, r, fullPath, info, "public, max-age=86400") {
+		return
+	}
+
 	mimeTypes := map[string]string{
 		".jpg": "image/jpeg", ".jpeg": "image/jpeg",
 		".png": "image/png", ".gif": "image/gif", ".webp": "image/webp",

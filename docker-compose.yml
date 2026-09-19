@@ -10,6 +10,7 @@ x-app: &app
   env_file:
     - .env.local
   volumes:
+    - artwork_cache:/app/cache/artwork
     - ${AUDIO_PATH:-./audio}:/audio:ro
     - ${CONTENT_PATH:-./content}:/app/content:ro
     - ${SOURCE_NORMALIZER_PATH:-/scripts/source_normalizer.py}:/app/config/source_normalizer.py:ro
@@ -97,5 +98,6 @@ services:
       retries: 5
 
 volumes:
+  artwork_cache:
   postgres_data:
   cap_valkey_data:

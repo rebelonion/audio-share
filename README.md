@@ -120,6 +120,7 @@ All configuration is done via environment variables on the Go server. Frontend c
 | `MAX_IMAGES_PER_WINDOW` | Thumbnail and poster requests allowed per client IP per window | `300` |
 | `CONTENT_DIR` | Directory for `about.md` | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |
+| `ARTWORK_CACHE_DIR` | Writable cache directory for card and blurred mature thumbnails | OS user cache directory + `/audio-share/artwork`; Docker: `/app/cache/artwork` |
 | `DATABASE_URL` | PostgreSQL connection URL; schema changes run with the `migrate` command | `postgres://audio_share:audio_share@localhost:5432/audio_share` |
 | `MANAGEMENT_ADDR` | Internal readiness, status, retire/resume/shutdown listener; never expose publicly | `127.0.0.1:9090` |
 | `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
