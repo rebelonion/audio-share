@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import {cleanup, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {useAppUpdate} from './useAppUpdate';
 
@@ -27,11 +27,30 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
 });
 
 describe('useAppUpdate', () => {
+    it('aborts a stalled check after ten seconds and allows a later check', async () => {
+        vi.useFakeTimers();
+        let signal: AbortSignal | undefined;
+        vi.mocked(fetch).mockImplementationOnce((_input, init) => new Promise((_resolve, reject) => {
+            signal = init?.signal ?? undefined;
+            signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        })).mockResolvedValue(versionResponse('build-next') as unknown as Response);
+
+        render(<UpdateProbe />);
+        await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+        expect(signal?.aborted).toBe(true);
+        expect(screen.getByText('up to date')).toBeTruthy();
+
+        await act(async () => { window.dispatchEvent(new Event('online')); });
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(screen.getByText('update available')).toBeTruthy();
+    });
+
     it('stays quiet when the deployed build matches the loaded build', async () => {
         vi.mocked(fetch).mockResolvedValue(versionResponse('build-current') as unknown as Response);
 

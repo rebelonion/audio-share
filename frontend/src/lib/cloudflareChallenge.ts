@@ -34,7 +34,7 @@ export async function appFetch(
     try {
         response = await fetch(input, init);
     } catch (error) {
-        if (!init?.signal?.aborted && !(input instanceof Request && input.signal.aborted)) {
+        if (operation !== 'version' && !init?.signal?.aborted && !(input instanceof Request && input.signal.aborted)) {
             reportError({operation, method, outcome, stage: 'request', cause: 'network', context: requestContext()}, error);
         }
         throw error;

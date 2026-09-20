@@ -8,6 +8,7 @@ import {
     isCloudflareChallengeResponse,
 } from './cloudflareChallenge';
 import {resetInitialResponsesForTests} from './initialData';
+import * as errorReporting from './errorReporting';
 
 afterEach(() => {
     resetInitialResponsesForTests();
@@ -17,6 +18,32 @@ afterEach(() => {
 });
 
 describe('Cloudflare challenge detection', () => {
+    it('silences version transport failures while reporting other request failures', async () => {
+        const report = vi.spyOn(errorReporting, 'reportError').mockImplementation(() => {});
+        const error = new TypeError('NetworkError when attempting to fetch resource.');
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+
+        await expect(appFetch('/api/version')).rejects.toBe(error);
+        expect(report).not.toHaveBeenCalled();
+
+        await expect(appFetch('/api/search')).rejects.toBe(error);
+        expect(report).toHaveBeenCalledWith(expect.objectContaining({operation: 'search', cause: 'network'}), error);
+    });
+
+    it('still reports version server errors and malformed JSON', async () => {
+        const report = vi.spyOn(errorReporting, 'reportError').mockImplementation(() => {});
+        vi.stubGlobal('fetch', vi.fn()
+            .mockResolvedValueOnce(new Response('', {status: 503}))
+            .mockResolvedValueOnce(new Response('invalid json')));
+
+        await appFetch('/api/version');
+        expect(report).toHaveBeenCalledWith(expect.objectContaining({operation: 'version', status: 503, cause: 'unavailable'}));
+
+        const response = await appFetch('/api/version');
+        await expect(response.json()).rejects.toBeInstanceOf(SyntaxError);
+        expect(report).toHaveBeenCalledWith(expect.objectContaining({operation: 'version', cause: 'invalid-response'}), expect.any(SyntaxError));
+    });
+
     it('serves embedded initial data without a network request', async () => {
         const initialData = document.createElement('script');
         initialData.id = 'server-initial-data';
