@@ -101,6 +101,37 @@ afterEach(() => {
 });
 
 describe('useAudioEngine', () => {
+    it('signals explicit seeks without treating playback updates as seeks', async () => {
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({
+            accessKey: 'signed-key', expiresAt: Date.now() + 60_000,
+        });
+        const currentTrackRef = {current: {
+            id: 'track-1', src: '/audio/key/track-key', shareKey: 'track-key',
+            name: 'Track', source: 'share' as const,
+        }};
+        const {result} = renderHook(() => useAudioEngine({
+            currentTrackRef, metadataRef: {current: null},
+            onEndedRef: {current: vi.fn()}, waveformDuration: 0,
+        }));
+        act(() => result.current.seekTo(90));
+        expect(result.current.seekVersion).toBe(0);
+        act(() => result.current.play());
+        await waitFor(() => expect(FakeAudio.instances).toHaveLength(1));
+        const audio = FakeAudio.instances[0];
+        act(() => audio.emit('loadedmetadata'));
+        act(() => result.current.seekTo(90));
+        expect(result.current.currentTime).toBe(90);
+        expect(result.current.seekVersion).toBe(1);
+        act(() => { audio.currentTime = 95; audio.emit('timeupdate'); });
+        expect(result.current.currentTime).toBe(95);
+        expect(result.current.seekVersion).toBe(1);
+        act(() => result.current.seekTo(95));
+        expect(result.current.seekVersion).toBe(2);
+        act(() => result.current.seekBy(30));
+        expect(result.current.currentTime).toBe(120);
+        expect(result.current.seekVersion).toBe(3);
+    });
+
     it('starts newly loaded audio at an explicitly requested time', async () => {
         mediaAccess.requestMediaAccess.mockResolvedValueOnce({
             accessKey: 'signed-key',

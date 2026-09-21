@@ -1,4 +1,4 @@
-import {useState, useRef, useEffect, type MouseEvent} from 'react';
+import {lazy, Suspense, useState, useRef, useEffect, type MouseEvent} from 'react';
 import {
     Play,
     Pause,
@@ -20,6 +20,7 @@ import {
     RotateCw,
     SkipBack,
     SkipForward,
+    Mountain,
     X
 } from 'lucide-react';
 import WaveformDisplay from '@/components/WaveformDisplay';
@@ -29,6 +30,13 @@ import QueuePanel from '@/components/QueuePanel';
 import {useLikes} from '@/contexts/LikesContext';
 import {useToast} from '@/contexts/ToastContext';
 import {audioShareUrl} from '@/lib/share';
+import {useRybbit} from '@/hooks/useRybbit';
+import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
+import ImmersiveErrorBoundary from './immersive/ImmersiveErrorBoundary';
+
+const IMMERSIVE_DISCOVERED_KEY = 'audio-share:immersive-discovered';
+
+const ImmersivePlayer = lazy(() => import('./immersive/ImmersivePlayer'));
 
 function formatTime(time: number): string {
     const safe = Number.isFinite(time) ? time : 0;
@@ -39,6 +47,9 @@ export default function AudioPlayer() {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [showQueue, setShowQueue] = useState(false);
+    const [showImmersive, setShowImmersive] = useState(false);
+    const [immersiveIsNew, setImmersiveIsNew] = useState(() => readLocalStorage(IMMERSIVE_DISCOVERED_KEY) !== 'true');
+    const {track: trackEvent} = useRybbit();
     const progressRef = useRef<HTMLDivElement>(null);
 
     const {
@@ -113,6 +124,7 @@ export default function AudioPlayer() {
 
     const handleClosePlayer = () => {
         setShowQueue(false);
+        setShowImmersive(false);
         closePlayer();
     };
 
@@ -122,6 +134,29 @@ export default function AudioPlayer() {
     };
 
     if (!currentTrack) return null;
+
+    const immersiveEntry = (
+        <button
+            type="button"
+            onClick={() => {
+                setShowQueue(false);
+                setShowImmersive(true);
+                setImmersiveIsNew(false);
+                writeLocalStorage(IMMERSIVE_DISCOVERED_KEY, 'true');
+                trackEvent('immersive-player-open', {
+                    entryPoint: isMinimized ? 'compact' : 'expanded',
+                    highlighted: immersiveIsNew,
+                });
+            }}
+            className={`flex flex-shrink-0 items-center gap-1 rounded px-1.5 py-1 transition-colors ${immersiveIsNew ? 'bg-[var(--primary-tint)] text-[var(--primary)] hover:bg-[var(--primary-wash)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            aria-label="Open immersive player"
+            aria-description={immersiveIsNew ? 'New: explore waveform landscapes while you listen' : undefined}
+            title={immersiveIsNew ? 'New: explore immersive waveform scenes' : 'Open immersive player'}
+        >
+            <Mountain className="h-4 w-4" />
+            {immersiveIsNew && <span className="text-[9px] font-semibold uppercase tracking-wide">New</span>}
+        </button>
+    );
 
     const copyShareLink = async () => {
         if (!navigator.clipboard) {
@@ -191,6 +226,7 @@ export default function AudioPlayer() {
                         <ListMusic className="h-3.5 w-3.5" />
                         <span className="min-w-3 text-center text-[10px] font-medium tabular-nums text-[var(--foreground)]">{upcoming.length > 99 ? '99+' : upcoming.length}</span>
                     </button>
+                    {immersiveEntry}
                     <button
                         type="button"
                         onClick={toggleMinimize}
@@ -214,6 +250,7 @@ export default function AudioPlayer() {
                         <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />
                     </button>
                     <div className="flex items-center gap-1">
+                        {immersiveEntry}
                         <button type="button" onClick={() => void copyShareLink()} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Copy share link" title="Copy share link">
                             <Share2 className="h-4 w-4" />
                         </button>
@@ -428,6 +465,14 @@ export default function AudioPlayer() {
             )}
         </div>
         {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
+        {showImmersive && (
+            <ImmersiveErrorBoundary onError={() => {
+                setShowImmersive(false);
+                toast.error('Immersive player could not be opened. Playback can continue here.');
+            }}>
+                <Suspense fallback={null}><ImmersivePlayer onClose={() => setShowImmersive(false)} /></Suspense>
+            </ImmersiveErrorBoundary>
+        )}
         </>
     );
 }

@@ -30,6 +30,9 @@ export function useAudioPlayerKeybinds({onTogglePlay}: UseAudioPlayerKeybindsOpt
             if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || isEditableTarget(event.target)) {
                 return;
             }
+            if (event.key === ' ' && event.target instanceof Element && event.target.closest('button')) {
+                return;
+            }
 
             const totalDuration = duration || metadata?.duration || 0;
 

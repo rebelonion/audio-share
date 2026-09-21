@@ -1,4 +1,5 @@
 import { AlertTriangle, X } from 'lucide-react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 interface MatureContentDialogProps {
     open: boolean;
@@ -17,12 +18,46 @@ export default function MatureContentDialog({
     description = 'This track is marked 18+. Continue playback?',
     confirmLabel = 'Continue',
 }: MatureContentDialogProps) {
+    const dialogRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const previousFocus = document.activeElement;
+        dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus({preventScroll: true});
+        return () => {
+            if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+                previousFocus.focus({preventScroll: true});
+            }
+        };
+    }, [open]);
+
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        event.stopPropagation();
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            onCancel();
+        } else if (event.key === 'Tab') {
+            const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }
+    };
+
     if (!open) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
             <div
+                ref={dialogRef}
                 role="dialog"
+                onKeyDown={handleKeyDown}
                 aria-modal="true"
                 aria-labelledby="mature-content-title"
                 className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-[0_24px_80px_rgba(0,0,0,0.55)] animate-fadeIn"

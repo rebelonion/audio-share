@@ -1,12 +1,20 @@
 import {ListMusic, Radio, Trash2, X} from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useRef, useState, type CSSProperties} from 'react';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 
 const QUEUE_ROW_HEIGHT = 52;
 const QUEUE_OVERSCAN = 4;
 
-export default function QueuePanel({onClose}: {onClose: () => void}) {
+interface QueuePanelProps {
+    onClose: () => void;
+    id?: string;
+    className?: string;
+    style?: CSSProperties;
+}
+
+export default function QueuePanel({onClose, id, className, style}: QueuePanelProps) {
     const {currentTrack, upcoming, contextLabel, autoplay, toggleAutoplay, removeFromQueue, clearQueue} = useGlobalAudioPlayer();
+    const hasUpcoming = upcoming.length > 0;
     const listRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(280);
@@ -16,14 +24,15 @@ export default function QueuePanel({onClose}: {onClose: () => void}) {
         if (!list) return;
         const updateHeight = () => setViewportHeight(list.clientHeight);
         updateHeight();
+        setScrollTop(list.scrollTop);
         const observer = new ResizeObserver(updateHeight);
         observer.observe(list);
         return () => observer.disconnect();
-    }, []);
+    }, [hasUpcoming]);
 
     useEffect(() => {
         const handleEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
+            if (event.key === 'Escape' && !event.defaultPrevented) onClose();
         };
         window.addEventListener('keydown', handleEscape);
         return () => window.removeEventListener('keydown', handleEscape);
@@ -38,12 +47,13 @@ export default function QueuePanel({onClose}: {onClose: () => void}) {
 
     return (
         <div
-            className="fixed z-[60] sm:bottom-4 sm:right-[21rem] sm:w-80 sm:h-[min(34rem,calc(100vh-2rem))] max-sm:inset-4 rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col animate-slideUp"
-            style={{contain: 'layout paint style', isolation: 'isolate'}}
+            id={id}
+            className={`${className ?? 'fixed z-[60] sm:bottom-4 sm:right-[21rem] sm:w-80 sm:h-[min(34rem,calc(100vh-2rem))] max-sm:inset-4'} rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col animate-slideUp`}
+            style={{contain: 'layout paint style', isolation: 'isolate', ...style}}
             role="dialog"
             aria-label="Playback queue"
         >
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+            <div className="queue-heading flex items-center justify-between p-4 border-b border-[var(--border)]">
                 <div>
                     <div className="flex items-center gap-2 font-semibold"><ListMusic className="h-4 w-4 text-[var(--primary)]" /> Queue</div>
                     <div className="mt-0.5 text-xs text-[var(--muted-foreground)]">{contextLabel || 'Listening now'}</div>
@@ -51,18 +61,8 @@ export default function QueuePanel({onClose}: {onClose: () => void}) {
                 <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--card-hover)] hover:text-[var(--foreground)]" aria-label="Close queue"><X className="h-4 w-4" /></button>
             </div>
 
-            <div className="p-3 border-b border-[var(--border)]">
-                <button onClick={toggleAutoplay} className="w-full flex items-center justify-between gap-3 rounded-md bg-[var(--secondary)] px-3 py-2.5 text-left hover:bg-[var(--muted)]" role="switch" aria-checked={autoplay}>
-                    <span className="flex items-center gap-2 text-sm"><Radio className="h-4 w-4 text-[var(--primary)]" /> Autoplay recommendations</span>
-                    <span className={`relative h-5 w-9 rounded-full transition-colors ${autoplay ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}>
-                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${autoplay ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                    </span>
-                </button>
-                <p className="mt-2 px-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">After this queue ends, continue with related tracks.</p>
-            </div>
-
             {currentTrack && (
-                <div className="p-3 border-b border-[var(--border)]">
+                <div className="queue-current p-3 border-b border-[var(--border)]">
                     <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Now playing</div>
                     <div className="rounded-md border border-[var(--primary-border)] bg-[var(--primary-wash)] p-3">
                         <div className="font-medium text-sm line-clamp-2">{currentTrack.name}</div>
@@ -104,6 +104,16 @@ export default function QueuePanel({onClose}: {onClose: () => void}) {
                     </div>
                 </div>
             )}
+
+            <div className="queue-autoplay p-3 border-t border-[var(--border)]">
+                <button onClick={toggleAutoplay} className="w-full flex items-center justify-between gap-3 rounded-md bg-[var(--secondary)] px-3 py-2.5 text-left hover:bg-[var(--muted)]" role="switch" aria-checked={autoplay}>
+                    <span className="flex items-center gap-2 text-sm"><Radio className="h-4 w-4 text-[var(--primary)]" /> Autoplay recommendations</span>
+                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${autoplay ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}>
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${autoplay ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                    </span>
+                </button>
+                <p className="mt-2 px-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">After this queue ends, continue with related tracks.</p>
+            </div>
         </div>
     );
 }

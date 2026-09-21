@@ -37,6 +37,7 @@ export function useAudioEngine({
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
+    const [seekVersion, setSeekVersion] = useState(0);
     const [volume, setVolume] = useState(initialVolume);
     const [isMuted, setIsMuted] = useState(() => volume === 0);
     const [error, setError] = useState<string | null>(null);
@@ -488,6 +489,7 @@ export function useAudioEngine({
         const time = Math.min(activeDuration, Math.max(0, seconds));
         audio.currentTime = time;
         setCurrentTime(time);
+        setSeekVersion(version => version + 1);
         const active = currentTrackRef.current;
         if (active) {
             writeLocalStorage(POSITION_STORAGE_KEY, JSON.stringify({shareKey: active.shareKey, time}));
@@ -508,6 +510,7 @@ export function useAudioEngine({
         isPlaying,
         duration,
         currentTime,
+        seekVersion,
         volume,
         isMuted,
         error,

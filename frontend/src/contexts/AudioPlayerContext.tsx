@@ -68,6 +68,7 @@ interface AudioPlayerContextValue {
     isPlaying: boolean;
     duration: number;
     currentTime: number;
+    seekVersion: number;
     volume: number;
     isMuted: boolean;
     error: string | null;
@@ -162,6 +163,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         isPlaying,
         duration,
         currentTime,
+        seekVersion,
         volume,
         isMuted,
         error,
@@ -457,6 +459,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         isPlaying,
         duration,
         currentTime,
+        seekVersion,
         volume,
         isMuted,
         error,
@@ -495,6 +498,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         adjustVolume,
         audioLoaded,
         currentTime,
+        seekVersion,
         duration,
         error,
         notice,

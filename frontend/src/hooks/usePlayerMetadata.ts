@@ -4,6 +4,7 @@ import {MATURE_PREFERENCE_EVENT} from '@/lib/matureContentPreference';
 import type {PlayerTrack} from '@/lib/playerQueue';
 import {appFetch} from '@/lib/cloudflareChallenge';
 import {reportError} from '@/lib/errorReporting';
+import {loadPlayerWaveform} from '@/lib/playerWaveform';
 
 export interface PlayerMetadata {
     title: string;
@@ -57,16 +58,25 @@ export function usePlayerMetadata(track: PlayerTrack | null) {
         const key = track.shareKey;
         setState({...EMPTY_METADATA, trackID: track.id, preferenceVersion});
 
-        const waveformRequest = appFetch(`${API_BASE}/api/audio/key/${key}/waveform`, {signal})
-            .then(response => response.status === 200 ? response.json() : null)
-            .catch(() => null);
+        const waveformRequest = loadPlayerWaveform(key);
         const metadataRequest = appFetch(`${API_BASE}/api/audio/key/${key}/meta`, {
             signal,
             credentials: 'include',
         }).then(response => response.ok ? response.json() : null);
 
-        Promise.all([waveformRequest, metadataRequest])
-            .then(([waveform, data]) => {
+        waveformRequest.then(waveform => {
+            if (signal.aborted) return;
+            const waveformPeaks = waveform?.peaks
+                ? Uint8Array.from(atob(waveform.peaks), value => value.charCodeAt(0))
+                : null;
+            setState(previous => ({...previous, waveformPeaks, waveformDuration: waveform?.duration || 0}));
+        }).catch(error => {
+            if (signal.aborted) return;
+            reportError({operation: 'metadata', stage: 'parse', cause: 'invalid-response', outcome: 'degraded', context: {resource: track.shareKey}}, error);
+        });
+
+        metadataRequest
+            .then(data => {
                 if (signal.aborted) return;
                 const metadata: PlayerMetadata = data ? {
                     title: data.title || track.name,
@@ -83,34 +93,25 @@ export function usePlayerMetadata(track: PlayerTrack | null) {
                     title: track.name,
                     artist: track.artist || '',
                 };
-                const waveformPeaks = waveform?.peaks
-                    ? Uint8Array.from(atob(waveform.peaks), value => value.charCodeAt(0))
-                    : null;
                 const view = metadata.isMature && !metadata.showMature ? 'blurred' : 'original';
                 const thumbnail = metadata.thumbnail
                     ? `${API_BASE}/api/audio/key/${key}/thumbnail${metadata.isMature ? `?view=${view}` : ''}`
                     : null;
 
-                setState({
-                    trackID: track.id,
-                    preferenceVersion,
+                setState(previous => ({
+                    ...previous,
                     metadata,
                     thumbnail,
-                    waveformPeaks,
-                    waveformDuration: waveform?.duration || 0,
-                });
+                }));
             })
             .catch(error => {
                 if (signal.aborted || error.name === 'AbortError') return;
                 reportError({operation: 'metadata', stage: 'parse', cause: 'invalid-response', outcome: 'degraded', context: {resource: track.shareKey}}, error);
-                setState({
-                    trackID: track.id,
-                    preferenceVersion,
+                setState(previous => ({
+                    ...previous,
                     metadata: {title: track.name, artist: track.artist || ''},
                     thumbnail: null,
-                    waveformPeaks: null,
-                    waveformDuration: 0,
-                });
+                }));
             });
 
         return () => controller.abort();
