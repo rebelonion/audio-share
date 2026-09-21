@@ -83,6 +83,10 @@ func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSit
 }
 
 func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/share" || strings.HasPrefix(r.URL.Path, "/share/") {
+		w.Header().Set("X-Robots-Tag", "noindex")
+	}
+
 	path := filepath.Clean(r.URL.Path)
 	if path == "/" {
 		path = "/index.html"
