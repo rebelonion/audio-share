@@ -1,10 +1,13 @@
 import {useEffect, useRef, type PointerEvent} from 'react';
+import {smoothAudioLevel} from '@/lib/audioLevel';
 import {clamp} from '@/lib/utils';
 import type {SceneFrame, ScenePlaybackProps} from '../types';
 import {SceneTransition} from './sceneTransition';
 import {createSceneClock} from './sceneClock';
 import {SCENE_TRAVEL_DISTANCE} from './scenery';
 import './SceneCanvas.css';
+
+const AUDIO_REACTIVITY = 0.6;
 
 interface SceneCanvasProps<T> extends ScenePlaybackProps {
     data: T;
@@ -31,6 +34,7 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
         let height = 0;
         let animation = 0;
         let lastFrame = performance.now();
+        let audioLevel = 0;
         const clock = createSceneClock(latest.current, lastFrame, duration => latest.current.travelSpan(duration));
         const transition = new SceneTransition<T>(duration => latest.current.travelSpan(duration));
 
@@ -38,8 +42,13 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
             const current = latest.current;
             lastFrame = now;
             const {elapsed, ...frame} = clock.step(now, current, pointer.current);
+            if (current.motion) {
+                const target = !document.hidden && current.isPlaying && !current.isLoading && current.previewTime === null
+                    ? current.readAudioLevel?.() ?? 0 : 0;
+                audioLevel = smoothAudioLevel(audioLevel, target, elapsed);
+            }
             current.renderFrame(ctx, current.data, {
-                width, height, ...frame,
+                width, height, ...frame, audioLevel: audioLevel * AUDIO_REACTIVITY,
                 layers: transition.update(current.data, current.trackKey, frame.time, current.duration, frame.travel, elapsed, current.motion),
             });
         };

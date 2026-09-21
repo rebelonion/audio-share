@@ -9,6 +9,7 @@ import {drawSeaLife} from './drawSeaLife';
 export function drawUnderwaterDrift(ctx: CanvasRenderingContext2D, scene: UnderwaterDrift, frame: SceneFrame<UnderwaterDrift>) {
     const {width: w, height: h, travel, pointerX, pointerY, ambientTime: time, layers} = frame;
     if (!w || !h) return;
+    const audioLevel = frame.audioLevel ?? 0;
     const s = clamp(h / 850, 0.55, 1.4);
     const p = mixPalette(layers.map(layer => ({palette: layer.data.palette, weight: layer.weight})));
     const random = (i: number) => sceneRandom(scene.seed, i);
@@ -22,16 +23,16 @@ export function drawUnderwaterDrift(ctx: CanvasRenderingContext2D, scene: Underw
         const x = (i + 0.35) * 210 * s + Math.sin(time * 0.12 + i * 2) * 18 * s + pointerX * 3;
         const reach = h * (0.63 + random(i + 5) * 0.3);
         ctx.save(); ctx.translate(x, -20); ctx.transform(1, 0, 0.38, 1, 0, 0);
-        ctx.scale((45 + random(i + 15) * 30) * s, reach);
+        ctx.scale((45 + random(i + 15) * 30) * s * (1 + audioLevel * 0.2), reach);
         const beam = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-        beam.addColorStop(0, '#b1e1cd1c'); beam.addColorStop(0.4, '#b1e1cd0f'); beam.addColorStop(1, '#b1e1cd00');
+        beam.addColorStop(0, `rgba(177, 225, 205, ${0.11 + audioLevel * 0.18})`); beam.addColorStop(0.4, `rgba(177, 225, 205, ${0.059 + audioLevel * 0.085})`); beam.addColorStop(1, '#b1e1cd00');
         ctx.fillStyle = beam;
         ctx.fillRect(-1, 0, 2, 1); ctx.restore();
     }
     ctx.strokeStyle = p.light; ctx.lineWidth = 1.2 * s;
     for (let row = 0; row < 14; row++) {
         const y = row * row * 0.49 * s;
-        ctx.globalAlpha = 0.035 + (1 - row / 14) * 0.055;
+        ctx.globalAlpha = (0.035 + (1 - row / 14) * 0.055) * (1 + audioLevel * 0.5);
         ctx.beginPath();
         for (let x = -20; x <= w + 20; x += 12) {
             const sy = y + Math.sin(x / (63 * s) + time * 0.22 + row) * (2 + row * 0.3) * s;
@@ -70,7 +71,7 @@ export function drawUnderwaterDrift(ctx: CanvasRenderingContext2D, scene: Underw
                 const x = (i + random(index + 700)) * cell - camera + Math.sin(time * 0.17 + index) * 10 * s + pointerX * (depth ? 22 : 5);
                 const cycle = random(index + 900) + time * (depth ? 0.0025 : 0.001);
                 const y = (1 - cycle % 1) * h;
-                ctx.globalAlpha = (0.08 + random(index + 1100) * 0.2) * Math.sin((y / h) * Math.PI);
+                ctx.globalAlpha = (0.08 + random(index + 1100) * 0.2) * (1 + audioLevel * 0.65) * Math.sin((y / h) * Math.PI);
                 ctx.beginPath(); ctx.ellipse(x, y, (depth ? 1.3 : 0.7) * s, (depth ? 1.7 : 0.7) * s, 0.2, 0, Math.PI * 2); ctx.fill();
             }
         }

@@ -46,6 +46,7 @@ function drawDune(ctx: CanvasRenderingContext2D, points: DunePoint[], height: nu
 export function drawDesertDusk(ctx: CanvasRenderingContext2D, scene: DesertDusk, frame: SceneFrame<DesertDusk>) {
     const {width: w, height: h, travel, pointerX, pointerY, ambientTime: time, layers} = frame;
     if (!w || !h) return;
+    const audioLevel = frame.audioLevel ?? 0;
     const s = clamp(h / 850, 0.55, 1.4);
     const p = mixPalette(layers.map(layer => ({palette: layer.data.palette, weight: layer.weight})));
     const random = (index: number) => sceneRandom(scene.seed, index);
@@ -63,8 +64,8 @@ export function drawDesertDusk(ctx: CanvasRenderingContext2D, scene: DesertDusk,
     ctx.globalAlpha = 1;
     const sunX = w * 0.69 + pointerX * 3;
     const sunY = h * 0.465 + pointerY * 2;
-    const halo = ctx.createRadialGradient(sunX, sunY, 22 * s, sunX, sunY, 210 * s);
-    halo.addColorStop(0, '#ffc48636'); halo.addColorStop(1, '#ffc48600');
+    const halo = ctx.createRadialGradient(sunX, sunY, 22 * s, sunX, sunY, (210 + audioLevel * 55) * s);
+    halo.addColorStop(0, `rgba(255, 196, 134, ${0.212 + audioLevel * 0.25})`); halo.addColorStop(1, '#ffc48600');
     ctx.fillStyle = halo; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = p.sun;
     ctx.beginPath(); ctx.arc(sunX, sunY, 37 * s, 0, Math.PI * 2); ctx.fill();
@@ -135,12 +136,12 @@ export function drawDesertDusk(ctx: CanvasRenderingContext2D, scene: DesertDusk,
     drawForegroundDetails(ctx, scene.seed, w, nearCamera, s, time, nearGroundY, p);
     ctx.restore();
 
-    ctx.save(); ctx.strokeStyle = p.sun; ctx.lineWidth = 0.7 * s;
-    for (let i = 0; i < 36; i++) {
+    ctx.save(); ctx.strokeStyle = p.sun; ctx.lineWidth = (0.9 + audioLevel * 0.5) * s;
+    for (let i = 0; i < 14; i++) {
         const progress = (time * (0.022 + random(i + 510) * 0.014) + random(i + 520)) % 1;
         const x = progress * (w + 180 * s) - 90 * s;
         const y = h * (0.73 + random(i + 540) * 0.22) + Math.sin(time * 0.25 + i) * 3 * s;
-        ctx.globalAlpha = Math.sin(progress * Math.PI) * 0.1;
+        ctx.globalAlpha = Math.sin(progress * Math.PI) * (0.075 + audioLevel * 0.24);
         ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 17 * s, y - 2 * s, x + (25 + random(i + 560) * 35) * s, y - 3 * s); ctx.stroke();
     }
     ctx.restore();

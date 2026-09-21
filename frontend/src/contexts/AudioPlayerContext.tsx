@@ -64,6 +64,8 @@ interface PlayTrackOptions {
 type QueueActionResult = 'ignored' | 'ready' | 'queued' | 'playing';
 
 interface AudioPlayerContextValue {
+    enableAudioLevels: () => void;
+    readAudioLevel: () => number;
     currentTrack: PlayerTrack | null;
     isPlaying: boolean;
     duration: number;
@@ -160,6 +162,8 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
     const advancePlaybackRef = useRef<() => void>(() => {});
     const {
         audioRef,
+        enableAudioLevels,
+        readAudioLevel,
         isPlaying,
         duration,
         currentTime,
@@ -455,6 +459,8 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
     }, [currentTrack, skipPrevious]);
 
     const value = useMemo<AudioPlayerContextValue>(() => ({
+        enableAudioLevels,
+        readAudioLevel,
         currentTrack,
         isPlaying,
         duration,
@@ -524,6 +530,8 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         upcoming,
         volume,
         waveformPeaks,
+        enableAudioLevels,
+        readAudioLevel,
     ]);
 
     const commands = useMemo<AudioPlayerCommandsContextValue>(() => ({

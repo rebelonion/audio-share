@@ -67,6 +67,10 @@ func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if isBotLikeUserAgent(r.UserAgent()) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
 		w.WriteHeader(http.StatusUnsupportedMediaType)

@@ -7,7 +7,7 @@ const TENT_COLORS = [
     ['#60565a', '#92827d', '#d1b39366'],
 ];
 
-export function drawCamp(ctx: CanvasRenderingContext2D, x: number, base: number, scale: number, camp: Campsite, time: number, p: DesertPalette) {
+export function drawCamp(ctx: CanvasRenderingContext2D, x: number, base: number, scale: number, camp: Campsite, time: number, p: DesertPalette, audioLevel = 0) {
     ctx.save(); ctx.translate(x, base); ctx.scale(scale, scale);
     ctx.fillStyle = '#352e3430';
     const {left, right} = camp.bounds;
@@ -58,16 +58,16 @@ export function drawCamp(ctx: CanvasRenderingContext2D, x: number, base: number,
 
     ctx.save(); ctx.translate(camp.fire.x, camp.fire.y);
     const glow = ctx.createRadialGradient(0, 7, 0, 0, 7, 42);
-    glow.addColorStop(0, '#efaa5742'); glow.addColorStop(1, '#efaa5700');
+    glow.addColorStop(0, `rgba(239, 170, 87, ${0.259 + audioLevel * 0.4})`); glow.addColorStop(1, '#efaa5700');
     ctx.fillStyle = glow; ctx.fillRect(-42, -35, 84, 84);
     ctx.strokeStyle = '#443438'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(-8, 10); ctx.lineTo(8, 5); ctx.moveTo(-7, 5); ctx.lineTo(7, 10); ctx.stroke();
     ctx.fillStyle = '#efb36d';
     ctx.beginPath(); ctx.moveTo(-5, 7);
-    ctx.quadraticCurveTo(-8, 0, Math.sin(time * 3) * 2, -10 - Math.sin(time * 4) * 2);
+    ctx.quadraticCurveTo(-8, 0, Math.sin(time * 3) * 2, -10 - Math.sin(time * 4) * 2 - audioLevel * 6);
     ctx.quadraticCurveTo(1, 0, 6, 7); ctx.fill();
     ctx.fillStyle = '#ffe1a0';
-    ctx.beginPath(); ctx.ellipse(0, 4, 2.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 4 - audioLevel * 1.5, 2.5, 5 + audioLevel * 1.5, 0, 0, Math.PI * 2); ctx.fill();
     for (let i = 0; i < 3; i++) {
         const phase = (time * 0.12 + i / 3) % 1;
         ctx.globalAlpha = (1 - phase) * 0.08;

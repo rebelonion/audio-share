@@ -15,6 +15,7 @@ import {createRidgeProfile, SHRINE_RIDGES} from './terrain';
 export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath, frame: SceneFrame<ShrinePath>) {
     const {width: w, height: h, travel, pointerX, pointerY, ambientTime: time, layers} = frame;
     if (!w || !h) return;
+    const audioLevel = frame.audioLevel ?? 0;
     const p = mixPalette(layers.map(layer => ({palette: layer.data.palette, weight: layer.weight})));
     const s = clamp(h / 850, 0.55, 1.4);
     const random = (index: number) => sceneRandom(scene.seed, index);
@@ -27,8 +28,8 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
 
     const sunX = w * 0.78 + pointerX * 3;
     const sunY = h * 0.345 + pointerY * 2;
-    ctx.save(); ctx.globalAlpha = 0.18;
-    lanternGlow(ctx, sunX, sunY, 140 * s, p.lantern);
+    ctx.save(); ctx.globalAlpha = 0.18 + audioLevel * 0.2;
+    lanternGlow(ctx, sunX, sunY, (140 + audioLevel * 35) * s, p.lantern);
     ctx.restore();
     ctx.fillStyle = '#e6c7a4';
     ctx.beginPath(); ctx.arc(sunX, sunY, 24 * s, 0, Math.PI * 2); ctx.fill();
@@ -38,8 +39,8 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
         const drift = Math.sin(time * 0.016 + band) * 20 * s;
         ctx.save();
         ctx.translate(w * random(10 + band) + drift, y);
-        ctx.scale(w * 0.55, 10 * s);
-        ctx.globalAlpha = 0.14;
+        ctx.scale(w * 0.55, (10 + audioLevel * 7) * s);
+        ctx.globalAlpha = 0.14 + audioLevel * 0.18;
         lanternGlow(ctx, 0, 0, 1, p.horizon);
         ctx.restore();
     }
@@ -82,7 +83,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
         const detail = (index: number) => sceneRandom(landmarkSeed, index + 3000);
         if (landmark !== 'shrine') {
             const gardenY = shrineBase + (gateBase - shrineBase) * 0.52;
-            drawGardenLandmark(ctx, landmark, centerX, start.x, shrineBase, gardenY, s, landmarkSeed, time, p);
+            drawGardenLandmark(ctx, landmark, centerX, start.x, shrineBase, gardenY, s, landmarkSeed, time, p, audioLevel);
             continue;
         }
         const end = section((approachEnd - shrineBase) / (gateBase - shrineBase));
@@ -105,7 +106,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
                 drawPine(ctx, treeX, shrineBase + 5 * s, height, landmarkSeed + side * 23, p.pine, time);
             }
         }
-        drawShrine(ctx, start.x, shrineBase, (0.8 + detail(1) * 0.24) * s, p, detail(2) > 0.5 ? 0 : 1);
+        drawShrine(ctx, start.x, shrineBase, (0.8 + detail(1) * 0.24) * s, p, detail(2) > 0.5 ? 0 : 1, audioLevel);
 
         const rearGates = Math.floor(detail(3) * 3);
         for (let gateIndex = 0; gateIndex < rearGates; gateIndex++) {
@@ -117,7 +118,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
         const lamps = section((gateBase - 12 * s - shrineBase) / (gateBase - shrineBase));
         for (const side of [-1, 1]) {
             const lampOffset = side * (lamps.halfWidth + 80 * s);
-            drawStoneLantern(ctx, lamps.x + lampOffset, lamps.y, s * (0.68 + detail(4) * 0.22), p);
+            drawStoneLantern(ctx, lamps.x + lampOffset, lamps.y, s * (0.68 + detail(4) * 0.22), p, audioLevel);
         }
         drawTorii(ctx, centerX, gateBase, s, p, time);
     }

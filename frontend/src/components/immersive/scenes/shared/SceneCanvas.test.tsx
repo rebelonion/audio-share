@@ -284,3 +284,30 @@ it.each([390, 844, 1440])('maps the same pixel drag to the same seek at width %s
     fireEvent.pointerUp(canvas, {pointerId: 1});
     expect(onSeek).toHaveBeenCalledExactlyOnceWith(14);
 });
+
+it('smooths live levels, releases during buffering, and freezes lighting in still mode', () => {
+    const readAudioLevel = vi.fn(() => 1);
+    const view = render(<SceneCanvas {...props} readAudioLevel={readAudioLevel} />);
+    advanceFrame(40);
+    const active = renderFrame.mock.lastCall![2].audioLevel;
+    expect(active).toBeGreaterThan(0);
+    expect(active).toBeLessThan(1);
+    view.rerender(<SceneCanvas {...props} readAudioLevel={readAudioLevel} isLoading />);
+    readAudioLevel.mockClear();
+    advanceFrame(80);
+    const released = renderFrame.mock.lastCall![2].audioLevel;
+    expect(released).toBeLessThan(active);
+    expect(readAudioLevel).not.toHaveBeenCalled();
+    view.rerender(<SceneCanvas {...props} readAudioLevel={readAudioLevel} motion={false} />);
+    view.rerender(<SceneCanvas {...props} readAudioLevel={readAudioLevel} motion={false} currentTime={20} />);
+    expect(renderFrame.mock.lastCall![2].audioLevel).toBe(released);
+    expect(readAudioLevel).not.toHaveBeenCalled();
+});
+
+it('does not sample live audio while the document is hidden', () => {
+    const readAudioLevel = vi.fn(() => 1);
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    render(<SceneCanvas {...props} readAudioLevel={readAudioLevel} />);
+    expect(readAudioLevel).not.toHaveBeenCalled();
+    hidden.mockRestore();
+});

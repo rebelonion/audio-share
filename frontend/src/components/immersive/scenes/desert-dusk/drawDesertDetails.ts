@@ -109,7 +109,7 @@ export function drawGroundDetails(ctx: CanvasRenderingContext2D, seed: number, f
         const size = (0.63 + random(i + 400) * 0.24) * scale;
         if (i === 0 || random(i + 420) < 0.32) {
             const camp = createCampsite(seed + i * 47);
-            drawCamp(ctx, x, campsiteBaseY(camp, world, height, scale, size), size, camp, time, p);
+            drawCamp(ctx, x, campsiteBaseY(camp, world, height, scale, size), size, camp, time, p, frame.audioLevel ?? 0);
             continue;
         }
         let base = 0;

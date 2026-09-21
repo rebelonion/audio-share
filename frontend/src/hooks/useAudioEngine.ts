@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useRef, useState, type MutableRefObject} from 'react';
+import {createAudioLevelReader} from '@/lib/audioLevel';
 import {recordPlayEvent} from '@/lib/api';
 import {useRybbit} from '@/hooks/useRybbit';
 import type {PlayerMetadata} from '@/hooks/usePlayerMetadata';
@@ -45,7 +46,15 @@ export function useAudioEngine({
     const [isLoading, setIsLoading] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
 
+    const levelReaderRef = useRef<ReturnType<typeof createAudioLevelReader> | null>(null);
+    const recoverAudioContextRef = useRef<() => void>(() => {});
+    const recoveringAudioContextRef = useRef(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const enableAudioLevels = useCallback(() => {
+        levelReaderRef.current ??= createAudioLevelReader(() => recoverAudioContextRef.current());
+        void levelReaderRef.current.enable(() => audioRef.current);
+    }, []);
+    const readAudioLevel = useCallback(() => levelReaderRef.current?.read() ?? 0, []);
     const audioListenersRef = useRef<Array<[string, EventListener]>>([]);
     const volumeRef = useRef(volume);
     const isMutedRef = useRef(isMuted);
@@ -110,6 +119,8 @@ export function useAudioEngine({
     const destroyAudio = useCallback(() => {
         clearAudio();
         audioRef.current = null;
+        levelReaderRef.current?.dispose();
+        levelReaderRef.current = null;
     }, [clearAudio]);
 
     useEffect(() => () => {
@@ -117,6 +128,16 @@ export function useAudioEngine({
         loadAttemptRef.current += 1;
         destroyAudio();
     }, [destroyAudio]);
+
+    useEffect(() => {
+        const recover = () => recoverAudioContextRef.current();
+        document.addEventListener('visibilitychange', recover);
+        window.addEventListener('pageshow', recover);
+        return () => {
+            document.removeEventListener('visibilitychange', recover);
+            window.removeEventListener('pageshow', recover);
+        };
+    }, []);
 
     const resetForTrack = useCallback(() => {
         wantsPlaybackRef.current = false;
@@ -191,6 +212,7 @@ export function useAudioEngine({
         };
 
         audio.preload = 'metadata';
+        audio.crossOrigin = 'use-credentials';
         audio.src = mediaAccessURL(loadedTrack.shareKey, 'stream', grant.accessKey);
 
         listen('timeupdate', () => {
@@ -307,7 +329,8 @@ export function useAudioEngine({
     const playAudio = useCallback((audio: HTMLAudioElement, selectedTrack: PlayerTrack) => {
         const playbackAttempt = ++playbackAttemptRef.current;
         setIsLoading(true);
-        audio.play().then(() => {
+        if (levelReaderRef.current) enableAudioLevels();
+        return Promise.all([audio.play(), levelReaderRef.current?.resume()]).then(() => {
             if (
                 audioRef.current !== audio
                 || currentTrackRef.current?.id !== selectedTrack.id
@@ -332,6 +355,7 @@ export function useAudioEngine({
             setIsLoading(false);
             if (playError.name === 'AbortError' && audio.paused) return;
             if (playError.name === 'NotAllowedError') {
+                audio.pause();
                 blockedPlaybackRef.current = audio;
                 setError(null);
                 setNotice('Ready to play — press play to continue.');
@@ -342,7 +366,16 @@ export function useAudioEngine({
                 reportOperationalError({operation: 'playback', stage: 'play', cause: 'unexpected', context: {resource: selectedTrack.shareKey}}, playError);
             }
         });
-    }, [currentTrackRef, metadataRef, trackEvent]);
+    }, [currentTrackRef, enableAudioLevels, metadataRef, trackEvent]);
+
+    recoverAudioContextRef.current = () => {
+        const audio = audioRef.current;
+        const selectedTrack = currentTrackRef.current;
+        if (document.hidden || !wantsPlaybackRef.current || !audio || audio.ended || audio.error
+            || !selectedTrack || !levelReaderRef.current?.isInterrupted() || recoveringAudioContextRef.current) return;
+        recoveringAudioContextRef.current = true;
+        void playAudio(audio, selectedTrack).finally(() => { recoveringAudioContextRef.current = false; });
+    };
 
     const loadAuthorizedAudio = useCallback(async (selectedTrack: PlayerTrack, resumeAt?: number) => {
         const loadAttempt = ++loadAttemptRef.current;
@@ -406,6 +439,7 @@ export function useAudioEngine({
     const play = useCallback((startTime?: number) => {
         const selectedTrack = currentTrackRef.current;
         if (!selectedTrack) return;
+        if (levelReaderRef.current) enableAudioLevels();
         wantsPlaybackRef.current = true;
         networkRetriesRef.current = 0;
         cancelNetworkRetry();
@@ -436,6 +470,7 @@ export function useAudioEngine({
         audioLoaded,
         cancelNetworkRetry,
         currentTrackRef,
+        enableAudioLevels,
         error,
         loadAuthorizedAudio,
         playAudio,
@@ -507,6 +542,8 @@ export function useAudioEngine({
 
     return {
         audioRef,
+        enableAudioLevels,
+        readAudioLevel,
         isPlaying,
         duration,
         currentTime,

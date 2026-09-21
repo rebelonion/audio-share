@@ -5,7 +5,7 @@ import {drawCherryTree} from './drawCherryTree';
 import {drawPond} from './drawPond';
 import type {ShrinePalette} from './palette';
 
-export function drawGardenLandmark(ctx: CanvasRenderingContext2D, kind: 'pond' | 'grove', x: number, rearX: number, rearY: number, groundY: number, scale: number, seed: number, time: number, p: ShrinePalette) {
+export function drawGardenLandmark(ctx: CanvasRenderingContext2D, kind: 'pond' | 'grove', x: number, rearX: number, rearY: number, groundY: number, scale: number, seed: number, time: number, p: ShrinePalette, audioLevel = 0) {
     const random = (index: number) => sceneRandom(seed, index + 1000);
     const count = 2 + Math.floor(random(1) * (kind === 'pond' ? 2 : 4));
     const spread = 280 + random(2) * 85;
@@ -31,6 +31,6 @@ export function drawGardenLandmark(ctx: CanvasRenderingContext2D, kind: 'pond' |
     }
     if (random(5) > 0.4) {
         const side = random(6) > 0.5 ? 1 : -1;
-        drawStoneLantern(ctx, x + side * 245 * scale, groundY + 12 * scale, (0.55 + random(7) * 0.2) * scale, p);
+        drawStoneLantern(ctx, x + side * 245 * scale, groundY + 12 * scale, (0.55 + random(7) * 0.2) * scale, p, audioLevel);
     }
 }

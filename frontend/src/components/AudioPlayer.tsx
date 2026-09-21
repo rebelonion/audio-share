@@ -77,6 +77,7 @@ export default function AudioPlayer() {
         seekBy,
         seekTo,
         setVolume,
+        enableAudioLevels,
     } = useGlobalAudioPlayer();
     const toast = useToast();
     const {isLiked, isLikePending, isLoading: likesLoading, isReady: likesReady, toggleLike} = useLikes();
@@ -141,6 +142,7 @@ export default function AudioPlayer() {
             onClick={() => {
                 setShowQueue(false);
                 setShowImmersive(true);
+                enableAudioLevels?.();
                 setImmersiveIsNew(false);
                 writeLocalStorage(IMMERSIVE_DISCOVERED_KEY, 'true');
                 trackEvent('immersive-player-open', {

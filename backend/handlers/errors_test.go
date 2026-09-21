@@ -36,6 +36,40 @@ func (m *memoryErrors) Record(_ context.Context, origin, sourceHash string, e se
 
 const validReport = `{"eventId":"00000000-0000-4000-8000-000000000001","operation":"captcha","stage":"solve","cause":"unavailable","outcome":"blocked","browser":"firefox"}`
 
+func TestErrorIngestionIgnoresBotsWithoutConsumingLimits(t *testing.T) {
+	for _, userAgent := range []string{
+		"Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0",
+		"Mozilla/5.0 (compatible; YandexRenderResourcesBot/1.0; +http://yandex.com/bots) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0",
+		"Googlebot/2.1",
+	} {
+		t.Run(userAgent, func(t *testing.T) {
+			recorder := &memoryErrors{}
+			h := NewErrorHandler(recorder, "secret")
+			for range 125 {
+				r := httptest.NewRequest(http.MethodPost, "/api/errors", strings.NewReader(validReport))
+				r.Header.Set("Content-Type", "application/json")
+				r.Header.Set("User-Agent", userAgent)
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, r)
+				if w.Code != http.StatusNoContent {
+					t.Fatalf("bot report returned %d", w.Code)
+				}
+			}
+			if len(recorder.events) != 0 || h.total != 0 || len(h.counts) != 0 {
+				t.Fatal("bot reports were recorded or consumed ingestion limits")
+			}
+			r := httptest.NewRequest(http.MethodPost, "/api/errors", strings.NewReader(validReport))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("User-Agent", "Mozilla/5.0 Chrome/108.0.0.0 Safari/537.36")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != http.StatusNoContent || len(recorder.events) != 1 {
+				t.Fatal("ordinary browser report was not accepted after crawler traffic")
+			}
+		})
+	}
+}
+
 func TestHTTPErrorIncludesDiagnosticContext(t *testing.T) {
 	recorder := &memoryErrors{}
 	h := ReportHTTPErrors(recorder, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

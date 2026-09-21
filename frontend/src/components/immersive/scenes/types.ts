@@ -10,6 +10,7 @@ export interface ScenePalette {
 }
 
 export interface ScenePlaybackProps {
+    readAudioLevel?: () => number;
     trackKey: string;
     currentTime: number;
     seekVersion: number;
@@ -37,6 +38,7 @@ export interface SceneLayer<T> {
 }
 
 export interface SceneFrame<T> {
+    audioLevel?: number;
     width: number;
     height: number;
     time: number;

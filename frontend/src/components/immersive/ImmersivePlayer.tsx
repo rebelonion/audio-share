@@ -122,6 +122,7 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
             }} fallback={<div className="immersive-scene-loading" role="alert">Scene could not be loaded. Choose another scene or return to the archive.</div>}>
                 <Suspense fallback={<div className="immersive-scene-loading" role="status">Loading scene…</div>}>
                     <Scene
+                        readAudioLevel={player.readAudioLevel}
                         trackKey={currentTrack.id}
                         thumbnail={thumbnail}
                         peaks={waveformPeaks}

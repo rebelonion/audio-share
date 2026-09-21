@@ -13,6 +13,7 @@ interface TravelerFrame extends Omit<SceneFrame<Traveler>, 'moving'> {
 
 export function drawTraveler(ctx: CanvasRenderingContext2D, scene: Traveler, frame: TravelerFrame) {
     const {width: w, height: h, ambientTime, walking, pointerX, pointerY, travel, layers: sources} = frame;
+    const audioLevel = frame.audioLevel ?? 0;
     const {seed} = scene;
     const p = mixPalette(sources.map(source => ({palette: source.data.palette, weight: source.weight})));
     const scale = clamp(h / 760, 0.65, 1.4);
@@ -41,11 +42,12 @@ export function drawTraveler(ctx: CanvasRenderingContext2D, scene: Traveler, fra
     const sunX = w * 0.76 + pointerX * 3;
     const sunY = h * 0.37 + pointerY * 2;
     const radius = clamp(w * 0.032, 22, 48);
-    const glow = ctx.createRadialGradient(sunX, sunY, radius * 0.5, sunX, sunY, radius * 4);
+    const glowRadius = radius * 4;
+    const glow = ctx.createRadialGradient(sunX, sunY, radius * 0.5, sunX, sunY, glowRadius);
     glow.addColorStop(0, '#ffe0a62e');
     glow.addColorStop(1, '#ffe0a600');
     ctx.fillStyle = glow;
-    ctx.fillRect(sunX - radius * 4, sunY - radius * 4, radius * 8, radius * 8);
+    ctx.fillRect(sunX - glowRadius, sunY - glowRadius, glowRadius * 2, glowRadius * 2);
     ctx.fillStyle = '#ffe5bc';
     ctx.beginPath();
     ctx.arc(sunX, sunY, radius, 0, Math.PI * 2);
@@ -226,11 +228,12 @@ export function drawTraveler(ctx: CanvasRenderingContext2D, scene: Traveler, fra
         ctx.strokeStyle = '#162e36';
         ctx.lineWidth = 1;
         ctx.strokeRect(-2, 0, 4, 5);
-        const lantern = ctx.createRadialGradient(0, 7, 0, 0, 7, 30);
-        lantern.addColorStop(0, '#ffe0a64d');
+        const lanternRadius = 30 + audioLevel * 18;
+        const lantern = ctx.createRadialGradient(0, 7, 0, 0, 7, lanternRadius);
+        lantern.addColorStop(0, `rgba(255, 224, 166, ${0.3 + audioLevel * 0.35})`);
         lantern.addColorStop(1, '#ffe0a600');
         ctx.fillStyle = lantern;
-        ctx.fillRect(-30, -23, 60, 60);
+        ctx.fillRect(-lanternRadius, 7 - lanternRadius, lanternRadius * 2, lanternRadius * 2);
         ctx.fillStyle = p.light;
         ctx.fillRect(-2, 4, 4, 6);
         ctx.restore();

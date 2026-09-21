@@ -66,7 +66,7 @@ function tiledRoof(ctx: CanvasRenderingContext2D, width: number, ridge: number, 
     ctx.fillRect(-half * 0.49, ridge - 8, half * 0.98, 4);
 }
 
-export function drawShrine(ctx: CanvasRenderingContext2D, x: number, base: number, scale: number, p: ShrinePalette, variant: number) {
+export function drawShrine(ctx: CanvasRenderingContext2D, x: number, base: number, scale: number, p: ShrinePalette, variant: number, audioLevel = 0) {
     ctx.save();
     ctx.translate(x, base);
     ctx.scale(scale, scale);
@@ -140,7 +140,7 @@ export function drawShrine(ctx: CanvasRenderingContext2D, x: number, base: numbe
         ctx.fillStyle = '#47392b';
         ctx.fillRect(lx - 4, -87, 8, 2);
         ctx.fillRect(lx - 4, -69, 8, 2);
-        ctx.save(); ctx.globalAlpha = 0.12; lanternGlow(ctx, lx, -77, 28, p.lantern); ctx.restore();
+        ctx.save(); ctx.globalAlpha = 0.12 + audioLevel * 0.3; lanternGlow(ctx, lx, -77, 28 + audioLevel * 12, p.lantern); ctx.restore();
     }
     ctx.restore();
 }
@@ -203,9 +203,9 @@ export function drawTorii(ctx: CanvasRenderingContext2D, x: number, base: number
     ctx.restore();
 }
 
-export function drawStoneLantern(ctx: CanvasRenderingContext2D, x: number, base: number, scale: number, p: ShrinePalette) {
+export function drawStoneLantern(ctx: CanvasRenderingContext2D, x: number, base: number, scale: number, p: ShrinePalette, audioLevel = 0) {
     ctx.save(); ctx.translate(x, base); ctx.scale(scale, scale);
-    ctx.save(); ctx.globalAlpha = 0.12; lanternGlow(ctx, 0, -54, 40, p.lantern); ctx.restore();
+    ctx.save(); ctx.globalAlpha = 0.12 + audioLevel * 0.3; lanternGlow(ctx, 0, -54, 40 + audioLevel * 16, p.lantern); ctx.restore();
     polygon(ctx, p.stone, [[-14, 0], [-12, -5], [-6, -9], [-5, -41], [5, -41], [6, -9], [12, -5], [14, 0]]);
     polygon(ctx, '#3e5146', [[-5, -9], [-4, -41], [0, -41], [0, -8]]);
     ctx.fillStyle = p.stone;

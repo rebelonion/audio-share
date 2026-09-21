@@ -33,6 +33,7 @@ class FakeAudio {
     muted = false;
     paused = true;
     preload = '';
+    crossOrigin = '';
     readyState = 0;
     src = '';
     volume = 1;
@@ -118,6 +119,7 @@ describe('useAudioEngine', () => {
         act(() => result.current.play());
         await waitFor(() => expect(FakeAudio.instances).toHaveLength(1));
         const audio = FakeAudio.instances[0];
+        expect(audio.crossOrigin).toBe('use-credentials');
         act(() => audio.emit('loadedmetadata'));
         act(() => result.current.seekTo(90));
         expect(result.current.currentTime).toBe(90);
@@ -349,5 +351,116 @@ describe('network recovery', () => {
         await act(async () => access.resolve({accessKey: 'later', expiresAt: Date.now() + 60_000}));
         expect(FakeAudio.instances).toHaveLength(0);
         expect(result.current.isPlaying).toBe(false);
+    });
+});
+
+
+class FakeAudioContext {
+    state = 'running';
+    destination = {};
+    onstatechange: (() => void) | null = null;
+    resume = vi.fn(async () => { this.state = 'running'; });
+    close = vi.fn(async () => {});
+    createAnalyser = vi.fn(() => ({connect() {}, disconnect() {}, fftSize: 2048}));
+    createMediaElementSource = vi.fn(() => ({connect() {}, disconnect() {}}));
+
+    interrupt() {
+        this.state = 'interrupted';
+        this.onstatechange?.();
+    }
+}
+
+describe('audio context recovery', () => {
+    let context: FakeAudioContext;
+    beforeEach(() => {
+        vi.useFakeTimers();
+        context = new FakeAudioContext();
+        vi.stubGlobal('AudioContext', vi.fn(function () { return context; }));
+        mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'valid-key', expiresAt: Date.now() + 60_000});
+    });
+
+    async function start() {
+        const engine = renderRecoveryEngine();
+        await act(async () => engine.result.current.play());
+        act(() => FakeAudio.instances[0].emit('loadedmetadata'));
+        await act(async () => engine.result.current.enableAudioLevels());
+        expect(context.createMediaElementSource).toHaveBeenCalledOnce();
+        return engine;
+    }
+
+    it('recovers an interruption while visible without reopening immersive mode', async () => {
+        const {result} = await start();
+        await act(async () => context.interrupt());
+        expect(context.state).toBe('running');
+        expect(result.current.isPlaying).toBe(true);
+        expect(result.current.notice).toBeNull();
+        expect(context.createMediaElementSource).toHaveBeenCalledOnce();
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledOnce();
+    });
+
+    it.each(['visibilitychange', 'pageshow'])('recovers on %s after returning to the page', async event => {
+        const {result} = await start();
+        const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+        try {
+            act(() => context.interrupt());
+            expect(context.resume).not.toHaveBeenCalled();
+            hidden.mockReturnValue(false);
+            await act(async () => (event === 'pageshow' ? window : document).dispatchEvent(new Event(event)));
+            expect(context.state).toBe('running');
+            expect(result.current.isPlaying).toBe(true);
+        } finally {
+            hidden.mockRestore();
+        }
+    });
+
+    it.each(['reject', 'pending', 'interrupted'])('offers a working play retry when resume is %s', async failure => {
+        const {result} = await start();
+        if (failure === 'reject') context.resume.mockRejectedValue(new DOMException('Blocked', 'NotAllowedError'));
+        else if (failure === 'pending') context.resume.mockImplementation(() => new Promise(() => {}));
+        else context.resume.mockImplementation(async () => {});
+        await act(async () => context.interrupt());
+        await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+        expect(result.current.isPlaying).toBe(false);
+        expect(FakeAudio.instances[0].paused).toBe(true);
+        expect(result.current.notice).toBe('Ready to play — press play to continue.');
+        context.resume.mockImplementation(async () => { context.state = 'running'; });
+        await act(async () => result.current.play());
+        expect(result.current.isPlaying).toBe(true);
+        expect(result.current.notice).toBeNull();
+        expect(FakeAudio.instances).toHaveLength(1);
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledOnce();
+    });
+
+    it.each(['pause', 'resetForTrack'] as const)('does not recover after %s', async action => {
+        const {result} = await start();
+        act(() => result.current[action]());
+        await act(async () => context.interrupt());
+        await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+        expect(context.resume).not.toHaveBeenCalled();
+        expect(FakeAudio.instances[0].paused).toBe(true);
+    });
+
+    it('ignores a failed recovery completed after a pause', async () => {
+        const {result} = await start();
+        const pending = deferred<void>();
+        context.resume.mockReturnValue(pending.promise);
+        await act(async () => context.interrupt());
+        act(() => result.current.pause());
+        await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+        expect(result.current.notice).toBeNull();
+        expect(result.current.isPlaying).toBe(false);
+        await act(async () => pending.resolve());
+        expect(FakeAudio.instances[0].paused).toBe(true);
+    });
+
+    it('removes recovery listeners when unmounted', async () => {
+        const {unmount} = await start();
+        unmount();
+        context.interrupt();
+        window.dispatchEvent(new Event('pageshow'));
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(context.resume).not.toHaveBeenCalled();
+        expect(context.close).toHaveBeenCalledOnce();
+        expect(context.onstatechange).toBeNull();
     });
 });

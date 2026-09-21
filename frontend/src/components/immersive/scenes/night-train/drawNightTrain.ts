@@ -19,6 +19,7 @@ export function drawNightTrain(ctx: CanvasRenderingContext2D, scene: NightTrain,
     const {width: w, height: h, ambientTime, pointerX, pointerY, travel, layers: sources} = frame;
     const colors = mixPalette(sources.map(source => ({palette: source.data.palette, weight: source.weight})));
     if (!w || !h) return;
+    const audioLevel = frame.audioLevel ?? 0;
     const scale = clamp(h / 800, 0.6, 1.5);
     const random = (index: number) => sceneRandom(scene.seed, index);
     const horizon = h * 0.61;
@@ -37,11 +38,11 @@ export function drawNightTrain(ctx: CanvasRenderingContext2D, scene: NightTrain,
     interior.addColorStop(1, '#171b21');
     ctx.fillStyle = interior;
     ctx.fillRect(0, 0, w, h);
-    glow(ctx, w * 0.72, 0, w * 0.65, '#e9bb7d14');
+    glow(ctx, w * 0.72, 0, w * 0.65, `rgba(233, 187, 125, ${0.078 + audioLevel * 0.15})`);
     ctx.save();
     ctx.translate(w * 0.55, top * 0.1);
     ctx.scale(w * 0.6, top * 1.1);
-    ctx.globalAlpha = 0.16;
+    ctx.globalAlpha = 0.16 + audioLevel * 0.25;
     glow(ctx, 0, 0, 1, colors.light);
     ctx.restore();
 
@@ -127,12 +128,12 @@ export function drawNightTrain(ctx: CanvasRenderingContext2D, scene: NightTrain,
         const height = (18 + amplitude * 105) * (0.55 + district * 0.45) * scale;
         const base = shoreline + pointerY * 4;
         const lightColor = random(i * 31 + 4002) < 0.35 ? colors.light : colors.amber;
-        drawBuilding(ctx, scene.seed, i, x, base, width, height, scale, lightColor);
+        drawBuilding(ctx, scene.seed, i, x, base, width, height, scale, lightColor, audioLevel);
         ctx.save();
         ctx.fillStyle = lightColor;
         for (let ripple = 0; ripple < 7; ripple++) {
             const spread = Math.sin(ambientTime * 0.6 + i + ripple * 2) * 3 * scale;
-            ctx.globalAlpha = 0.12 * (1 - ripple / 8);
+            ctx.globalAlpha = (0.12 + audioLevel * 0.2) * (1 - ripple / 8);
             ctx.fillRect(x + width * 0.25 + spread, base + (5 + ripple * 6) * scale, width * (0.4 + random(i + ripple) * 0.4), scale);
         }
         ctx.restore();
@@ -196,11 +197,11 @@ export function drawNightTrain(ctx: CanvasRenderingContext2D, scene: NightTrain,
     reflection.addColorStop(0.8, colors.light);
     reflection.addColorStop(1, 'transparent');
     ctx.fillStyle = reflection;
-    ctx.globalAlpha = 0.22;
+    ctx.globalAlpha = 0.22 + audioLevel * 0.3;
     ctx.beginPath();
     ctx.roundRect(w * 0.48, top + 55 * scale, w * 0.45, 9 * scale, 4 * scale);
     ctx.fill();
-    ctx.globalAlpha = 0.09;
+    ctx.globalAlpha = 0.09 + audioLevel * 0.15;
     ctx.fillRect(w * 0.6, top + 78 * scale, w * 0.32, 2 * scale);
     ctx.restore();
 

@@ -10,6 +10,7 @@ const FACADES = [
 export function drawBuilding(
     ctx: CanvasRenderingContext2D, seed: number, index: number,
     x: number, base: number, width: number, height: number, scale: number, lightColor: string,
+    audioLevel = 0,
 ) {
     const random = (n: number) => sceneRandom(seed, index * 1901 + n + 7000);
     const style = Math.floor(random(0) * 4);
@@ -83,6 +84,27 @@ export function drawBuilding(
     const spacing = (face - margin * 2) / columns;
     const windowWidth = Math.min(spacing * (style === 2 ? 0.72 : 0.58), 6 * scale);
     const windowHeight = Math.min(6 * scale, (base - wallTop - 7 * scale) / rows * 0.5);
+    // Keep one window in a sparse, stable set of buildings responsive throughout its passage.
+    const twinkle = random(502) < 0.25 ? audioLevel : 0;
+    const visibleRows = Math.max(0, Math.min(rows,
+        Math.floor((base - 6 * scale - windowHeight - wallTop - 5 * scale) / floor) + 1));
+    const twinkleWindow = Math.floor(random(600) * visibleRows * columns);
+    const drawTwinkle = (wx: number, wy: number, ww: number, wh: number) => {
+        if (twinkle <= 0) return;
+        ctx.save();
+        ctx.fillStyle = '#fff0c4';
+        ctx.globalAlpha = Math.min(1, twinkle * 1.4);
+        ctx.fillRect(wx, wy, ww, wh);
+        const haloRadius = 12 * scale;
+        const haloX = wx + ww / 2;
+        const haloY = wy + wh / 2;
+        const halo = ctx.createRadialGradient(haloX, haloY, 0, haloX, haloY, haloRadius);
+        halo.addColorStop(0, lightColor); halo.addColorStop(1, 'transparent');
+        ctx.globalAlpha = twinkle * 0.5;
+        ctx.fillStyle = halo;
+        ctx.fillRect(haloX - haloRadius, haloY - haloRadius, haloRadius * 2, haloRadius * 2);
+        ctx.restore();
+    };
     for (let row = 0; row < rows; row++) {
         const y = wallTop + 5 * scale + row * floor;
         if (y + windowHeight > base - 6 * scale) continue;
@@ -100,6 +122,9 @@ export function drawBuilding(
             if (light >= 0.4 && light <= 0.91) ctx.globalAlpha = 0.35 + light * 0.45;
             ctx.fillRect(wx, y, windowWidth, windowHeight);
             ctx.restore();
+            if (row * columns + column === twinkleWindow) {
+                drawTwinkle(wx, y, windowWidth, windowHeight);
+            }
             if (light > 0.4 && light < 0.65) {
                 ctx.fillStyle = '#24303990';
                 ctx.fillRect(wx, y, windowWidth, windowHeight * 0.45);
@@ -128,6 +153,10 @@ export function drawBuilding(
     ctx.fillRect(x + face * 0.58, base - 8 * scale, doorWidth, 8 * scale);
     ctx.fillStyle = '#e9bb7d70';
     ctx.fillRect(x + face * 0.58 + scale, base - 7 * scale, Math.max(scale, doorWidth - 2 * scale), 2 * scale);
+    // Very short waveform buildings have no upper windows; use their entrance light.
+    if (visibleRows === 0) {
+        drawTwinkle(x + face * 0.58 + scale, base - 7 * scale, Math.max(scale, doorWidth - 2 * scale), 2 * scale);
+    }
     if (style === 1 && height > 24 * scale) {
         ctx.save();
         ctx.fillStyle = lightColor;

@@ -4,14 +4,15 @@ import type {UnderwaterDrift} from './underwaterDrift';
 import type {UnderwaterPalette} from './palette';
 import {drawSwimmers} from './drawSwimmers';
 
-function drawJellyfish(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, phase: number, p: UnderwaterPalette) {
+function drawJellyfish(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, phase: number, p: UnderwaterPalette, audioLevel: number) {
     ctx.save(); ctx.translate(x, y); ctx.scale(size, size);
     ctx.rotate(Math.sin(phase * 0.4) * 0.08);
     const pulse = Math.sin(phase);
     const radius = 27 + pulse * 2.5;
-    const glow = ctx.createRadialGradient(0, -8, 2, 0, -8, 67);
-    glow.addColorStop(0, '#a0e4d512'); glow.addColorStop(1, '#a0e4d500');
-    ctx.fillStyle = glow; ctx.fillRect(-67, -75, 134, 134);
+    const glowRadius = 67 + audioLevel * 12;
+    const glow = ctx.createRadialGradient(0, -8, 2, 0, -8, glowRadius);
+    glow.addColorStop(0, `rgba(160, 228, 213, ${0.071 + audioLevel * 0.075})`); glow.addColorStop(1, '#a0e4d500');
+    ctx.fillStyle = glow; ctx.fillRect(-glowRadius, -8 - glowRadius, glowRadius * 2, glowRadius * 2);
     ctx.strokeStyle = p.glow; ctx.lineCap = 'round';
     for (let i = 0; i < 9; i++) {
         const root = (i - 4) * 5;
@@ -21,7 +22,7 @@ function drawJellyfish(ctx: CanvasRenderingContext2D, x: number, y: number, size
         ctx.bezierCurveTo(root - 12 + pulse * 5, length * 0.35, root + 13 + Math.sin(phase + i) * 7, length * 0.68, root + Math.sin(phase * 0.7 + i * 0.6) * 14, length);
         ctx.stroke();
     }
-    ctx.globalAlpha = 0.33;
+    ctx.globalAlpha = 0.33 + audioLevel * 0.09;
     const bell = ctx.createLinearGradient(0, -32, 0, 8);
     bell.addColorStop(0, p.glow); bell.addColorStop(1, p.water);
     ctx.fillStyle = bell;
@@ -60,9 +61,9 @@ export function drawSeaLife(ctx: CanvasRenderingContext2D, scene: UnderwaterDrif
             const phase = time * 1.15 + random(i * 17 + j + 40) * 6;
             const size = (j === 0 ? 1.05 : 0.35 + random(i * 17 + j + 60) * 0.25) * scale;
             const jx = x + j * 67 * scale + Math.sin(time * 0.19 + i) * 13 * scale;
-            if (jx < -75 * scale || jx > width + 75 * scale) continue;
+            if (jx < -105 * scale || jx > width + 105 * scale) continue;
             drawJellyfish(ctx, jx,
-                y + j * 33 * scale + Math.sin(time * 0.28 + i * 2 + j) * 19 * scale, size, phase, p);
+                y + j * 33 * scale + Math.sin(time * 0.28 + i * 2 + j) * 19 * scale, size, phase, p, frame.audioLevel ?? 0);
         }
     }
     ctx.restore();

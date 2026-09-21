@@ -600,6 +600,7 @@ func isBotLikeUserAgent(userAgent string) bool {
 		"twitterbot",
 		"whatsapp",
 		"yandexbot",
+		"yandexrenderresourcesbot",
 	}
 
 	for _, marker := range botMarkers {
