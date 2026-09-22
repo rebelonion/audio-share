@@ -43,3 +43,13 @@ export function fetchTargetedMessage(): Promise<TargetedMessage | null> {
 
     return request;
 }
+
+export async function acknowledgeTargetedMessage(id: number): Promise<void> {
+    const response = await appFetch(`${API_BASE}/api/session/targeted-message`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id}),
+    });
+    if (!response.ok) throw new Error(`Failed to acknowledge targeted message: ${response.status}`);
+}

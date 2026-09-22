@@ -40,7 +40,7 @@ func NewTargetedMessageHandler(db *sql.DB, sessionSecret string) *TargetedMessag
 
 func (h *TargetedMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
 		return
 	}
@@ -52,11 +52,28 @@ func (h *TargetedMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if r.Method == http.MethodDelete {
+		var body struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&body); err != nil || body.ID <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_message_id"})
+			return
+		}
+		_, err := h.db.ExecContext(r.Context(), "DELETE FROM targeted_messages WHERE session_id = $1 AND id = $2", sessionID, body.ID)
+		if err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	var message targetedMessage
-	err := h.db.QueryRow(`
-		DELETE FROM targeted_messages
+	err := h.db.QueryRowContext(r.Context(), `
+		SELECT id, title, message FROM targeted_messages
 		WHERE session_id = $1
-		RETURNING id, title, message
 	`, sessionID).Scan(&message.ID, &message.Title, &message.Message)
 	if err != nil {
 		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
@@ -64,7 +81,7 @@ func (h *TargetedMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		log.Printf("targeted message: consume failed for session=%s: %v", sessionID, err)
+		log.Printf("targeted message: fetch failed for session=%s: %v", sessionID, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return
 	}

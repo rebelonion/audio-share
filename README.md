@@ -167,7 +167,7 @@ One key is issued for a logical playback or download. Browser Range requests mad
 
 ### Targeted messages
 
-Create a one-time message for an anonymous session through the admin API:
+Send a message to an anonymous session through the admin API:
 
 ```bash
 curl -X POST http://localhost:8080/api/admin/targeted-messages \
@@ -180,7 +180,9 @@ curl -X POST http://localhost:8080/api/admin/targeted-messages \
   }'
 ```
 
-Only one message may be pending for a session. The browser checks for it as soon as the app loads and displays it in a modal. Delivery is at most once: the row is atomically removed when the signed session claims it, preventing duplicate delivery across tabs. A displayed message fires the Rybbit event `targeted-message-displayed` with its numeric `messageId`; message text and session identifiers are not sent to analytics.
+Each session can have one pending message, shown in a modal on app load until the server processes a dismissal. Multiple tabs may show it; repeated dismissals cannot delete a newer message. A failed acknowledgement may still have reached the server, so redelivery is not guaranteed.
+
+Displays emit the Rybbit event `targeted-message-displayed` with `messageId` only—no message text or session ID.
 
 ### Cap CAPTCHA
 

@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -113,21 +116,21 @@ func TestAdminValidatesTargetedMessage(t *testing.T) {
 	}
 }
 
-func TestTargetedMessageIsConsumedOnce(t *testing.T) {
+func TestTargetedMessageRemainsPendingUntilAcknowledged(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock.New: %v", err)
 	}
 	defer db.Close()
 
-	mock.ExpectQuery("DELETE FROM targeted_messages").
+	mock.ExpectQuery("SELECT id, title, message FROM targeted_messages").
 		WithArgs("session-123").
 		WillReturnRows(sqlmock.NewRows(
 			[]string{"id", "title", "message"},
 		).AddRow(42, "A direct note", "Please get in touch."))
-	mock.ExpectQuery("DELETE FROM targeted_messages").
+	mock.ExpectQuery("SELECT id, title, message FROM targeted_messages").
 		WithArgs("session-123").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "message"}))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "message"}).AddRow(42, "A direct note", "Please get in touch."))
 
 	secret := "test-secret"
 	handler := NewTargetedMessageHandler(db, secret)
@@ -149,7 +152,7 @@ func TestTargetedMessageIsConsumedOnce(t *testing.T) {
 	request = targetedMessageRequest(secret, "session-123")
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusNoContent {
+	if recorder.Code != http.StatusOK {
 		t.Fatalf("second status = %d, body=%s", recorder.Code, recorder.Body.String())
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -198,4 +201,53 @@ func targetedMessageRequest(secret, sessionID string) *http.Request {
 		Value: signValue(sessionID, []byte(secret)),
 	})
 	return request
+}
+
+func TestTargetedMessageAcknowledgement(t *testing.T) {
+	for _, affected := range []int64{0, 1} {
+		t.Run(fmt.Sprint(affected), func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			// Both predicates matter: a late acknowledgement must not delete a newer
+			// message or a message belonging to another session. Repeats are harmless.
+			mock.ExpectExec(regexp.QuoteMeta("DELETE FROM targeted_messages WHERE session_id = $1 AND id = $2")).
+				WithArgs("session-123", int64(42)).WillReturnResult(sqlmock.NewResult(0, affected))
+			request := targetedMessageRequest("secret", "session-123")
+			request.Method = http.MethodDelete
+			request.Body = io.NopCloser(strings.NewReader(`{"id":42}`))
+			recorder := httptest.NewRecorder()
+			NewTargetedMessageHandler(db, "secret").ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusNoContent {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestTargetedMessageRejectsInvalidAcknowledgement(t *testing.T) {
+	for _, body := range []string{`{}`, `{"id":0}`, `{"id":-1}`, `{"id":"42"}`, `invalid`} {
+		request := targetedMessageRequest("secret", "session-123")
+		request.Method = http.MethodDelete
+		request.Body = io.NopCloser(strings.NewReader(body))
+		recorder := httptest.NewRecorder()
+		NewTargetedMessageHandler(nil, "secret").ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d", body, recorder.Code)
+		}
+	}
+}
+
+func TestTargetedMessageAcknowledgementRequiresSession(t *testing.T) {
+	request := httptest.NewRequest(http.MethodDelete, "/api/session/targeted-message", strings.NewReader(`{"id":42}`))
+	recorder := httptest.NewRecorder()
+	NewTargetedMessageHandler(nil, "secret").ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status=%d", recorder.Code)
+	}
 }

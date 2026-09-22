@@ -1,7 +1,7 @@
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {AudioLines, X} from 'lucide-react';
-import {fetchTargetedMessage, type TargetedMessage} from '@/lib/targetedMessage';
+import {acknowledgeTargetedMessage, fetchTargetedMessage, type TargetedMessage} from '@/lib/targetedMessage';
 
 export default function TargetedMessageModal() {
     const [message, setMessage] = useState<TargetedMessage | null>(null);
@@ -22,6 +22,14 @@ export default function TargetedMessageModal() {
         };
     }, []);
 
+    const dismissMessage = useCallback(() => {
+        if (!message) return;
+        setMessage(null);
+        void acknowledgeTargetedMessage(message.id).catch(error => {
+            console.error('Could not acknowledge targeted message:', error);
+        });
+    }, [message]);
+
     useEffect(() => {
         if (!message) return;
 
@@ -38,7 +46,7 @@ export default function TargetedMessageModal() {
         }
 
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setMessage(null);
+            if (event.key === 'Escape') dismissMessage();
         };
         window.addEventListener('keydown', handleKeyDown);
 
@@ -47,7 +55,7 @@ export default function TargetedMessageModal() {
             document.body.style.overflow = previousOverflow;
             previouslyFocused?.focus();
         };
-    }, [message]);
+    }, [message, dismissMessage]);
 
     if (!message) return null;
 
@@ -85,7 +93,7 @@ export default function TargetedMessageModal() {
                         </div>
                         <button
                             type="button"
-                            onClick={() => setMessage(null)}
+                            onClick={dismissMessage}
                             className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--card-hover)] hover:text-[var(--foreground)]"
                             aria-label="Close message"
                         >
@@ -104,7 +112,7 @@ export default function TargetedMessageModal() {
                         <button
                             ref={acknowledgeButtonRef}
                             type="button"
-                            onClick={() => setMessage(null)}
+                            onClick={dismissMessage}
                             className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)]"
                         >
                             Got it

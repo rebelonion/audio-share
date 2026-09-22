@@ -1,6 +1,7 @@
 package services
 
 import (
+	"container/list"
 	"context"
 	"math"
 	"sync"
@@ -37,6 +38,8 @@ type bandwidthBucket struct {
 	tokens   float64
 	last     time.Time
 	lastUsed time.Time
+	active   int
+	queue    list.List
 }
 
 func NewIPBandwidthLimiter(bytesPerSecond, burstBytes int64) *IPBandwidthLimiter {
@@ -60,9 +63,16 @@ func (l *IPBandwidthLimiter) Wait(ctx context.Context, ip string, byteCount int)
 		return ctx.Err()
 	}
 	bucket := l.bucket(ip)
+	defer func() {
+		bucket.mu.Lock()
+		bucket.active--
+		bucket.lastUsed = l.clock.Now()
+		bucket.mu.Unlock()
+		l.maybeCleanup(l.clock.Now())
+	}()
 	remaining := int64(byteCount)
 	for remaining > 0 {
-		chunk := min(remaining, l.burstBytes)
+		chunk := min(remaining, l.burstBytes, 32*1024)
 		if err := l.waitChunk(ctx, bucket, chunk); err != nil {
 			return err
 		}
@@ -77,10 +87,14 @@ func (l *IPBandwidthLimiter) bucket(ip string) *bandwidthBucket {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if bucket, ok := l.buckets[ip]; ok {
+		bucket.mu.Lock()
+		bucket.active++
+		bucket.mu.Unlock()
 		return bucket
 	}
 	bucket := &bandwidthBucket{
 		tokens:   float64(l.burstBytes),
+		active:   1,
 		last:     now,
 		lastUsed: now,
 	}
@@ -89,6 +103,30 @@ func (l *IPBandwidthLimiter) bucket(ip string) *bandwidthBucket {
 }
 
 func (l *IPBandwidthLimiter) waitChunk(ctx context.Context, bucket *bandwidthBucket, byteCount int64) error {
+	// Only the head waiter consumes tokens. Each bounded read rejoins the tail,
+	// so a busy stream cannot overtake reads already waiting for capacity.
+	ready := make(chan struct{})
+	bucket.mu.Lock()
+	entry := bucket.queue.PushBack(ready)
+	if bucket.queue.Front() == entry {
+		close(ready)
+	}
+	bucket.mu.Unlock()
+	defer func() {
+		bucket.mu.Lock()
+		wasHead := bucket.queue.Front() == entry
+		bucket.queue.Remove(entry)
+		if next := bucket.queue.Front(); wasHead && next != nil {
+			close(next.Value.(chan struct{}))
+		}
+		bucket.mu.Unlock()
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ready:
+	}
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -107,7 +145,6 @@ func (l *IPBandwidthLimiter) waitChunk(ctx context.Context, bucket *bandwidthBuc
 		if bucket.tokens >= float64(byteCount) {
 			bucket.tokens -= float64(byteCount)
 			bucket.mu.Unlock()
-			l.maybeCleanup(now)
 			return nil
 		}
 		missing := float64(byteCount) - bucket.tokens
@@ -130,7 +167,7 @@ func (l *IPBandwidthLimiter) maybeCleanup(now time.Time) {
 	l.waitsSinceCleanup = 0
 	for ip, bucket := range l.buckets {
 		bucket.mu.Lock()
-		inactive := now.Sub(bucket.lastUsed) > 10*time.Minute
+		inactive := bucket.active == 0 && now.Sub(bucket.lastUsed) > 10*time.Minute
 		bucket.mu.Unlock()
 		if inactive {
 			delete(l.buckets, ip)
