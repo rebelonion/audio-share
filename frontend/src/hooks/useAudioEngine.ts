@@ -15,6 +15,7 @@ import {reportError as reportOperationalError} from '@/lib/errorReporting';
 
 export const POSITION_STORAGE_KEY = 'audio-share:position';
 const VOLUME_STORAGE_KEY = 'audio-share:volume';
+const STREAM_EXPIRY_MARGIN_MS = 5 * 60_000;
 
 function initialVolume(): number {
     const value = Number.parseFloat(readLocalStorage(VOLUME_STORAGE_KEY) || '1');
@@ -379,6 +380,8 @@ export function useAudioEngine({
 
     const loadAuthorizedAudio = useCallback(async (selectedTrack: PlayerTrack, resumeAt?: number) => {
         const loadAttempt = ++loadAttemptRef.current;
+        clearAudio();
+        pendingResumeAtRef.current = resumeAt;
         setIsLoading(true);
         setError(null);
         setNotice(null);
@@ -390,7 +393,6 @@ export function useAudioEngine({
                 || currentTrackRef.current?.id !== selectedTrack.id
             ) return;
 
-            clearAudio();
             const audio = createAudio(selectedTrack, grant, resumeAt);
             audio.volume = volumeRef.current;
             audio.muted = isMutedRef.current;
@@ -447,32 +449,41 @@ export function useAudioEngine({
         if (existingAudio && !existingAudio.paused && !existingAudio.error) return;
 
         const grant = activeGrantRef.current;
-        const hasValidGrant = grant && Date.now() < grant.expiresAt;
+        const resumeAt = startTime ?? (existingAudio && !existingAudio.ended
+            ? pendingResumeAtRef.current ?? existingAudio.currentTime
+            : undefined);
+        const trackDuration = existingAudio && Number.isFinite(existingAudio.duration) && existingAudio.duration > 0
+            ? existingAudio.duration : metadataRef.current?.duration || duration;
+        const remaining = Number.isFinite(trackDuration) ? Math.max(0, trackDuration - (resumeAt ?? 0)) : 0;
+        const playbackRate = existingAudio?.playbackRate || 1;
+        const requiredLifetime = remaining / Math.abs(playbackRate) * 1000 + STREAM_EXPIRY_MARGIN_MS;
+        const hasEnoughTime = grant && grant.expiresAt - Date.now() > requiredLifetime;
         if (
             existingAudio
             && !existingAudio.error
             && !existingAudio.ended
-            && hasValidGrant
+            && hasEnoughTime
             && (
                 blockedPlaybackRef.current === existingAudio
                 || (audioLoaded && !error)
             )
         ) {
+            if (startTime !== undefined) applyRequestedPosition(existingAudio, startTime);
             playAudio(existingAudio, selectedTrack);
             return;
         }
 
-        const resumeAt = existingAudio && !existingAudio.ended
-            ? pendingResumeAtRef.current ?? existingAudio.currentTime
-            : undefined;
-        void loadAuthorizedAudio(selectedTrack, startTime ?? resumeAt);
+        void loadAuthorizedAudio(selectedTrack, resumeAt);
     }, [
         audioLoaded,
+        applyRequestedPosition,
         cancelNetworkRetry,
         currentTrackRef,
         enableAudioLevels,
+        duration,
         error,
         loadAuthorizedAudio,
+        metadataRef,
         playAudio,
     ]);
 

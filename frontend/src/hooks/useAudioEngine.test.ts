@@ -33,6 +33,7 @@ class FakeAudio {
     muted = false;
     paused = true;
     preload = '';
+    playbackRate = 1;
     crossOrigin = '';
     readyState = 0;
     src = '';
@@ -104,7 +105,7 @@ afterEach(() => {
 describe('useAudioEngine', () => {
     it('signals explicit seeks without treating playback updates as seeks', async () => {
         mediaAccess.requestMediaAccess.mockResolvedValueOnce({
-            accessKey: 'signed-key', expiresAt: Date.now() + 60_000,
+            accessKey: 'signed-key', expiresAt: Date.now() + 3_600_000,
         });
         const currentTrackRef = {current: {
             id: 'track-1', src: '/audio/key/track-key', shareKey: 'track-key',
@@ -137,7 +138,7 @@ describe('useAudioEngine', () => {
     it('starts newly loaded audio at an explicitly requested time', async () => {
         mediaAccess.requestMediaAccess.mockResolvedValueOnce({
             accessKey: 'signed-key',
-            expiresAt: Date.now() + 60_000,
+            expiresAt: Date.now() + 3_600_000,
         });
         const currentTrackRef = {
             current: {
@@ -166,7 +167,7 @@ describe('useAudioEngine', () => {
     it('retries blocked playback with the existing grant and audio element', async () => {
         mediaAccess.requestMediaAccess.mockResolvedValueOnce({
             accessKey: 'signed-key',
-            expiresAt: Date.now() + 60_000,
+            expiresAt: Date.now() + 3_600_000,
         });
         FakeAudio.playFailures.push(new DOMException('Playback blocked', 'NotAllowedError'));
         const currentTrackRef = {
@@ -233,7 +234,7 @@ describe('useAudioEngine', () => {
         await act(async () => {
             access.resolve({
                 accessKey: 'signed-key',
-                expiresAt: Date.now() + 60_000,
+                expiresAt: Date.now() + 3_600_000,
             });
             await access.promise;
         });
@@ -258,7 +259,7 @@ function renderRecoveryEngine() {
 describe('network recovery', () => {
     beforeEach(() => {
         vi.useFakeTimers();
-        mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'valid-key', expiresAt: Date.now() + 60_000});
+        mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'valid-key', expiresAt: Date.now() + 3_600_000});
     });
 
     it('reuses authorization, restores position, and stops after two retries', async () => {
@@ -348,7 +349,7 @@ describe('network recovery', () => {
         const {result} = renderRecoveryEngine();
         act(() => result.current.play());
         act(() => result.current.pause());
-        await act(async () => access.resolve({accessKey: 'later', expiresAt: Date.now() + 60_000}));
+        await act(async () => access.resolve({accessKey: 'later', expiresAt: Date.now() + 3_600_000}));
         expect(FakeAudio.instances).toHaveLength(0);
         expect(result.current.isPlaying).toBe(false);
     });
@@ -376,7 +377,7 @@ describe('audio context recovery', () => {
         vi.useFakeTimers();
         context = new FakeAudioContext();
         vi.stubGlobal('AudioContext', vi.fn(function () { return context; }));
-        mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'valid-key', expiresAt: Date.now() + 60_000});
+        mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'valid-key', expiresAt: Date.now() + 3_600_000});
     });
 
     async function start() {
@@ -462,5 +463,97 @@ describe('audio context recovery', () => {
         expect(context.resume).not.toHaveBeenCalled();
         expect(context.close).toHaveBeenCalledOnce();
         expect(context.onstatechange).toBeNull();
+    });
+});
+
+describe('proactive stream grant renewal', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        mediaAccess.requestMediaAccess.mockReset();
+    });
+
+    async function pausedTrack(lifetimeSeconds: number, position = 60, duration = 120) {
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({accessKey: 'original', expiresAt: Date.now() + lifetimeSeconds * 1000});
+        const engine = renderRecoveryEngine();
+        await act(async () => engine.result.current.play());
+        const audio = FakeAudio.instances[0];
+        act(() => { audio.duration = duration; audio.emit('loadedmetadata'); audio.currentTime = position; engine.result.current.pause(); });
+        vi.spyOn(audio, 'load').mockImplementation(() => { audio.currentTime = 0; });
+        return {...engine, audio};
+    }
+
+    it('reuses a grant that covers the remaining audio, even when it cannot cover the entire track', async () => {
+        const {result, audio} = await pausedTrack(600, 3540, 3600);
+        await act(async () => result.current.play());
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledOnce();
+        expect(audio.currentTime).toBe(3540);
+        expect(result.current.isPlaying).toBe(true);
+    });
+
+    it('renews an unexpired grant early and clears the old URL while authorization is pending', async () => {
+        const {result, audio} = await pausedTrack(600, 900, 1800);
+        const next = deferred<{accessKey: string; expiresAt: number}>();
+        mediaAccess.requestMediaAccess.mockReturnValueOnce(next.promise);
+        await act(async () => result.current.play());
+        expect(audio.src).toBe('');
+        expect(audio.paused).toBe(true);
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(2);
+        await act(async () => next.resolve({accessKey: 'renewed', expiresAt: Date.now() + 72 * 3_600_000}));
+        act(() => audio.emit('loadedmetadata'));
+        expect(audio.src).toContain('access_key=renewed');
+        expect(audio.currentTime).toBe(900);
+        expect(result.current.isPlaying).toBe(true);
+    });
+
+    it.each([0.5, 1, 2])('accounts for playback rate %s when deciding to renew', async rate => {
+        const {result, audio} = await pausedTrack(400, 60, 120);
+        audio.playbackRate = rate;
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({accessKey: 'renewed', expiresAt: Date.now() + 3_600_000});
+        await act(async () => result.current.play());
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(rate === 0.5 ? 2 : 1);
+    });
+
+    it('includes elapsed pause time and the five-minute safety margin', async () => {
+        const {result, audio} = await pausedTrack(600);
+        await act(async () => { await vi.advanceTimersByTimeAsync(250_000); });
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({accessKey: 'renewed', expiresAt: Date.now() + 3_600_000});
+        await act(async () => result.current.play());
+        act(() => audio.emit('loadedmetadata'));
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(2);
+        expect(audio.currentTime).toBe(60);
+    });
+
+    it('renews a grant that expired during a long pause', async () => {
+        const {result, audio} = await pausedTrack(600);
+        await act(async () => { await vi.advanceTimersByTimeAsync(700_000); });
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({accessKey: 'renewed', expiresAt: Date.now() + 3_600_000});
+        await act(async () => result.current.play());
+        act(() => audio.emit('loadedmetadata'));
+        expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(2);
+        expect(audio.currentTime).toBe(60);
+    });
+
+    it('retains position if renewal fails and the user tries again', async () => {
+        const {result, audio} = await pausedTrack(60, 75);
+        mediaAccess.requestMediaAccess.mockRejectedValueOnce(new Error('Unavailable'));
+        await act(async () => result.current.play());
+        expect(result.current.error).toBeTruthy();
+        expect(audio.src).toBe('');
+        mediaAccess.requestMediaAccess.mockResolvedValueOnce({accessKey: 'renewed', expiresAt: Date.now() + 3_600_000});
+        await act(async () => result.current.play());
+        act(() => audio.emit('loadedmetadata'));
+        expect(audio.currentTime).toBe(75);
+    });
+
+    it('does not resume when the user pauses while renewal is pending', async () => {
+        const {result, audio} = await pausedTrack(60);
+        const next = deferred<{accessKey: string; expiresAt: number}>();
+        mediaAccess.requestMediaAccess.mockReturnValueOnce(next.promise);
+        await act(async () => result.current.play());
+        act(() => result.current.pause());
+        await act(async () => next.resolve({accessKey: 'renewed', expiresAt: Date.now() + 3_600_000}));
+        expect(audio.paused).toBe(true);
+        expect(audio.src).toBe('');
+        expect(result.current.isPlaying).toBe(false);
     });
 });
