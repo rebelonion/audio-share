@@ -158,6 +158,29 @@ export function surfaceSlope(x: number, y: number, time: number, drops: Drop[], 
     return {x: dx, y: dy};
 }
 
+export function padPose(pad: PositionedPad, time: number, drops: Drop[], scale: number) {
+    const slope = swellSlope(pad.x, pad.y, time, scale);
+    let lift = 0;
+    let rock = 0;
+    for (const drop of drops) {
+        if (drop.onPad >= 0) continue;
+        const distance = Math.hypot(pad.x - drop.x, (pad.y - drop.y) / 0.82) / scale;
+        const offset = distance - drop.age * RAIN_SPEED;
+        // A floating leaf responds across its footprint, not to each sharp ripple crest.
+        const width = 0.018 + pad.radius / scale * 0.5 + drop.age * 0.006;
+        const fade = Math.max(0, Math.min(1, drop.age / 0.4, (DROP_LIFETIME - drop.age) / 0.6));
+        const response = Math.exp(-offset * offset / (width * width) - drop.age * 0.55)
+            * fade * fade * (3 - 2 * fade) * drop.strength;
+        lift += response;
+        rock += response * offset / width * (pad.x - drop.x) / (scale * Math.max(distance, 0.001));
+    }
+    return {
+        y: pad.y + pad.bob + slope.y * scale * 0.07 - Math.tanh(lift) * Math.min(4, scale * 0.008),
+        scaleY: 0.82 + slope.y * 0.18,
+        angle: pad.angle + slope.x * 0.15 + Math.tanh(rock) * 0.045,
+    };
+}
+
 export function fishPose(fish: Fish, time: number, width: number, height: number) {
     const travelPhase = (t: number) => t * fish.rate + fish.phase + Math.sin(t * 0.62 + fish.phase) * fish.rate * 0.35;
     const phase = travelPhase(time);

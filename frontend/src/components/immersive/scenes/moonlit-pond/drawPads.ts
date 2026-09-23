@@ -1,6 +1,6 @@
 import type {PondContext} from './pondCanvas';
 import {sceneRandom} from '../shared/scenery';
-import {surfaceSlope, type Drop, type PositionedPad, type POND_PALETTE} from './pond';
+import {padPose, type Drop, type PositionedPad, type POND_PALETTE} from './pond';
 
 function padPath(pad: PositionedPad): Path2D {
     const path = new Path2D();
@@ -128,10 +128,7 @@ export function createPadRenderer() {
         draw(ctx: PondContext, pads: PositionedPad[], drops: Drop[], time: number, width: number, height: number, palette: typeof POND_PALETTE) {
             const scale = Math.min(width, height);
             const density = Math.max(1, Math.min(2, ctx.canvas.width / width));
-            const poses = pads.map(pad => {
-                const slope = surfaceSlope(pad.x, pad.y, time, drops, scale);
-                return {y: pad.y + pad.bob + slope.y * scale * 0.07, scaleY: 0.82 + slope.y * 0.18, angle: pad.angle + slope.x * 0.15};
-            });
+            const poses = pads.map(pad => padPose(pad, time, drops, scale));
             const paint = (sprite: Sprite, index: number) => {
                 const pose = poses[index];
                 ctx.save();

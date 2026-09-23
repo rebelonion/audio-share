@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {createPond, DROP_COUNT, DROP_LIFETIME, fishPose, padContains, POND_PALETTE, pondPaletteFromPixels, positionPads, rainDrops, surfaceSlope} from './pond';
+import {createPond, DROP_COUNT, DROP_LIFETIME, fishPose, padContains, padPose, POND_PALETTE, pondPaletteFromPixels, positionPads, rainDrops, surfaceSlope} from './pond';
 
 const pond = createPond('moonlit-study', null);
 
@@ -44,6 +44,52 @@ describe('pond continuity and perspective', () => {
 });
 
 describe('rain and lily pad interactions', () => {
+    it.each([[390, 844], [1280, 800]])('gently lifts a pad through a ripple without vibrating or stretching at %i × %i', (width, height) => {
+        const scale = Math.min(width, height);
+        const pad = positionPads(pond.pads, 0, width, height)[0];
+        let previousLift = 0;
+        let previousStep = 0;
+        let maxLift = 0;
+        let maxJolt = 0;
+        let maxRock = 0;
+        let reversals = 0;
+        for (let frame = 0; frame <= 120; frame++) {
+            const time = frame / 30;
+            const drop = {x: pad.x - scale * 0.04, y: pad.y - scale * 0.04, age: time, strength: 1, onPad: -1};
+            const calm = padPose(pad, time, [], scale);
+            const pose = padPose(pad, time, time < DROP_LIFETIME ? [drop] : [], scale);
+            const lift = calm.y - pose.y;
+            const step = lift - previousLift;
+            maxLift = Math.max(maxLift, lift);
+            maxJolt = Math.max(maxJolt, Math.abs(step - previousStep));
+            maxRock = Math.max(maxRock, Math.abs(pose.angle - calm.angle));
+            if (step * previousStep < 0) reversals++;
+            expect(pose.scaleY).toBe(calm.scaleY);
+            previousLift = lift;
+            previousStep = step;
+        }
+        expect(maxLift).toBeGreaterThan(1);
+        expect(maxLift).toBeLessThanOrEqual(4);
+        expect(maxRock).toBeGreaterThan(0.005);
+        expect(maxRock).toBeLessThan(0.045);
+        expect(maxJolt).toBeLessThan(0.08);
+        expect(reversals).toBe(1);
+        expect(previousLift).toBe(0);
+    });
+
+    it('bounds overlapping ripple motion and reproduces the same pose after time changes', () => {
+        const pad = positionPads(pond.pads, 1, 1280, 800)[0];
+        const drop = {x: pad.x - 40, y: pad.y, age: 0.8, strength: 1.2, onPad: -1};
+        const drops = Array.from({length: DROP_COUNT}, () => drop);
+        const calm = padPose(pad, 1, [], 800);
+        const pose = padPose(pad, 1, drops, 800);
+        expect(calm.y - pose.y).toBeLessThanOrEqual(4);
+        expect(Math.abs(pose.angle - calm.angle)).toBeLessThanOrEqual(0.045);
+        padPose(pad, 20, [], 800);
+        expect(padPose(pad, 1, drops, 800)).toEqual(pose);
+        expect(padPose(pad, 1, [{...drop, onPad: 0}], 800)).toEqual(calm);
+    });
+
     it('treats the notch as water and the leaf as solid, including rotated pads', () => {
         const pad = {...positionPads(pond.pads, 0, 1280, 800)[0], x: 100, y: 100, radius: 40, angle: 0};
         expect(padContains(pad, 120, 100)).toBe(false);
