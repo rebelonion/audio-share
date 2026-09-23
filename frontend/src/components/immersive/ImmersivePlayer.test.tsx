@@ -36,6 +36,7 @@ const player = vi.hoisted(() => ({
     togglePlay: vi.fn(),
 }));
 const sceneUnmounted = vi.hoisted(() => vi.fn());
+const loadPendingScene = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/AudioPlayerContext', () => ({useGlobalAudioPlayer: () => player}));
 vi.mock('@/lib/playerWaveform', () => ({loadPlayerWaveform: vi.fn()}));
@@ -72,7 +73,8 @@ vi.mock('./scenes/registry', () => {
         ...first, id: 'unavailable', label: 'Unavailable',
         Component: lazy(() => Promise.reject(new TypeError('Failed to fetch dynamically imported module'))),
     };
-    return {defaultScene: first, scenes: [first, second, unavailable]};
+    const pending = {...second, id: 'pending', label: 'Pending', Component: lazy(loadPendingScene)};
+    return {defaultScene: first, scenes: [first, second, unavailable, pending]};
 });
 
 let fullscreenElement: Element | null = null;
@@ -167,6 +169,22 @@ function timeline() {
     input.releasePointerCapture = vi.fn();
     return input;
 }
+
+it('keeps the current scene and playback controls available while another scene loads', async () => {
+    let finishLoading!: (module: {default: () => React.ReactNode}) => void;
+    loadPendingScene.mockReturnValue(new Promise(resolve => { finishLoading = resolve; }));
+    render(<ImmersivePlayer onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Scene'}));
+    fireEvent.click(screen.getByRole('option', {name: 'Pending'}));
+    expect(screen.getByRole('button', {name: 'Preview first scene'})).toBeTruthy();
+    expect(screen.queryByText('Loading scene…')).toBeNull();
+    expect(sceneUnmounted).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', {name: 'Pause'}));
+    expect(player.togglePlay).toHaveBeenCalledOnce();
+    await act(async () => finishLoading({default: () => <div>New scene ready</div>}));
+    expect(screen.getByText('New scene ready')).toBeTruthy();
+    expect(sceneUnmounted).toHaveBeenCalledOnce();
+});
 
 it('previews timeline dragging and seeks once on release', () => {
     localStorage.setItem('audio-share:immersive-scene', 'second');

@@ -1,4 +1,4 @@
-import {Suspense, useCallback, useEffect, useId, useRef, useState, type CSSProperties} from 'react';
+import {startTransition, Suspense, useCallback, useEffect, useId, useRef, useState, type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {ArrowLeft, ListMusic, Loader2, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume2, VolumeX, Wind} from 'lucide-react';
 import {useRybbit} from '@/hooks/useRybbit';
@@ -116,11 +116,11 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
             onPointerDown={revealControls}
             onFocus={revealControls}
         >
-            <ImmersiveErrorBoundary key={scene.id} onError={() => {
-                setSceneFailed(true);
-                setPreviewTime(null);
-            }} fallback={<div className="immersive-scene-loading" role="alert">Scene could not be loaded. Choose another scene or return to the archive.</div>}>
-                <Suspense fallback={<div className="immersive-scene-loading" role="status">Loading scene…</div>}>
+            <Suspense fallback={<div className="immersive-scene-loading" role="status">Loading scene…</div>}>
+                <ImmersiveErrorBoundary key={scene.id} onError={() => {
+                    setSceneFailed(true);
+                    setPreviewTime(null);
+                }} fallback={<div className="immersive-scene-loading" role="alert">Scene could not be loaded. Choose another scene or return to the archive.</div>}>
                     <Scene
                         readAudioLevel={player.readAudioLevel}
                         trackKey={currentTrack.id}
@@ -138,8 +138,8 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
                         onSeek={player.seekTo}
                         onPaletteChange={updatePalette}
                     />
-                </Suspense>
-            </ImmersiveErrorBoundary>
+                </ImmersiveErrorBoundary>
+            </Suspense>
             <header className="immersive-header immersive-chrome">
                 <button ref={closeRef} type="button" className="immersive-back" onClick={closeImmersive} aria-label="Exit immersive player">
                     <ArrowLeft size={17} /> <span>Back to archive</span>
@@ -155,7 +155,7 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
                                 if (value !== scene.id) trackEvent('immersive-scene-change', {from: scene.id, to: value});
                                 setPreviewTime(null);
                                 setSceneFailed(false);
-                                setSceneId(value);
+                                startTransition(() => setSceneId(value));
                                 writeLocalStorage(SCENE_STORAGE_KEY, value);
                                 revealControls();
                             }}
