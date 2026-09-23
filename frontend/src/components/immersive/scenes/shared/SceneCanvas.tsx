@@ -12,15 +12,16 @@ const AUDIO_REACTIVITY = 0.6;
 interface SceneCanvasProps<T> extends ScenePlaybackProps {
     data: T;
     renderFrame: (ctx: CanvasRenderingContext2D, data: T, frame: SceneFrame<T>) => void;
+    renderBitmapFrame?: (ctx: ImageBitmapRenderingContext, data: T, frame: SceneFrame<T>) => void;
     travelSpan: (duration: number) => number;
     seekFromDrag: (time: number, deltaX: number, travelDistance: number, duration: number) => number;
     className: string;
 }
 
-export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromDrag, className, ...props}: SceneCanvasProps<T>) {
+export default function SceneCanvas<T>({data, renderFrame, renderBitmapFrame, travelSpan, seekFromDrag, className, ...props}: SceneCanvasProps<T>) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const latest = useRef({...props, data, renderFrame, travelSpan});
-    latest.current = {...props, data, renderFrame, travelSpan};
+    const latest = useRef({...props, data, renderFrame, renderBitmapFrame, travelSpan});
+    latest.current = {...props, data, renderFrame, renderBitmapFrame, travelSpan};
     const pointer = useRef({x: 0, y: 0});
     const drag = useRef<{pointerId: number; x: number; time: number; target: number; moved: boolean} | null>(null);
     const redraw = useRef<() => void>(() => {});
@@ -28,8 +29,11 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        const ctx = canvas?.getContext('2d', {alpha: false});
-        if (!canvas || !ctx) return;
+        if (!canvas) return;
+        const bitmapContext = latest.current.renderBitmapFrame && typeof OffscreenCanvas !== 'undefined' && typeof Worker !== 'undefined'
+            ? canvas.getContext('bitmaprenderer') : null;
+        const ctx = bitmapContext ? null : canvas.getContext('2d', {alpha: false});
+        if (!ctx && !bitmapContext) return;
         let width = 0;
         let height = 0;
         let animation = 0;
@@ -42,7 +46,7 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
         const draw = (now: number) => {
             if (width <= 0 || height <= 0) return;
             // Context restoration can reset the transform without a layout resize.
-            ctx.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
+            ctx?.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
             const current = latest.current;
             lastFrame = now;
             const {elapsed, ...frame} = clock.step(now, current, pointer.current);
@@ -51,10 +55,12 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
                     ? current.readAudioLevel?.() ?? 0 : 0;
                 audioLevel = smoothAudioLevel(audioLevel, target, elapsed);
             }
-            current.renderFrame(ctx, current.data, {
-                width, height, ...frame, audioLevel: audioLevel * AUDIO_REACTIVITY,
+            const sceneFrame = {
+                width, height, ...frame, motionEnabled: current.motion, audioLevel: audioLevel * AUDIO_REACTIVITY,
                 layers: transition.update(current.data, current.trackKey, frame.time, current.duration, frame.travel, elapsed, current.motion),
-            });
+            };
+            if (bitmapContext) current.renderBitmapFrame!(bitmapContext, current.data, sceneFrame);
+            else current.renderFrame(ctx!, current.data, sceneFrame);
         };
 
         const tick = (now: number) => {

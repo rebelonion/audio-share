@@ -44,6 +44,7 @@ export interface SceneFrame<T> {
     time: number;
     duration: number;
     ambientTime: number;
+    motionEnabled?: boolean;
     moving: boolean;
     pointerX: number;
     pointerY: number;
