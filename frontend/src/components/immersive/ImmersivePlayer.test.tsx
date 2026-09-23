@@ -592,3 +592,28 @@ it('handles fullscreen rejection and hides the toggle where fullscreen is unsupp
     render(<ImmersivePlayer onClose={vi.fn()} />);
     expect(screen.queryByRole('button', {name: 'Enter fullscreen'})).toBeNull();
 });
+
+it('keeps the screen awake in Still scene and during buffering, then releases on pause', async () => {
+    const lock = Object.assign(new EventTarget(), {released: false, release: vi.fn(async () => {})});
+    const request = vi.fn(async () => lock);
+    Object.defineProperty(navigator, 'wakeLock', {configurable: true, value: {request}});
+    const originalPlaying = player.isPlaying;
+    const originalLoading = player.isLoading;
+    const view = render(<ImmersivePlayer onClose={vi.fn()} />);
+    try {
+        await waitFor(() => expect(request).toHaveBeenCalledWith('screen'));
+        fireEvent.click(screen.getByRole('button', {name: 'Still scene'}));
+        player.isLoading = true;
+        view.rerender(<ImmersivePlayer onClose={vi.fn()} />);
+        expect(lock.release).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledOnce();
+        player.isPlaying = false;
+        view.rerender(<ImmersivePlayer onClose={vi.fn()} />);
+        expect(lock.release).toHaveBeenCalledOnce();
+    } finally {
+        view.unmount();
+        player.isPlaying = originalPlaying;
+        player.isLoading = originalLoading;
+        Reflect.deleteProperty(navigator, 'wakeLock');
+    }
+});

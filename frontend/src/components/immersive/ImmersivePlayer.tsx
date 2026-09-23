@@ -12,6 +12,7 @@ import {defaultScene, scenes} from './scenes/registry';
 import type {ScenePalette} from './scenes/types';
 import {useImmersiveControls} from './useImmersiveControls';
 import {useImmersiveFullscreen} from './useImmersiveFullscreen';
+import {useImmersiveWakeLock} from './useImmersiveWakeLock';
 import ImmersiveErrorBoundary from './ImmersiveErrorBoundary';
 import './ImmersivePlayer.css';
 
@@ -28,6 +29,7 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     const player = useGlobalAudioPlayer();
     const {track: trackEvent} = useRybbit();
     const {currentTrack, metadata, artist, track, thumbnail, waveformPeaks, currentTime, duration, isPlaying, isLoading, audioLoaded, error, notice} = player;
+    useImmersiveWakeLock(!!currentTrack && isPlaying && !error);
     const [queueOpen, setQueueOpen] = useState(false);
     const queueButtonRef = useRef<HTMLButtonElement>(null);
     const queueId = useId();
