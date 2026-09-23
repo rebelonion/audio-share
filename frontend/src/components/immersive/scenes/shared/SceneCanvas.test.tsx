@@ -42,6 +42,49 @@ beforeEach(() => {
     });
 });
 
+it.each([1, 1.25, 2, 3])('restores logical drawing coordinates every frame at device pixel ratio %s', ratio => {
+    vi.stubGlobal('devicePixelRatio', ratio);
+    vi.mocked(HTMLCanvasElement.prototype.getBoundingClientRect).mockReturnValue(new DOMRect(0, 0, 393, 851));
+    let transform: number[] = [];
+    const ctx = {setTransform: vi.fn((...values: number[]) => { transform = values; })};
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    const renderedTransforms: number[][] = [];
+    const view = render(<SceneCanvas {...props} renderFrame={(_ctx, _data, frame) => {
+        renderedTransforms.push([...transform]);
+        expect(frame).toMatchObject({width: 393, height: 851});
+    }} />);
+    const canvas = view.container.querySelector('canvas')!;
+    const scale = Math.min(ratio, 2);
+    expect([canvas.width, canvas.height]).toEqual([Math.round(393 * scale), Math.round(851 * scale)]);
+    // A restored graphics context has the identity transform, even without a layout resize.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    advanceFrame(40);
+    advanceFrame(80);
+    for (const values of renderedTransforms) {
+        expect(values).toEqual([canvas.width / 393, 0, 0, canvas.height / 851, 0, 0]);
+    }
+});
+
+it('repaints a restored graphics context immediately in still mode', () => {
+    const view = render(<SceneCanvas {...props} motion={false} />);
+    const canvas = view.container.querySelector('canvas')!;
+    renderFrame.mockClear();
+    fireEvent(canvas, new Event('contextrestored'));
+    expect(renderFrame).toHaveBeenCalledOnce();
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+    view.unmount();
+    renderFrame.mockClear();
+    fireEvent(canvas, new Event('contextrestored'));
+    expect(renderFrame).not.toHaveBeenCalled();
+});
+
+it.each([60, 90, 120])('schedules 30 scene frames per second on a %s Hz display', refreshRate => {
+    render(<SceneCanvas {...props} />);
+    renderFrame.mockClear();
+    for (let frame = 1; frame <= refreshRate; frame++) advanceFrame(frame * 1000 / refreshRate);
+    expect(renderFrame).toHaveBeenCalledTimes(30);
+});
+
 it('preserves animation and parallax when artwork or waveform data arrives', () => {
     const view = render(<SceneCanvas {...props} isPlaying={false} />);
     fireEvent.pointerMove(view.container.querySelector('canvas')!, {clientX: 1000, clientY: 800});

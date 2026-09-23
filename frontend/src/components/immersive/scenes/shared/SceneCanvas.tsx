@@ -34,11 +34,15 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
         let height = 0;
         let animation = 0;
         let lastFrame = performance.now();
+        let nextFrame = lastFrame + 1000 / 30;
         let audioLevel = 0;
         const clock = createSceneClock(latest.current, lastFrame, duration => latest.current.travelSpan(duration));
         const transition = new SceneTransition<T>(duration => latest.current.travelSpan(duration));
 
         const draw = (now: number) => {
+            if (width <= 0 || height <= 0) return;
+            // Context restoration can reset the transform without a layout resize.
+            ctx.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
             const current = latest.current;
             lastFrame = now;
             const {elapsed, ...frame} = clock.step(now, current, pointer.current);
@@ -54,7 +58,11 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
         };
 
         const tick = (now: number) => {
-            if (now - lastFrame >= 1000 / 30) draw(now);
+            if (now >= nextFrame - 0.5) {
+                draw(now);
+                nextFrame += 1000 / 30;
+                if (nextFrame < now) nextFrame = now + 1000 / 30;
+            }
             animation = requestAnimationFrame(tick);
         };
         const resize = () => {
@@ -64,13 +72,13 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
             const ratio = Math.min(window.devicePixelRatio || 1, 2);
             canvas.width = Math.round(width * ratio);
             canvas.height = Math.round(height * ratio);
-            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
             draw(performance.now());
         };
         const updateVisibility = () => {
             cancelAnimationFrame(animation);
             if (document.hidden) return;
             lastFrame = performance.now();
+            nextFrame = lastFrame + 1000 / 30;
             clock.resume(lastFrame);
             draw(lastFrame);
             if (latest.current.motion) animation = requestAnimationFrame(tick);
@@ -82,10 +90,12 @@ export default function SceneCanvas<T>({data, renderFrame, travelSpan, seekFromD
         const observer = new ResizeObserver(resize);
         observer.observe(canvas);
         resize();
+        canvas.addEventListener('contextrestored', resize);
         document.addEventListener('visibilitychange', updateVisibility);
         return () => {
             observer.disconnect();
             cancelAnimationFrame(animation);
+            canvas.removeEventListener('contextrestored', resize);
             document.removeEventListener('visibilitychange', updateVisibility);
             redraw.current = () => {};
             updateMotion.current = () => {};
