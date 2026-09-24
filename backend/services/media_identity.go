@@ -243,7 +243,7 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 		return err
 	}
 	rows.Close()
-	catalog := newMediaCatalog(indexed)
+	catalog := newMediaCatalog(indexed, files)
 	var blocked []indexedMedia
 	if !recoverOnly {
 		blocked = catalog.conflicts(files)

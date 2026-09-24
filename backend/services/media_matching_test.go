@@ -83,13 +83,19 @@ func TestMediaMatchingScenarioMatrix(t *testing.T) {
 		{name: "legacy rename and path reuse",
 			records: []indexedMedia{record(1, "original [A].m4a", "", false)},
 			files:   []AudioFileRecord{file("original [A].m4a", "B"), file("renamed [A].m4a", "A")},
-			want:    map[string]int64{"original [A].m4a": 0, "renamed [A].m4a": 1},
-			blocked: []int64{1}},
+			want:    map[string]int64{"original [A].m4a": 1, "renamed [A].m4a": 0}},
 		{name: "legacy filename swap",
 			records: []indexedMedia{record(1, "old [A].m4a", "", false), record(2, "old [B].m4a", "", false)},
 			files:   []AudioFileRecord{file("old [A].m4a", "B"), file("old [B].m4a", "A")},
-			want:    map[string]int64{"old [A].m4a": 2, "old [B].m4a": 1},
-			blocked: []int64{1, 2}},
+			want:    map[string]int64{"old [A].m4a": 1, "old [B].m4a": 2}},
+		{name: "sidecar ID overrides title tags on initial backfill",
+			records: []indexedMedia{record(1, "track [Compilation].m4a", "", false)},
+			files:   []AudioFileRecord{file("track [Compilation].m4a", "real-id")},
+			want:    map[string]int64{"track [Compilation].m4a": 1}},
+		{name: "legacy filename still matches a missing path",
+			records: []indexedMedia{record(1, "old [A].m4a", "", false)},
+			files:   []AudioFileRecord{file("new [A].m4a", "A")},
+			want:    map[string]int64{"new [A].m4a": 1}},
 		{name: "stored ID overrides filename",
 			records: []indexedMedia{record(1, "old [A].m4a", "B", false)},
 			files:   []AudioFileRecord{file("new", "B")},
@@ -98,10 +104,10 @@ func TestMediaMatchingScenarioMatrix(t *testing.T) {
 			records: []indexedMedia{record(1, "a", "", false)},
 			files:   []AudioFileRecord{file("a", "A")},
 			want:    map[string]int64{"a": 1}},
-		{name: "unknown backfill cannot claim known ID",
-			records:  []indexedMedia{record(1, "a", "", false), record(2, "b", "B", false)},
-			files:    []AudioFileRecord{file("a", "B")},
-			deferred: true},
+		{name: "unknown exact path backfills even with a duplicate ID",
+			records: []indexedMedia{record(1, "a", "", false), record(2, "b", "B", false)},
+			files:   []AudioFileRecord{file("a", "B")},
+			want:    map[string]int64{"a": 1}},
 		{name: "unknown historical exact path",
 			records: []indexedMedia{record(1, "a", "", true)},
 			files:   []AudioFileRecord{file("a", "")},
@@ -129,7 +135,7 @@ func TestMediaMatchingScenarioMatrix(t *testing.T) {
 					if reverseFiles {
 						slices.Reverse(files)
 					}
-					catalog := newMediaCatalog(records)
+					catalog := newMediaCatalog(records, files)
 					var blocked []int64
 					for _, old := range catalog.conflicts(files) {
 						blocked = append(blocked, old.id)

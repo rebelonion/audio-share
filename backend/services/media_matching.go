@@ -22,16 +22,25 @@ type mediaCatalog struct {
 	byID    map[string][]indexedMedia
 }
 
-// Historical identity never comes from the current occupant of a path.
-func newMediaCatalog(records []indexedMedia) mediaCatalog {
+// Stored IDs are authoritative. Initial exact-path backfill trusts the current
+// sidecar; historical filename hints are only needed without an active path match.
+func newMediaCatalog(records []indexedMedia, files []AudioFileRecord) mediaCatalog {
 	c := mediaCatalog{
 		owners:  make(map[string]indexedMedia),
 		history: make(map[string][]indexedMedia),
 		byID:    make(map[string][]indexedMedia),
 	}
+	currentIDs := make(map[string]string)
+	for _, a := range files {
+		currentIDs[a.Path] = a.MediaID
+	}
 	for _, old := range records {
 		if old.mediaID == "" {
-			old.mediaID = mediaIDFromFilename(old.filename)
+			if currentID, present := currentIDs[old.path]; !old.deleted && present {
+				old.mediaID = currentID
+			} else {
+				old.mediaID = mediaIDFromFilename(old.filename)
+			}
 		}
 		if old.deleted {
 			c.history[old.path] = append(c.history[old.path], old)
@@ -85,9 +94,6 @@ func (c mediaCatalog) plan(files []AudioFileRecord, recoverOnly bool, pathMissin
 				continue
 			}
 			old, exact = indexedMedia{}, false
-		}
-		if !recoverOnly && exact && old.mediaID == "" && a.MediaID != "" && len(c.byID[a.MediaID]) > 0 {
-			return nil, conflict(a.Path, "cannot backfill an unknown identity with an ID already held by another record")
 		}
 		if !recoverOnly && !exact {
 			var historical []indexedMedia

@@ -1366,66 +1366,71 @@ func TestIntegrationMediaDuplicateIDRestoresUniqueHistoricalPath(t *testing.T) {
 	}
 }
 
-func TestIntegrationMediaFirstIndexPreservesLegacyFilenameIdentity(t *testing.T) {
-	for _, incomplete := range []bool{false, true} {
-		t.Run(fmt.Sprintf("incomplete=%v", incomplete), func(t *testing.T) {
-			f := newMediaFixture(t)
-			const original = "original [A].m4a"
-			const renamed = "renamed [A].m4a"
-			f.write(t, original, "A", "audio A")
-			f.index(t)
-			a, key := f.record(t, original)
-			f.seedFavoriteAndWaveform(t, a)
-			if _, err := f.db.db.Exec(`INSERT INTO play_events(audio_file_id) VALUES($1)`, a); err != nil {
-				t.Fatal(err)
-			}
-			// Existing rows have no stored media ID immediately after migration.
-			if _, err := f.db.db.Exec(`UPDATE audio_files SET media_id=NULL WHERE id=$1`, a); err != nil {
-				t.Fatal(err)
-			}
-			f.write(t, original, "B", "audio B")
-			f.write(t, renamed, "A", "audio A")
-			if incomplete {
-				f.write(t, "broken.m4a", "broken", "neighbor audio")
-				if err := os.Remove(filepath.Join(f.dir, "broken.info.json")); err != nil {
-					t.Fatal(err)
-				}
-			}
-			f.index(t)
-			if incomplete {
-				var mediaID string
-				var deleted int
-				var conflicted bool
-				if err := f.db.db.QueryRow(`SELECT media_id,deleted,identity_conflicted FROM audio_files WHERE id=$1`, a).Scan(&mediaID, &deleted, &conflicted); err != nil {
-					t.Fatal(err)
-				}
-				if mediaID != "A" || deleted != 1 || !conflicted {
-					t.Fatalf("legacy identity not retained and blocked: id=%s deleted=%d conflicted=%v", mediaID, deleted, conflicted)
-				}
-				f.write(t, "broken.m4a", "broken", "neighbor audio")
-			}
-			for range 2 {
+func TestIntegrationMediaInitialBackfillTrustsSidecarOverTitleTags(t *testing.T) {
+	for _, tag := range []string{"Compilation", "Size Difference", "Handholding"} {
+		for _, incomplete := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/incomplete=%v", tag, incomplete), func(t *testing.T) {
+				f := newMediaFixture(t)
+				name := "track [" + tag + "].m4a"
+				f.write(t, name, "real-id", "original audio")
 				f.index(t)
-				if id, gotKey := f.record(t, renamed); id != a || gotKey != key {
-					t.Fatal("legacy recording lost its original identity")
-				}
-				if id, gotKey := f.record(t, original); id == a || gotKey == key {
-					t.Fatal("replacement inherited the original identity")
-				}
-				var mediaID string
-				var likes, plays, count int
-				if err := f.db.db.QueryRow(`SELECT media_id,
-					(SELECT count(*) FROM likes WHERE audio_file_id=$1),
-					(SELECT count(*) FROM play_events WHERE audio_file_id=$1),
-					(SELECT count(*) FROM audio_files WHERE media_id='A')
-					FROM audio_files WHERE id=$1`, a).Scan(&mediaID, &likes, &plays, &count); err != nil {
+				id, key := f.record(t, name)
+				f.seedFavoriteAndWaveform(t, id)
+				if _, err := f.db.db.Exec(`INSERT INTO play_events(audio_file_id) VALUES($1)`, id); err != nil {
 					t.Fatal(err)
 				}
-				if mediaID != "A" || likes != 1 || plays != 1 || count != 1 {
-					t.Fatalf("legacy history changed: media=%s likes=%d plays=%d records=%d", mediaID, likes, plays, count)
+				if _, err := f.db.db.Exec(`UPDATE audio_files SET media_id=NULL WHERE id=$1`, id); err != nil {
+					t.Fatal(err)
 				}
-			}
-		})
+				if incomplete {
+					f.write(t, "broken.m4a", "broken", "neighbor audio")
+					if err := os.Remove(filepath.Join(f.dir, "broken.info.json")); err != nil {
+						t.Fatal(err)
+					}
+					f.index(t)
+					var mediaID sql.NullString
+					var deleted int
+					var conflicted bool
+					if err := f.db.db.QueryRow(`SELECT media_id,deleted,identity_conflicted FROM audio_files WHERE id=$1`, id).Scan(&mediaID, &deleted, &conflicted); err != nil {
+						t.Fatal(err)
+					}
+					if mediaID.Valid || deleted != 0 || conflicted {
+						t.Fatalf("incomplete backfill changed record: id=%v deleted=%d conflicted=%v", mediaID, deleted, conflicted)
+					}
+					f.write(t, "broken.m4a", "broken", "neighbor audio")
+				}
+				for range 2 {
+					f.index(t)
+					if gotID, gotKey := f.record(t, name); gotID != id || gotKey != key {
+						t.Fatal("backfill changed share identity")
+					}
+					var mediaID string
+					var likes, plays, count, cache, deleted int
+					var conflicted bool
+					if err := f.db.db.QueryRow(`SELECT media_id,deleted,identity_conflicted,
+						(SELECT count(*) FROM likes WHERE audio_file_id=$1),
+						(SELECT count(*) FROM play_events WHERE audio_file_id=$1),
+						(SELECT count(*) FROM audio_files WHERE path=$2),
+						(SELECT count(*) FROM waveform_cache WHERE audio_file_id=$1)
+						FROM audio_files WHERE id=$1`, id, "audio/"+name).Scan(&mediaID, &deleted, &conflicted, &likes, &plays, &count, &cache); err != nil {
+						t.Fatal(err)
+					}
+					if mediaID != "real-id" || deleted != 0 || conflicted || likes != 1 || plays != 1 || count != 1 || cache != 1 {
+						t.Fatalf("backfill: media=%s deleted=%d conflicted=%v likes=%d plays=%d records=%d cache=%d", mediaID, deleted, conflicted, likes, plays, count, cache)
+					}
+				}
+				// After backfill, a different sidecar ID must no longer reuse the record.
+				f.write(t, name, "different-id", "replacement audio")
+				f.index(t)
+				if gotID, gotKey := f.record(t, name); gotID == id || gotKey == key {
+					t.Fatal("stored identity was overwritten by a later replacement")
+				}
+				var conflicted bool
+				if err := f.db.db.QueryRow(`SELECT identity_conflicted FROM audio_files WHERE id=$1 AND deleted=1`, id).Scan(&conflicted); err != nil || !conflicted {
+					t.Fatalf("stored identity not protected: conflict=%v err=%v", conflicted, err)
+				}
+			})
+		}
 	}
 }
 
