@@ -77,7 +77,11 @@ func (c mediaCatalog) plan(files []AudioFileRecord, recoverOnly bool, pathMissin
 	}
 	for id, count := range diskCounts {
 		if count > 1 || len(c.byID[id]) > 1 {
-			log.Printf("Ambiguous media ID %q in %s: %d files, %d records; keeping records separate", id, files[0].ParentPath, count, len(c.byID[id]))
+			err := fmt.Errorf("ambiguous media ID %q: %d files, %d records; keeping records separate", id, count, len(c.byID[id]))
+			log.Printf("%s: %v", files[0].ParentPath, err)
+			if !recoverOnly {
+				failure("identity-ambiguous", files[0].ParentPath, err)
+			}
 		}
 	}
 	var updates []mediaUpdate

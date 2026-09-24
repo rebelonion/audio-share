@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,68 @@ import (
 	"testing"
 	"time"
 )
+
+func TestIntegrationAmbiguousMediaIDsNotifyWithoutBlockingIndex(t *testing.T) {
+	for _, removeDuplicate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("historical-duplicate=%v", removeDuplicate), func(t *testing.T) {
+			f := newMediaFixture(t)
+			ids := []string{"ambiguous-A", "ambiguous-B", "ambiguous-C"}
+			for _, id := range ids {
+				f.write(t, "channel/"+id+".m4a", id, "audio")
+				f.write(t, "channel/old-"+id+".m4a", id, "audio")
+			}
+			f.index(t)
+			keys := make(map[string]string)
+			for _, id := range ids {
+				_, keys[id] = f.record(t, "channel/"+id+".m4a")
+				if removeDuplicate {
+					f.remove(t, "channel/old-"+id+".m4a")
+				}
+			}
+			f.write(t, "other/new.m4a", "unique", "new audio")
+			bodies := make(chan string, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				bodies <- string(body)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			f.db.Errors = NewErrorReporter(f.db.DB(), "test", testErrorPolicy(), NewNtfyService(server.URL, "errors", "", 3, ""))
+			f.index(t)
+			var reports, count int
+			if err := f.db.DB().QueryRow(`SELECT count(*), COALESCE(sum((context->'failureCounts'->>'identity-ambiguous')::int),0) FROM error_reports WHERE operation='reindex'`).Scan(&reports, &count); err != nil {
+				t.Fatal(err)
+			}
+			if reports != 1 || count != 3 {
+				t.Fatalf("reports=%d ambiguity count=%d; want one report with three IDs", reports, count)
+			}
+			for _, id := range ids {
+				_, key := f.record(t, "channel/"+id+".m4a")
+				if key != keys[id] {
+					t.Fatalf("share key changed for %s", id)
+				}
+			}
+			f.record(t, "other/new.m4a")
+			var blocked int
+			if err := f.db.DB().QueryRow(`SELECT count(*) FROM audio_files WHERE identity_conflicted`).Scan(&blocked); err != nil || blocked != 0 {
+				t.Fatalf("blocked=%d err=%v", blocked, err)
+			}
+			if err := f.db.Errors.Process(); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case body := <-bodies:
+				for _, text := range append(ids, "audio/channel", "3 ambiguous media IDs", "0 folders deferred") {
+					if !strings.Contains(body, text) {
+						t.Fatalf("alert missing %q: %s", text, body)
+					}
+				}
+			default:
+				t.Fatal("no ntfy alert delivered")
+			}
+		})
+	}
+}
 
 type mediaFixture struct {
 	db  *Database

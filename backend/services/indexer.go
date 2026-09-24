@@ -108,8 +108,8 @@ func (s *indexJob) rebuildIndex() error {
 	defer func() {
 		if s.metadataFailures+s.skippedFiles > 0 {
 			details := s.failures.Context()
-			details.Message = fmt.Sprintf("Index scan issues: %d folder retries, %d retries succeeded, %d retries deferred, %d retries failed; %d folders deferred in total",
-				details.FailureCounts["retry"], details.FailureCounts["retry-succeeded"], details.FailureCounts["retry-deferred"], details.FailureCounts["retry-failed"], len(s.deferredFolders))
+			details.Message = fmt.Sprintf("Index scan issues: %d ambiguous media IDs; %d folder retries, %d retries succeeded, %d retries deferred, %d retries failed; %d folders deferred in total",
+				details.FailureCounts["identity-ambiguous"], details.FailureCounts["retry"], details.FailureCounts["retry-succeeded"], details.FailureCounts["retry-deferred"], details.FailureCounts["retry-failed"], len(s.deferredFolders))
 			s.reporter.Report("worker", ErrorEvent{Operation: "reindex", Stage: "run", Cause: "partial-failure", Outcome: "degraded", FailedItems: s.metadataFailures + s.skippedFiles, Context: details})
 		}
 	}()
