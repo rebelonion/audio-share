@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -114,6 +115,9 @@ func TestIntegrationJobsWriteThroughLockConnection(t *testing.T) {
 		cmd := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", filepath.Join(directory, "track.wav"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("generate audio: %v: %s", err, output)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "track.info.json"), []byte(`{}`), 0600); err != nil {
+			t.Fatal(err)
 		}
 		if err := NewSearchService(db, fs, nil).RebuildIndex(); err != nil {
 			t.Fatal(err)

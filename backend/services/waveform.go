@@ -62,10 +62,10 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 	log.Println("Waveform: starting generation job")
 
 	rows, err := conn.QueryContext(ctx, `
-		SELECT af.id, af.path
+		SELECT af.id, af.path, af.media_revision, af.size, af.file_mtime_ns
 		FROM audio_files af
 		LEFT JOIN waveform_cache wc ON wc.audio_file_id = af.id
-		WHERE wc.id IS NULL AND af.deleted = 0
+		WHERE wc.id IS NULL AND af.deleted = 0 AND af.file_mtime_ns IS NOT NULL
 		ORDER BY af.downloaded_at DESC NULLS LAST, af.id DESC
 	`)
 	if err != nil {
@@ -73,8 +73,9 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 	}
 
 	type fileRow struct {
-		id   int64
-		path string
+		id                      int64
+		path                    string
+		revision, size, mtimeNS int64
 	}
 	var files []fileRow
 	var failed, attempted atomic.Int64
@@ -86,7 +87,7 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 	}()
 	for rows.Next() {
 		var f fileRow
-		if err := rows.Scan(&f.id, &f.path); err != nil {
+		if err := rows.Scan(&f.id, &f.path, &f.revision, &f.size, &f.mtimeNS); err != nil {
 			examples.Add("scan", "", err)
 			failed.Add(1)
 			continue
@@ -148,11 +149,23 @@ dispatch:
 				return
 			}
 
+			statCtx, cancelStat := context.WithTimeout(ctx, MediaPreparationTimeout)
+			info, err := s.fs.StatMedia(statCtx, fullPath)
+			cancelStat()
+			if err != nil {
+				log.Printf("Waveform: failed to validate %s: %v", f.path, err)
+				if ctx.Err() == nil {
+					examples.Add("stat", f.path, err)
+					failed.Add(1)
+				}
+				return
+			}
+			if info.Size() != f.size || info.ModTime().UnixNano() != f.mtimeNS {
+				log.Printf("Waveform: file changed while generating %s; retry after indexing", f.path)
+				return
+			}
 			encoded := base64.StdEncoding.EncodeToString(peaks)
-			_, err = conn.ExecContext(ctx, `
-				INSERT INTO waveform_cache (audio_file_id, peaks, duration_seconds) VALUES ($1, $2, $3)
-				ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks, duration_seconds = excluded.duration_seconds, generated_at = CURRENT_TIMESTAMP
-			`, f.id, encoded, duration)
+			_, err = storeWaveform(ctx, conn, f.id, f.revision, encoded, duration)
 			if err != nil {
 				cancel(fmt.Errorf("waveform store %s: %w", f.path, err))
 				return
@@ -321,4 +334,16 @@ func smoothPeaks(peaks []float64, radius int) []float64 {
 		smoothed[i] = sum / float64(end-start+1)
 	}
 	return smoothed
+}
+
+func storeWaveform(ctx context.Context, conn *sql.Conn, id, revision int64, peaks string, duration float64) (sql.Result, error) {
+	return conn.ExecContext(ctx, `
+		WITH current_media AS (
+			SELECT id FROM audio_files WHERE id = $1 AND media_revision = $4 AND deleted = 0 FOR UPDATE
+		)
+		INSERT INTO waveform_cache (audio_file_id, peaks, duration_seconds)
+		SELECT id, $2, $3 FROM current_media
+		ON CONFLICT(audio_file_id) DO UPDATE SET peaks = excluded.peaks,
+			duration_seconds = excluded.duration_seconds, generated_at = CURRENT_TIMESTAMP
+	`, id, peaks, duration, revision)
 }

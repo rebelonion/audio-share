@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -218,6 +219,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 	}
 
 	row, err := h.lookupByKey(key)
+
 	if err == sql.ErrNoRows || (err == nil && row.deleted) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "audio_not_found"})
 		return
@@ -375,9 +377,13 @@ func (h *AudioHandler) lookupByKey(key string) (*audioRow, error) {
 }
 
 func lookupAudioByKey(db *sql.DB, key string) (*audioRow, error) {
+	return lookupAudioByKeyContext(context.Background(), db, key)
+}
+
+func lookupAudioByKeyContext(ctx context.Context, db *sql.DB, key string) (*audioRow, error) {
 	var row audioRow
 	var deletedInt int
-	err := db.QueryRow(`
+	err := db.QueryRowContext(ctx, `
 		SELECT id, path, deleted, unavailable_at, removal_requested_at, thumbnail, title, meta_artist, upload_date,
 		       webpage_url, description, age_limit, parent_path
 		FROM audio_files WHERE share_key = $1
@@ -407,6 +413,22 @@ func (h *AudioHandler) resolveFullPath(virtualPath string) (string, bool) {
 		return "", false
 	}
 	return h.fs.ValidatePath(parts[0], parts[1])
+}
+
+func (h *AudioHandler) recoverAudio(ctx context.Context, key string, row *audioRow) (*audioRow, error) {
+	if err := services.RecoverMissingAudio(ctx, h.db, h.fs, row.id); err != nil {
+		return nil, err
+	}
+	return lookupAudioByKeyContext(ctx, h.db, key)
+}
+
+func writeAudioUnavailable(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "30")
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+		"error":   "audio_unavailable",
+		"message": "This audio is currently unavailable. Please try again shortly.",
+	})
 }
 
 func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key string, download bool) {
@@ -463,7 +485,9 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		return
 	}
 
-	row, err := h.lookupByKey(key)
+	ctx, cancel := context.WithTimeout(r.Context(), services.MediaPreparationTimeout)
+	defer cancel()
+	row, err := lookupAudioByKeyContext(ctx, h.db, key)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
@@ -477,41 +501,57 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		http.Error(w, "Gone", http.StatusGone)
 		return
 	}
-	if row.removalRequestedAt.Valid {
-		w.Header().Set("Cache-Control", "private, no-store")
-	}
 	if row.removalRestricted(r) {
+		w.Header().Set("Cache-Control", "private, no-store")
 		writeJSON(w, http.StatusGone, map[string]string{"error": "removal_requested"})
 		return
 	}
-
 	fullPath, valid := h.resolveFullPath(row.path)
 	if !valid {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
-
-	info, err := os.Stat(fullPath)
-	if err != nil || info.IsDir() {
-		services.AnnotateFileError(r.Context(), err, fullPath, "blocked")
-		http.Error(w, "Not found", http.StatusNotFound)
+	_, statErr := h.fs.StatMedia(ctx, fullPath)
+	if os.IsNotExist(statErr) {
+		row, err = h.recoverAudio(ctx, key, row)
+		if err != nil {
+			services.AnnotateMediaIOError(r.Context(), err, fullPath)
+			writeAudioUnavailable(w)
+			return
+		}
+		if row.deleted {
+			http.Error(w, "Gone", http.StatusGone)
+			return
+		}
+		if row.removalRestricted(r) {
+			w.Header().Set("Cache-Control", "private, no-store")
+			writeJSON(w, http.StatusGone, map[string]string{"error": "removal_requested"})
+			return
+		}
+		fullPath, valid = h.resolveFullPath(row.path)
+		if !valid {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+	} else if statErr != nil {
+		services.AnnotateMediaIOError(r.Context(), statErr, fullPath)
+		writeAudioUnavailable(w)
 		return
 	}
+	file, info, err := h.fs.OpenMedia(ctx, fullPath)
+	if err != nil {
+		services.AnnotateMediaIOError(r.Context(), err, fullPath)
+		writeAudioUnavailable(w)
+		return
+	}
+	defer file.Close()
+	cancel()
 
 	ext := strings.ToLower(filepath.Ext(fullPath))
 	contentType := h.mimeTypes[ext]
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-
-	file, err := os.Open(fullPath)
-	if err != nil {
-		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
-		services.AnnotateError(r.Context(), "read", "io", "blocked")
-		http.Error(w, "Error opening file", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "private, no-store")

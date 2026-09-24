@@ -16,7 +16,8 @@ Defaults:
     postgres_url postgres://audio_share:audio_share@localhost:5432/audio_share
 
 The script is safe to re-run: it skips rows whose primary key already exists in
-Postgres (ON CONFLICT DO NOTHING). Run with --clear to truncate all tables first.
+Postgres (ON CONFLICT (id) DO NOTHING). Run with --clear to truncate all tables
+first, in the same transaction as the import.
 """
 
 import argparse
@@ -107,11 +108,10 @@ def migrate_table(sqlite_cur, pg_cur, table, columns, batch_size=500):
         nonlocal inserted, skipped
         if not batch:
             return
-        # Use execute_values for bulk insert; ON CONFLICT DO NOTHING skips
-        # rows that already exist (safe for re-runs).
+        # Target the primary key; deferrable path constraints cannot be arbiters.
         psycopg2.extras.execute_values(
             pg_cur,
-            f"INSERT INTO {table} ({col_list}) VALUES %s ON CONFLICT DO NOTHING",
+            f"INSERT INTO {table} ({col_list}) VALUES %s ON CONFLICT (id) DO NOTHING",
             batch,
             page_size=len(batch),
         )
@@ -176,7 +176,6 @@ def main():
     try:
         if args.clear:
             clear_tables(pg_cur)
-            pg_con.commit()
         else:
             # Warn if any table already has data.
             for table, _ in TABLES:

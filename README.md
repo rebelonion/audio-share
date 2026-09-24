@@ -215,7 +215,7 @@ Organize your audio files in your configured audio directory. The application wi
 
 ### File Metadata
 
-For each audio file, you can add optional metadata:
+Each audio file requires a valid `.info.json` metadata file. Thumbnails are optional:
 
 1. **Thumbnails**: Add an image file with the same base name as your audio file. Supported suffixes (checked in order):
    `-thumb.jpg`, `-thumb.webp`, `-thumb.png`, `.jpg`, `.webp`, `.png`
@@ -227,6 +227,7 @@ For each audio file, you can add optional metadata:
 The metadata JSON can include:
 ```json
 {
+  "id": "stable-media-id",
   "title": "Song Title",
   "meta_artist": "Artist Name",
   "upload_date": "20230215",
@@ -235,6 +236,8 @@ The metadata JSON can include:
   "epoch": 1707955200.0
 }
 ```
+
+The optional `id` field should be stable and unique within its folder, allowing renamed or replaced audio to retain its share links, likes, and playback history. If omitted, the ID is taken from a final `[id]` in the filename, such as `Song [12345].m4a`.
 
 The `epoch` field (Unix timestamp of when the file was downloaded) is used to generate stats. This is automatically present in `.info.json` files created by yt-dlp.
 

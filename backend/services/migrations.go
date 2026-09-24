@@ -20,7 +20,10 @@ var webpageURLSearchSchema string
 //go:embed migrations/004_error_context.sql
 var errorContextSchema string
 
-const SchemaVersion = 4
+//go:embed migrations/005_media_identity.sql
+var mediaIdentitySchema string
+
+const SchemaVersion = 5
 
 type schemaMigration struct {
 	version       int
@@ -33,6 +36,7 @@ var schemaMigrations = []schemaMigration{
 	{2, 1, errorReportingSchema},
 	{3, 1, webpageURLSearchSchema},
 	{4, 1, errorContextSchema},
+	{5, 5, mediaIdentitySchema},
 }
 
 // Migrate adopts the current legacy schema or creates a fresh one. All changes,

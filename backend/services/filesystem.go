@@ -45,6 +45,7 @@ type DirectoryContents struct {
 }
 
 type FileSystemService struct {
+	mediaIO     *mediaFileIO
 	audioDirs   []AudioDirConfig
 	slugToDir   map[string]AudioDirConfig
 	audioExts   map[string]string
@@ -53,6 +54,7 @@ type FileSystemService struct {
 
 func NewFileSystemService(audioDirEnv string) *FileSystemService {
 	fs := &FileSystemService{
+		mediaIO:   sharedMediaIO,
 		slugToDir: make(map[string]AudioDirConfig),
 		audioExts: map[string]string{
 			".mp3":  "audio/mpeg",

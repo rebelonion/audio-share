@@ -289,7 +289,7 @@ export function useAudioEngine({
             setIsLoading(false);
             setIsPlaying(false);
             setNotice(null);
-            setError('This track could not be loaded. You can skip it from the queue.');
+            setError('This track could not be loaded. Please try again shortly, or skip it from the queue.');
             if (audio.error?.code !== 1) {
                 reportOperationalError({operation: 'playback', stage: 'play', cause: audio.error?.code === 2
                     ? 'media-network' : audio.error?.code === 3 ? 'media-decode' : 'media-source',

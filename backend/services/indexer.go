@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,6 +31,8 @@ type FolderRecord struct {
 }
 
 type AudioFileRecord struct {
+	MediaID            string
+	FileMtimeNS        int64
 	ID                 int64
 	Path               string
 	ParentPath         string
@@ -52,6 +56,7 @@ type AudioFileRecord struct {
 }
 
 type AudioInfoJSON struct {
+	ID          string  `json:"id"`
 	Title       string  `json:"title"`
 	MetaArtist  string  `json:"meta_artist"`
 	Uploader    string  `json:"uploader"`
@@ -94,6 +99,7 @@ type indexJob struct {
 	webhookService   *WebhookService
 	reporter         *ErrorReporter
 	metadataFailures int
+	deferredFolders  []string
 	skippedFiles     int
 	failures         FailureExamples
 }
@@ -101,7 +107,10 @@ type indexJob struct {
 func (s *indexJob) rebuildIndex() error {
 	defer func() {
 		if s.metadataFailures+s.skippedFiles > 0 {
-			s.reporter.Report("worker", ErrorEvent{Operation: "reindex", Stage: "parse", Cause: "partial-failure", Outcome: "degraded", FailedItems: s.metadataFailures + s.skippedFiles, Context: s.failures.Context()})
+			details := s.failures.Context()
+			details.Message = fmt.Sprintf("Index scan issues: %d folder retries, %d retries succeeded, %d retries deferred, %d retries failed; %d folders deferred in total",
+				details.FailureCounts["retry"], details.FailureCounts["retry-succeeded"], details.FailureCounts["retry-deferred"], details.FailureCounts["retry-failed"], len(s.deferredFolders))
+			s.reporter.Report("worker", ErrorEvent{Operation: "reindex", Stage: "run", Cause: "partial-failure", Outcome: "degraded", FailedItems: s.metadataFailures + s.skippedFiles, Context: details})
 		}
 	}()
 	log.Println("Starting index rebuild...")
@@ -132,7 +141,8 @@ func (s *indexJob) rebuildIndex() error {
 	if _, err := s.conn.ExecContext(context.Background(), "DELETE FROM folders WHERE indexed_at < $1", start); err != nil {
 		return err
 	}
-	if _, err := s.conn.ExecContext(context.Background(), "UPDATE audio_files SET deleted = 1 WHERE indexed_at < $1 AND deleted = 0", start); err != nil {
+	if _, err := s.conn.ExecContext(context.Background(), `UPDATE audio_files SET deleted = 1 WHERE indexed_at < $1 AND deleted = 0
+		AND COALESCE(parent_path, '') <> ALL(COALESCE($2::text[], '{}'))`, start, s.deferredFolders); err != nil {
 		return err
 	}
 
@@ -265,7 +275,7 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") && entry.IsDir() {
+		if !entry.IsDir() || strings.HasPrefix(name, ".") {
 			continue
 		}
 
@@ -285,103 +295,82 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 		}
 
 		parentPath := s.getParentPath(virtualPath)
-		if entry.IsDir() {
-			record := FolderRecord{
-				Path:       virtualPath,
-				ParentPath: parentPath,
-				FolderName: name,
-				Name:       name,
-				UploadDate: info.ModTime().Format("20060102"),
+		record := FolderRecord{
+			Path:       virtualPath,
+			ParentPath: parentPath,
+			FolderName: name,
+			Name:       name,
+			UploadDate: info.ModTime().Format("20060102"),
+		}
+
+		if m, ok := metadataMap[name]; ok {
+			record.Name = m.Name
+			record.OriginalURL = m.OriginalURL
+		}
+
+		entryPath := filepath.Join(fullPath, name)
+		for _, posterName := range s.fs.posterNames {
+			posterPath := filepath.Join(entryPath, posterName)
+			if _, err := os.Stat(posterPath); err == nil {
+				record.PosterImage = posterName
+				break
 			}
+		}
 
-			if m, ok := metadataMap[name]; ok {
-				record.Name = m.Name
-				record.OriginalURL = m.OriginalURL
-			}
+		if err := s.insertFolder(record); err != nil {
+			return err
+		}
 
-			entryPath := filepath.Join(fullPath, name)
-			for _, posterName := range s.fs.posterNames {
-				posterPath := filepath.Join(entryPath, posterName)
-				if _, err := os.Stat(posterPath); err == nil {
-					record.PosterImage = posterName
-					break
-				}
-			}
+		childSourcePath := sourcePath
+		if record.OriginalURL != "" {
+			childSourcePath = virtualPath
+		}
 
-			if err := s.insertFolder(record); err != nil {
-				return err
-			}
-
-			childSourcePath := sourcePath
-			if record.OriginalURL != "" {
-				childSourcePath = virtualPath
-			}
-
-			subRelativePath := name
-			if relativePath != "" {
-				subRelativePath = relativePath + "/" + name
-			}
-			if err := s.indexDirectory(slug, basePath, subRelativePath, childSourcePath); err != nil {
-				return err
-			}
-		} else {
-			ext := strings.ToLower(filepath.Ext(name))
-			if mimeType, ok := s.fs.audioExts[ext]; ok {
-				record := AudioFileRecord{
-					Path:       virtualPath,
-					ParentPath: parentPath,
-					Filename:   name,
-					Size:       info.Size(),
-					MimeType:   mimeType,
-					SourcePath: sourcePath,
-				}
-
-				baseName := strings.TrimSuffix(name, filepath.Ext(name))
-
-				for _, suffix := range []string{"-thumb.jpg", "-thumb.webp", "-thumb.png", ".jpg", ".webp", ".png"} {
-					thumbPath := filepath.Join(fullPath, baseName+suffix)
-					if _, err := os.Stat(thumbPath); err == nil {
-						record.Thumbnail = baseName + suffix
-						break
-					}
-				}
-
-				infoPath := filepath.Join(fullPath, baseName+".info.json")
-				if data, err := os.ReadFile(infoPath); err == nil {
-					var infoJSON AudioInfoJSON
-					if err := json.Unmarshal(data, &infoJSON); err == nil {
-						record.Title = infoJSON.Title
-						record.MetaArtist = infoJSON.MetaArtist
-						if record.MetaArtist == "" {
-							record.MetaArtist = infoJSON.Uploader
-						}
-						record.UploadDate = infoJSON.UploadDate
-						record.WebpageURL = infoJSON.WebpageURL
-						record.Description = infoJSON.Description
-						if infoJSON.Epoch > 0 {
-							record.DownloadedAt = time.Unix(int64(infoJSON.Epoch), 0).Format("2006-01-02T15:04:05Z")
-						}
-						record.AgeLimit = infoJSON.AgeLimit
-					} else {
-						s.failures.Add("parse", infoPath, err)
-						s.metadataFailures++
-					}
-				} else if !os.IsNotExist(err) {
-					s.failures.Add("read", infoPath, err)
-					s.metadataFailures++
-				}
-				if record.UploadDate == "" {
-					record.UploadDate = info.ModTime().Format("20060102")
-				}
-
-				if err := s.insertAudioFile(record); err != nil {
-					return err
-				}
-			}
+		subRelativePath := name
+		if relativePath != "" {
+			subRelativePath = relativePath + "/" + name
+		}
+		if err := s.indexDirectory(slug, basePath, subRelativePath, childSourcePath); err != nil {
+			return err
 		}
 	}
 
-	return nil
+	parent := slug
+	if relativePath != "" {
+		parent += "/" + relativePath
+	}
+	reconcile := func() error {
+		return reconcileAudioDirectory(context.Background(), s.conn, s.fs, parent, sourcePath, false, func(stage, path string, err error) {
+			s.failures.Add(stage, path, err)
+			if stage == "stat" || stage == "validate" {
+				s.skippedFiles++
+			} else {
+				s.metadataFailures++
+			}
+		})
+	}
+	err = reconcile()
+	if errors.Is(err, errAudioFileChanged) {
+		s.failures.Add("retry", parent, errors.New("Retrying folder once after file changed during validation"))
+		log.Printf("Retrying audio reconciliation for %s after file changed during validation", parent)
+		err = reconcile()
+		step, message := "retry-succeeded", "Folder retry succeeded"
+		if errors.Is(err, errIncompleteAudioDirectory) {
+			step, message = "retry-deferred", "Folder retry incomplete; preserving records until the next index"
+		} else if err != nil {
+			step, message = "retry-failed", "Folder retry failed: "+err.Error()
+		}
+		s.failures.Add(step, parent, errors.New(message))
+		log.Printf("%s: %s", message, parent)
+	}
+	if errors.Is(err, errIncompleteAudioDirectory) {
+		// The final sweep must not treat a deferred scan as evidence of deletion.
+		s.deferredFolders = append(s.deferredFolders, parent)
+		s.failures.Add("deferred", parent, errors.New("Folder scan incomplete; existing records excluded from deletion reconciliation"))
+		log.Printf("Deferring audio reconciliation for %s after scan errors", parent)
+		return nil
+	}
+	return err
 }
 
 func (s *indexJob) getParentPath(path string) string {
@@ -414,40 +403,5 @@ func (s *indexJob) insertFolder(f FolderRecord) error {
 			indexed_at = CURRENT_TIMESTAMP
 	`, f.Path, f.ParentPath, f.FolderName, f.Name, f.OriginalURL,
 		f.PosterImage, f.UploadDate, shareKey)
-	return err
-}
-
-func (s *indexJob) insertAudioFile(a AudioFileRecord) error {
-	shareKey, err := generateShareKey()
-	if err != nil {
-		return err
-	}
-
-	_, err = s.conn.ExecContext(context.Background(), `
-		INSERT INTO audio_files
-		(path, parent_path, filename, size, mime_type,
-		 title, meta_artist, upload_date, webpage_url, description,
-		 downloaded_at, source_path, thumbnail, age_limit, share_key, deleted, indexed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, CURRENT_TIMESTAMP)
-		ON CONFLICT(path) DO UPDATE SET
-			parent_path = excluded.parent_path,
-			filename = excluded.filename,
-			size = excluded.size,
-			mime_type = excluded.mime_type,
-			title = excluded.title,
-			meta_artist = excluded.meta_artist,
-			upload_date = excluded.upload_date,
-			webpage_url = excluded.webpage_url,
-			description = excluded.description,
-			downloaded_at = excluded.downloaded_at,
-			source_path = excluded.source_path,
-			thumbnail = excluded.thumbnail,
-			age_limit = excluded.age_limit,
-			share_key = COALESCE(audio_files.share_key, excluded.share_key),
-			deleted = 0,
-			indexed_at = CURRENT_TIMESTAMP
-	`, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType,
-		a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
-		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, shareKey)
 	return err
 }
