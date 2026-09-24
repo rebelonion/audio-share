@@ -487,13 +487,20 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 
 	ctx, cancel := context.WithTimeout(r.Context(), services.MediaPreparationTimeout)
 	defer cancel()
+	timings := make(map[string]int64, 4)
+	defer func() {
+		services.AddErrorContext(r.Context(), services.ErrorContext{TimingsMS: timings})
+	}()
+	started := time.Now()
 	row, err := lookupAudioByKeyContext(ctx, h.db, key)
+	timings["database-lookup"] = time.Since(started).Milliseconds()
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "database-lookup"})
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
@@ -511,11 +518,16 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
+	started = time.Now()
 	_, statErr := h.fs.StatMedia(ctx, fullPath)
+	timings["file-stat"] = time.Since(started).Milliseconds()
 	if os.IsNotExist(statErr) {
+		started = time.Now()
 		row, err = h.recoverAudio(ctx, key, row)
+		timings["recovery"] = time.Since(started).Milliseconds()
 		if err != nil {
 			services.AnnotateMediaIOError(r.Context(), err, fullPath)
+			services.AddErrorContext(r.Context(), services.ErrorContext{Step: "recovery"})
 			writeAudioUnavailable(w)
 			return
 		}
@@ -535,12 +547,16 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		}
 	} else if statErr != nil {
 		services.AnnotateMediaIOError(r.Context(), statErr, fullPath)
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "file-stat"})
 		writeAudioUnavailable(w)
 		return
 	}
+	started = time.Now()
 	file, info, err := h.fs.OpenMedia(ctx, fullPath)
+	timings["file-open"] = time.Since(started).Milliseconds()
 	if err != nil {
 		services.AnnotateMediaIOError(r.Context(), err, fullPath)
+		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "file-open"})
 		writeAudioUnavailable(w)
 		return
 	}

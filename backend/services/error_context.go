@@ -17,17 +17,18 @@ import (
 
 // ErrorContext contains diagnostics, never request bodies, headers, or cookies.
 type ErrorContext struct {
-	Route          string         `json:"route,omitempty"`
-	Endpoint       string         `json:"endpoint,omitempty"`
-	Resource       string         `json:"resource,omitempty"`
-	Step           string         `json:"step,omitempty"`
-	Message        string         `json:"message,omitempty"`
-	Stack          string         `json:"stack,omitempty"`
-	ComponentStack string         `json:"componentStack,omitempty"`
-	DurationMS     int64          `json:"durationMs,omitempty"`
-	Online         *bool          `json:"online,omitempty"`
-	Failures       []ErrorContext `json:"failures,omitempty"`
-	FailureCounts  map[string]int `json:"failureCounts,omitempty"`
+	Route          string           `json:"route,omitempty"`
+	Endpoint       string           `json:"endpoint,omitempty"`
+	Resource       string           `json:"resource,omitempty"`
+	Step           string           `json:"step,omitempty"`
+	Message        string           `json:"message,omitempty"`
+	Stack          string           `json:"stack,omitempty"`
+	ComponentStack string           `json:"componentStack,omitempty"`
+	DurationMS     int64            `json:"durationMs,omitempty"`
+	TimingsMS      map[string]int64 `json:"timingsMs,omitempty"`
+	Online         *bool            `json:"online,omitempty"`
+	Failures       []ErrorContext   `json:"failures,omitempty"`
+	FailureCounts  map[string]int   `json:"failureCounts,omitempty"`
 }
 
 var diagnosticURL = regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s<>"']+`)
@@ -77,6 +78,16 @@ func (c ErrorContext) sanitized() ErrorContext {
 	if c.DurationMS < 0 {
 		c.DurationMS = 0
 	}
+	timings := make(map[string]int64)
+	for step, duration := range c.TimingsMS {
+		if len(timings) == 10 {
+			break
+		}
+		if duration >= 0 {
+			timings[SafeDiagnosticLabel(step)] = duration
+		}
+	}
+	c.TimingsMS = timings
 	if len(c.Failures) > 5 {
 		c.Failures = c.Failures[:5]
 	}
@@ -148,6 +159,9 @@ func AddErrorContext(ctx context.Context, details ErrorContext) {
 		if details.Stack != "" {
 			event.Context.Stack = details.Stack
 		}
+		if len(details.TimingsMS) > 0 {
+			event.Context.TimingsMS = details.TimingsMS
+		}
 	}
 }
 
@@ -199,6 +213,10 @@ func diagnosticSummary(raw []byte) string {
 	}
 	if c.DurationMS > 0 {
 		lines = append(lines, fmt.Sprintf("Duration: %dms", c.DurationMS))
+	}
+	if len(c.TimingsMS) > 0 {
+		timings, _ := json.Marshal(c.TimingsMS)
+		lines = append(lines, "Operation timings (ms): "+string(timings))
 	}
 	if c.Online != nil {
 		lines = append(lines, fmt.Sprintf("Browser online: %t", *c.Online))

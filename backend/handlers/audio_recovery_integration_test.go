@@ -263,3 +263,95 @@ func TestIntegrationAudioKnownIdentityMismatchBlocksExistingGrants(t *testing.T)
 		})
 	}
 }
+
+func TestIntegrationPlaybackPreparationErrorTimings(t *testing.T) {
+	for _, step := range []string{"database-lookup", "file-stat", "recovery", "file-open"} {
+		t.Run(step, func(t *testing.T) {
+			db := recoveryDatabase(t)
+			dir := t.TempDir()
+			path := filepath.Join(dir, "track.m4a")
+			if err := os.WriteFile(path, []byte("audio"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "track.info.json"), []byte(`{"id":"track"}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			fs := services.NewFileSystemService(dir + ":Audio")
+			if err := services.NewSearchService(db, fs, nil).RebuildIndex(); err != nil {
+				t.Fatal(err)
+			}
+			var key string
+			if err := db.DB().QueryRow(`SELECT share_key FROM audio_files`).Scan(&key); err != nil {
+				t.Fatal(err)
+			}
+			manager := newTestHandlerAccessKeyManager(t, "10/1m")
+			handler := NewAudioHandler(fs, db.DB(), AudioHandlerOptions{SessionSecret: "test-secret", AccessKeys: manager})
+			grant, err := manager.IssueCaptchaCleared("session-one", "192.0.2.1", key, services.MediaPurposeStream)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := signedAudioRequest(http.MethodGet, "https://example.test/api/audio/key/"+key+"?access_key="+grant.AccessKey, "", "test-secret", "session-one")
+			event := services.ErrorEvent{}
+			ctx := services.WithRequestError(req.Context(), &event)
+			if step == "database-lookup" {
+				db.DB().SetMaxOpenConns(1)
+				conn, err := db.DB().Conn(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer conn.Close()
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
+				defer cancel()
+			} else {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+				switch step {
+				case "recovery":
+					if err := os.WriteFile(filepath.Join(dir, "replacement.m4a"), []byte("audio"), 0600); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(filepath.Join(dir, "replacement.info.json"), []byte(`{"id":`), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "file-stat":
+					if err := os.Symlink(path, path); err != nil {
+						t.Fatal(err)
+					}
+				case "file-open":
+					if err := os.Mkdir(path, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req.WithContext(ctx))
+			wantStatus := http.StatusServiceUnavailable
+			if step == "database-lookup" {
+				wantStatus = http.StatusInternalServerError
+			}
+			if rec.Code != wantStatus || event.Context.Step != step {
+				t.Fatalf("status=%d step=%q context=%+v", rec.Code, event.Context.Step, event.Context)
+			}
+			want := []string{"database-lookup"}
+			if step != "database-lookup" {
+				want = append(want, "file-stat")
+				if step != "file-stat" {
+					want = append(want, step)
+				}
+			}
+			if len(event.Context.TimingsMS) != len(want) {
+				t.Fatalf("unexpected timings: %v", event.Context.TimingsMS)
+			}
+			for _, name := range want {
+				if duration, ok := event.Context.TimingsMS[name]; !ok || duration < 0 {
+					t.Fatalf("missing timing for %s: %v", name, event.Context.TimingsMS)
+				}
+			}
+			if step == "database-lookup" && event.Context.TimingsMS[step] < 100 {
+				t.Fatalf("connection-pool wait not measured: %v", event.Context.TimingsMS)
+			}
+		})
+	}
+}

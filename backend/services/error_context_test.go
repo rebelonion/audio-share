@@ -48,12 +48,15 @@ func TestDiagnosticContextRedactionAndBounds(t *testing.T) {
 	if len(long) > 103 || !utf8.ValidString(long) {
 		t.Fatalf("invalid truncation: %q", long)
 	}
-	context := ErrorContext{Stack: strings.Repeat("s", 4000)}
+	context := ErrorContext{Stack: strings.Repeat("s", 4000), TimingsMS: make(map[string]int64)}
+	for i := range 20 {
+		context.TimingsMS[fmt.Sprintf("step-%d", i)] = int64(i)
+	}
 	for range 10 {
 		context.Failures = append(context.Failures, ErrorContext{Message: input, Failures: []ErrorContext{{Message: input}}})
 	}
 	safe := context.sanitized()
-	if len(safe.Failures) != 5 || len(safe.Stack) > 3003 || len(safe.Failures[0].Failures) != 0 {
+	if len(safe.TimingsMS) != 10 || len(safe.Failures) != 5 || len(safe.Stack) > 3003 || len(safe.Failures[0].Failures) != 0 {
 		t.Fatalf("unbounded context: %+v", safe)
 	}
 }
@@ -133,7 +136,7 @@ func TestIntegrationErrorContextPersistsAndAppearsInAlerts(t *testing.T) {
 	reporter := NewErrorReporter(db.DB(), "build", policy, NewNtfyService(server.URL, "errors", "", 3, ""))
 	for i := range 3 {
 		event := ErrorEvent{Operation: "artwork", Method: "GET", Stage: "read", Cause: "missing-file", Outcome: "degraded", Status: 404,
-			Context: ErrorContext{Route: fmt.Sprintf("/api/audio/key/track-%d/thumbnail?token=private-secret", i), Resource: fmt.Sprintf("source/poster-%d.jpg", i), Message: "open: no such file", Stack: "example stack"}}
+			Context: ErrorContext{Route: fmt.Sprintf("/api/audio/key/track-%d/thumbnail?token=private-secret", i), Resource: fmt.Sprintf("source/poster-%d.jpg", i), Message: "open: no such file", Stack: "example stack", TimingsMS: map[string]int64{"database-lookup": 4, "file-stat": 4996}}}
 		if err := reporter.Record(context.Background(), "server", "", event); err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +156,7 @@ func TestIntegrationErrorContextPersistsAndAppearsInAlerts(t *testing.T) {
 	if err := json.Unmarshal(raw, &details); err != nil {
 		t.Fatal(err)
 	}
-	if details.Stack != "example stack" || strings.Contains(string(raw), "private-secret") {
+	if details.TimingsMS["database-lookup"] != 4 || details.TimingsMS["file-stat"] != 4996 || details.Stack != "example stack" || strings.Contains(string(raw), "private-secret") {
 		t.Fatalf("bad stored context: %s", raw)
 	}
 	if err := reporter.Process(); err != nil {
@@ -161,7 +164,7 @@ func TestIntegrationErrorContextPersistsAndAppearsInAlerts(t *testing.T) {
 	}
 	select {
 	case body := <-bodies:
-		if strings.Count(body, "Event:") != 2 || !strings.Contains(body, "poster-") || !strings.Contains(body, "open: no such file") || strings.Contains(body, "private-secret") || len(body) > 4096 {
+		if !strings.Contains(body, `"file-stat":4996`) || !strings.Contains(body, `"database-lookup":4`) || strings.Count(body, "Event:") != 2 || !strings.Contains(body, "poster-") || !strings.Contains(body, "open: no such file") || strings.Contains(body, "private-secret") || len(body) > 4096 {
 			t.Fatalf("bad alert: %s", body)
 		}
 	default:
