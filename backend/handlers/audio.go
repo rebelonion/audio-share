@@ -488,12 +488,13 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	ctx, cancel := context.WithTimeout(r.Context(), services.MediaPreparationTimeout)
 	defer cancel()
 	timings := make(map[string]int64, 4)
-	defer func() {
+	recordTiming := func(step string, started time.Time) {
+		timings[step] = time.Since(started).Milliseconds()
 		services.AddErrorContext(r.Context(), services.ErrorContext{TimingsMS: timings})
-	}()
+	}
 	started := time.Now()
 	row, err := lookupAudioByKeyContext(ctx, h.db, key)
-	timings["database-lookup"] = time.Since(started).Milliseconds()
+	recordTiming("database-lookup", started)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
@@ -520,11 +521,11 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	}
 	started = time.Now()
 	_, statErr := h.fs.StatMedia(ctx, fullPath)
-	timings["file-stat"] = time.Since(started).Milliseconds()
+	recordTiming("file-stat", started)
 	if os.IsNotExist(statErr) {
 		started = time.Now()
 		row, err = h.recoverAudio(ctx, key, row)
-		timings["recovery"] = time.Since(started).Milliseconds()
+		recordTiming("recovery", started)
 		if err != nil {
 			services.AnnotateMediaIOError(r.Context(), err, fullPath)
 			services.AddErrorContext(r.Context(), services.ErrorContext{Step: "recovery"})
@@ -553,7 +554,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	}
 	started = time.Now()
 	file, info, err := h.fs.OpenMedia(ctx, fullPath)
-	timings["file-open"] = time.Since(started).Milliseconds()
+	recordTiming("file-open", started)
 	if err != nil {
 		services.AnnotateMediaIOError(r.Context(), err, fullPath)
 		services.AddErrorContext(r.Context(), services.ErrorContext{Step: "file-open"})

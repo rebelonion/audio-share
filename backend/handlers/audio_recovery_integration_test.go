@@ -291,8 +291,8 @@ func TestIntegrationPlaybackPreparationErrorTimings(t *testing.T) {
 				t.Fatal(err)
 			}
 			req := signedAudioRequest(http.MethodGet, "https://example.test/api/audio/key/"+key+"?access_key="+grant.AccessKey, "", "test-secret", "session-one")
-			event := services.ErrorEvent{}
-			ctx := services.WithRequestError(req.Context(), &event)
+			recorder := &memoryErrors{}
+			ctx := req.Context()
 			if step == "database-lookup" {
 				db.DB().SetMaxOpenConns(1)
 				conn, err := db.DB().Conn(context.Background())
@@ -300,9 +300,6 @@ func TestIntegrationPlaybackPreparationErrorTimings(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer conn.Close()
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
-				defer cancel()
 			} else {
 				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
@@ -326,7 +323,11 @@ func TestIntegrationPlaybackPreparationErrorTimings(t *testing.T) {
 				}
 			}
 			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req.WithContext(ctx))
+			ReportHTTPErrors(recorder, handler).ServeHTTP(rec, req.WithContext(ctx))
+			if len(recorder.events) != 1 {
+				t.Fatalf("expected one persisted error, got %d", len(recorder.events))
+			}
+			event := recorder.events[0].event
 			wantStatus := http.StatusServiceUnavailable
 			if step == "database-lookup" {
 				wantStatus = http.StatusInternalServerError
@@ -349,7 +350,7 @@ func TestIntegrationPlaybackPreparationErrorTimings(t *testing.T) {
 					t.Fatalf("missing timing for %s: %v", name, event.Context.TimingsMS)
 				}
 			}
-			if step == "database-lookup" && event.Context.TimingsMS[step] < 100 {
+			if step == "database-lookup" && event.Context.TimingsMS[step] < services.MediaPreparationTimeout.Milliseconds()-500 {
 				t.Fatalf("connection-pool wait not measured: %v", event.Context.TimingsMS)
 			}
 		})
