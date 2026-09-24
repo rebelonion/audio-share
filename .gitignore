@@ -1,6 +1,5 @@
 # dependencies
 node_modules/
-CLAUDE.md
 
 # build output
 /frontend/dist/
@@ -24,6 +23,7 @@ yarn-error.log*
 
 # content (user-specific)
 content/
+/docs/
 
 # typescript
 *.tsbuildinfo
