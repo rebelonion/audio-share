@@ -2,6 +2,9 @@ import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {Helmet} from 'react-helmet-async';
 import {Activity, Copy, LockKeyhole, RefreshCw, LogOut} from 'lucide-react';
 import {AdminAccessError, getLibraryHealth, getAdminSession, loginAdmin, logoutAdmin, type AdminSession, type LibraryHealth, type JobRun, type JobDetails, type HealthTrack} from '@/lib/operations';
+import AdminRequests from '@/components/admin/AdminRequests';
+import AdminAudio from '@/components/admin/AdminAudio';
+import AdminMessages from '@/components/admin/AdminMessages';
 import {DEFAULT_TITLE} from '@/lib/config';
 
 const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm hover:bg-[var(--card-hover)] disabled:opacity-50';
@@ -156,6 +159,7 @@ function HealthView({health}: {health: LibraryHealth}) {
 }
 
 export default function Admin() {
+    const [section, setSection] = useState('health');
     const [draftKey, setDraftKey] = useState('');
     const [session, setSession] = useState<AdminSession | null>(null);
     const [checking, setChecking] = useState(true);
@@ -174,6 +178,10 @@ export default function Admin() {
         setHealth(null);
         setLoading(false);
     }, []);
+
+    const onAuthFailure = useCallback((message: string) => {
+        clearHealth(); setSession(null); setSection('health'); setError(message);
+    }, [clearHealth]);
 
     const refresh = useCallback(async () => {
         if (requestRef.current) return;
@@ -252,24 +260,28 @@ export default function Admin() {
     };
 
     return <div className="mx-auto max-w-6xl">
-        <Helmet><title>Library health - {DEFAULT_TITLE}</title><meta name="robots" content="noindex,nofollow" /></Helmet>
+        <Helmet><title>Admin - {DEFAULT_TITLE}</title><meta name="robots" content="noindex,nofollow" /></Helmet>
         <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-            <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Operations · read only</p><h1 className="text-4xl sm:text-5xl">Library health</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Scans, waveform coverage, and the files that need attention.</p></div>
-            {connected && <div className="flex gap-2"><button className={buttonClass} disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</button><button className={buttonClass} onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</button></div>}
+            <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Administration</p><h1 className="text-4xl sm:text-5xl">Library management</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Library health, source requests, audio flags, and messages.</p></div>
+            {connected && <div className="flex gap-2">{section === 'health' && <button className={buttonClass} disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</button>}<button className={buttonClass} onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</button></div>}
         </header>
-        {error && <div role="alert" className="mb-5 rounded-md border border-[var(--error-border)] bg-[var(--error-bg)] p-4 text-sm text-[var(--error-text)]">{error}{health && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</div>}
+        {error && <div role="alert" className="mb-5 rounded-md border border-[var(--error-border)] bg-[var(--error-bg)] p-4 text-sm text-[var(--error-text)]">{error}{health && section === 'health' && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</div>}
         {checking && <p role="status">Checking admin session…</p>}
         {logoutPending && <button className={buttonClass} disabled={working} onClick={() => void disconnect()}>{working ? 'Locking dashboard…' : 'Retry locking dashboard'}</button>}
         {!checking && !connected && !logoutPending && <form onSubmit={event => void connect(event)} className="max-w-lg rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
             <LockKeyhole className="mb-4 h-6 w-6 text-[var(--primary)]" />
-            <h2 className="text-2xl">Unlock library health</h2>
+            <h2 className="text-2xl">Unlock administration</h2>
             <p className="mb-5 mt-2 text-sm text-[var(--muted-foreground)]">Enter the admin API key once to sign in. Your session survives refreshes and navigation until it expires or you lock the dashboard.</p>
             <label htmlFor="admin-key" className="mb-2 block text-sm">Admin API key</label>
             <input id="admin-key" type="password" autoComplete="off" required value={draftKey} onChange={event => setDraftKey(event.target.value)} className={`${inputClass} w-full`} />
             <button className={`${buttonClass} mt-4 bg-[var(--primary)] text-white`} disabled={working || !draftKey.trim()}>{working ? 'Unlocking…' : 'Unlock dashboard'}</button>
         </form>}
         {session && <p className="mb-3 text-xs text-[var(--muted-foreground)]">Session expires <Timestamp value={session.expiresAt} />.</p>}
-        {connected && <p className="mb-5 text-xs text-[var(--muted-foreground)]">{health ? <>Snapshot: <Timestamp value={health.generatedAt} /> · refreshes every 30 seconds while visible</> : loading ? 'Loading library health…' : 'No snapshot loaded. Use Refresh to try again.'}</p>}
-        {health && <HealthView health={health} />}
+        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages']].map(([value, label]) => <button key={value} aria-pressed={section === value} className={`${buttonClass} ${section === value ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : ''}`} onClick={() => setSection(value)}>{label}</button>)}</nav>}
+        {connected && section === 'health' && <p className="mb-5 text-xs text-[var(--muted-foreground)]">{health ? <>Snapshot: <Timestamp value={health.generatedAt} /> · refreshes every 30 seconds while visible</> : loading ? 'Loading library health…' : 'No snapshot loaded. Use Refresh to try again.'}</p>}
+        {connected && section === 'health' && health && <HealthView health={health} />}
+        {connected && section === 'requests' && <AdminRequests onAuthFailure={onAuthFailure} />}
+        {connected && section === 'audio' && <AdminAudio onAuthFailure={onAuthFailure} />}
+        {connected && section === 'messages' && <AdminMessages onAuthFailure={onAuthFailure} />}
     </div>;
 }

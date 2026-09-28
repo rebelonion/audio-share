@@ -3,8 +3,10 @@ import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library
 import {HelmetProvider} from 'react-helmet-async';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import Admin from './Admin';
+import {sendTargetedMessage} from '@/lib/adminManagement';
 import {AdminAccessError, getLibraryHealth, getAdminSession, loginAdmin, logoutAdmin, type LibraryHealth} from '@/lib/operations';
 
+vi.mock('@/lib/adminManagement', async original => ({...await original<typeof import('@/lib/adminManagement')>(), sendTargetedMessage: vi.fn()}));
 vi.mock('@/lib/operations', async original => ({...await original<typeof import('@/lib/operations')>(), getLibraryHealth: vi.fn(), getAdminSession: vi.fn(), loginAdmin: vi.fn(), logoutAdmin: vi.fn()}));
 const snapshot: LibraryHealth = {
     generatedAt: '2026-09-28T12:00:00Z', schemaVersion: 6,
@@ -108,4 +110,18 @@ it('shows a rejected login and clears the submitted key', async () => {
     await screen.findByText('Invalid key');
     expect((screen.getByLabelText('Admin API key') as HTMLInputElement).value).toBe('');
     expect(getLibraryHealth).not.toHaveBeenCalled();
+});
+
+it('locks all admin sections when a management endpoint rejects the session', async () => {
+    vi.mocked(sendTargetedMessage).mockRejectedValueOnce(new AdminAccessError('Session expired'));
+    mount(); await unlock();
+    await screen.findByText('Private conflict');
+    fireEvent.click(screen.getByRole('button', {name: 'Messages'}));
+    fireEvent.change(screen.getByLabelText('Session ID'), {target: {value: 'known-session'}});
+    fireEvent.change(screen.getByLabelText('Message'), {target: {value: 'Private draft'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Send message'}));
+    await screen.findByLabelText('Admin API key');
+    expect(screen.queryByRole('navigation', {name: 'Admin sections'})).toBeNull();
+    expect(screen.queryByText('Private conflict')).toBeNull();
+    expect(screen.queryByLabelText('Message')).toBeNull();
 });

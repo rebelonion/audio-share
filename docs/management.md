@@ -60,7 +60,9 @@ Set `REQUESTS_API_KEY`, apply the configuration, then open `/admin` and enter th
 
 You stay signed in for 8 hours by default, including across page refreshes. Set `ADMIN_SESSION_TTL` to change this duration, or click “Lock dashboard” to sign out. Use HTTPS when accessing the dashboard outside localhost.
 
-The dashboard is read-only and refreshes every 30 seconds while visible. Its schedules reflect the web server's configuration, so keep the worker's configuration in sync. Job history is collected even when ntfy error reporting is disabled.
+Use Requests to create, edit, update the status of, or delete source requests. Audio lets you mark source-linked tracks as unavailable or requested for removal. Messages sends a note to a known session ID.
+
+The Health section refreshes every 30 seconds while visible. Its schedules reflect the web server's configuration, so keep the worker's configuration in sync. Job history is collected even when ntfy error reporting is disabled.
 
 Inspect service status and logs with:
 

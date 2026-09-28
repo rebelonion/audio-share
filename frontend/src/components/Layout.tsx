@@ -128,7 +128,7 @@ function LayoutContent() {
           </PageLoadBoundary>
         </main>
 
-        <FloatingActionButton />
+        {!(location.pathname === '/admin' || location.pathname.startsWith('/admin/')) && <FloatingActionButton />}
         <FloatingAudioPlayerSlot />
 
         <footer className="bg-[var(--card)] border-t border-[var(--border)] mt-auto">
