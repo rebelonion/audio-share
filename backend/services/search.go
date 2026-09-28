@@ -205,8 +205,10 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 	// We UNION the arms together, then sort and paginate the combined result.
 	// COUNT(*) OVER() gives us the total without a separate count query.
 
-	orderClause := "name ASC"
+	orderClause := "relevance DESC, name ASC"
 	switch opts.Sort {
+	case "name_asc":
+		orderClause = "name ASC"
 	case "name_desc":
 		orderClause = "name DESC"
 	case "date_asc":
@@ -215,10 +217,17 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		orderClause = "modified_at DESC NULLS LAST"
 	}
 
+	orderClause += ", type ASC, id ASC"
+
 	var unionParts []string
 	var allArgs []any
 
 	if includeAudio {
+		audioRank := "0"
+		if query != "" && opts.Sort == "" {
+			audioArgs = append(audioArgs, query)
+			audioRank = searchRelevance(len(audioArgs), opts.Fields, false)
+		}
 		audioSelect := fmt.Sprintf(`
 			SELECT
 				audio_files.id, COALESCE(NULLIF(audio_files.title, ''), audio_files.filename) as name, audio_files.path, 'audio' as type, audio_files.parent_path,
@@ -226,15 +235,20 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				audio_files.description, audio_files.webpage_url, audio_files.age_limit,
 				NULL as original_url, NULL::bigint as item_count, NULL as directory_size, NULL as poster_image,
 				SUBSTR(audio_files.upload_date,1,4) || '-' || SUBSTR(audio_files.upload_date,5,2) || '-' || SUBSTR(audio_files.upload_date,7,2) as modified_at,
-				audio_files.share_key, audio_files.unavailable_at, audio_files.removal_requested_at
+				audio_files.share_key, audio_files.unavailable_at, audio_files.removal_requested_at, %s AS relevance
 			FROM audio_files %s
-			WHERE %s`, audioJoin, reindex(audioWhere, 1))
+			WHERE %s`, audioRank, audioJoin, audioWhere)
 		unionParts = append(unionParts, audioSelect)
 		allArgs = append(allArgs, audioArgs...)
 	}
 
 	if includeFolders {
 		folderOffset := len(allArgs) + 1
+		folderRank := "0"
+		if query != "" && opts.Sort == "" {
+			folderArgs = append(folderArgs, query)
+			folderRank = searchRelevance(len(allArgs)+len(folderArgs), nil, true)
+		}
 		folderSelect := fmt.Sprintf(`
 			SELECT
 				id, name, path, 'folder' as type, parent_path,
@@ -243,9 +257,9 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				original_url, item_count, directory_size_bytes as directory_size,
 				poster_image,
 				SUBSTR(upload_date,1,4)||'-'||SUBSTR(upload_date,5,2)||'-'||SUBSTR(upload_date,7,2) as modified_at,
-				share_key, NULL::timestamptz as unavailable_at, NULL::timestamptz as removal_requested_at
+				share_key, NULL::timestamptz as unavailable_at, NULL::timestamptz as removal_requested_at, %s AS relevance
 			FROM folders
-			WHERE %s`, reindex(folderWhere, folderOffset))
+			WHERE %s`, folderRank, reindex(folderWhere, folderOffset))
 		unionParts = append(unionParts, folderSelect)
 		allArgs = append(allArgs, folderArgs...)
 	}
@@ -343,7 +357,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		results = append(results, r)
 	}
 
-	return results, total, nil
+	return results, total, rows.Err()
 }
 
 // reindex replaces $1, $2, ... in a SQL fragment with $start, $start+1, ...
@@ -384,4 +398,37 @@ func (s *SearchService) RandomAudio(includeRemovalRequested bool) (string, error
 		return "", err
 	}
 	return shareKey, nil
+}
+
+// Rank the strongest selected-field match; long descriptions should not outweigh titles.
+func searchRelevance(parameter int, fields []string, folder bool) string {
+	type fieldScore struct {
+		column                  string
+		exact, prefix, contains int
+	}
+	scores := map[string]fieldScore{
+		"title": {"title", 100, 70, 40}, "artist": {"meta_artist", 95, 65, 35},
+		"filename": {"filename", 90, 60, 30}, "webpage_url": {"webpage_url", 85, 55, 25},
+		"description": {"description", 10, 5, 1},
+	}
+	if folder {
+		scores = map[string]fieldScore{"name": {"name", 100, 70, 40}, "folder_name": {"folder_name", 90, 60, 30}}
+		fields = []string{"name", "folder_name"}
+	} else if len(fields) == 0 {
+		fields = []string{"title", "artist", "filename", "webpage_url", "description"}
+	}
+	parts := []string{"0"}
+	for _, field := range fields {
+		score, ok := scores[field]
+		if !ok {
+			continue
+		}
+		column := "LOWER(COALESCE(" + score.column + ", ''))"
+		value := fmt.Sprintf("LOWER($%d::text)", parameter)
+		parts = append(parts, fmt.Sprintf("CASE WHEN %s = %s THEN %d WHEN STRPOS(%s, %s) = 1 THEN %d WHEN STRPOS(%s, %s) > 0 THEN %d ELSE 0 END", column, value, score.exact, column, value, score.prefix, column, value, score.contains))
+	}
+	if len(parts) == 1 {
+		return searchRelevance(parameter, nil, folder)
+	}
+	return "GREATEST(" + strings.Join(parts, ", ") + ")"
 }

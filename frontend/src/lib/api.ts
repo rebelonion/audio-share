@@ -263,7 +263,7 @@ export interface SearchFilters {
     includeMature?: boolean;
 }
 
-export async function searchAudio(query: string, limit?: number, offset?: number, filters?: SearchFilters): Promise<SearchResponse> {
+export async function searchAudio(query: string, limit?: number, offset?: number, filters?: SearchFilters, signal?: AbortSignal): Promise<SearchResponse> {
     const params = new URLSearchParams({ q: query });
     if (limit) {
         params.set('limit', limit.toString());
@@ -284,7 +284,7 @@ export async function searchAudio(query: string, limit?: number, offset?: number
         if (filters.includeMature) params.set('includeMature', 'true');
     }
 
-    const response = await appFetch(`${API_BASE}/api/search?${params}`);
+    const response = await appFetch(`${API_BASE}/api/search?${params}`, {signal});
     if (!response.ok) {
         throw new Error(`Search failed: ${response.status}`);
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
@@ -89,87 +89,79 @@ export default function Search() {
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [searchError, setSearchError] = useState(false);
+    const [retry, setRetry] = useState(0);
     const [isLucky, setIsLucky] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [showRequestDialog, setShowRequestDialog] = useState(false);
     const [filters, setFilters] = useState<SearchFilters>(() => filtersFromParams(searchParams));
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const resultScopeRef = useRef('');
 
     const totalPages = Math.ceil(total / RESULTS_PER_PAGE);
 
-    const performSearch = useCallback(async (searchQuery: string, page: number = 1, activeFilters: SearchFilters = {}) => {
-        if (searchQuery.length < 2 && !hasActiveFilters(activeFilters)) {
-            setResults([]);
-            setTotal(0);
-            setHasSearched(false);
-            return;
-        }
-
-        setIsLoading(true);
-        const offset = (page - 1) * RESULTS_PER_PAGE;
-        try {
-            const response = await searchAudio(searchQuery, RESULTS_PER_PAGE, offset, activeFilters);
-            setResults(response.results);
-            setTotal(response.total);
-            setHasSearched(true);
-            if (page === 1) {
-                track('search', { query: searchQuery, resultCount: response.total, ...activeFilters });
-            }
-        } catch (error) {
-            console.error('Search failed:', error);
-            setResults([]);
-            setTotal(0);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [track]);
-
-    useEffect(() => {
-        const urlQuery = searchParams.get('q') ?? '';
-        const urlPage = parseInt(searchParams.get('page') || '1', 10);
-        const urlFilters = filtersFromParams(searchParams);
-
-        if (urlQuery !== query) setQuery(urlQuery);
-        setCurrentPage(urlPage);
-        setFilters(urlFilters);
-
-        if (urlQuery.length >= 2 || hasActiveFilters(urlFilters)) {
-            performSearch(urlQuery, urlPage, urlFilters);
-        }
-    }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Debounce query input → URL update
     useEffect(() => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        setQuery(searchParams.get('q') ?? '');
+        const page = Number(searchParams.get('page') || '1');
+        setCurrentPage(Number.isSafeInteger(page) && page > 0 ? page : 1);
+        setFilters(filtersFromParams(searchParams));
+    }, [searchParams]);
 
+    useEffect(() => {
+        const controller = new AbortController();
+        const urlQuery = searchParams.get('q') ?? '';
+        const activeFilters = filtersFromParams(searchParams);
+        const rawPage = Number(searchParams.get('page') || '1');
+        const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+        const scope = JSON.stringify([urlQuery, activeFilters]);
+        setResults([]);
+        if (resultScopeRef.current !== scope || query !== urlQuery) setTotal(0);
+        resultScopeRef.current = scope;
+        setHasSearched(false);
+        setSearchError(false);
+        setIsLoading(false);
+        if (query !== urlQuery || (urlQuery.length < 2 && !hasActiveFilters(activeFilters))) return;
+
+        setIsLoading(true);
+        searchAudio(urlQuery, RESULTS_PER_PAGE, (page - 1) * RESULTS_PER_PAGE, activeFilters, controller.signal)
+            .then(response => {
+                if (controller.signal.aborted) return;
+                setResults(response.results);
+                setTotal(response.total);
+                setHasSearched(true);
+                if (page === 1) track('search', {query: urlQuery, resultCount: response.total, ...activeFilters});
+            }).catch(() => {
+                if (!controller.signal.aborted) setSearchError(true);
+            }).finally(() => {
+                if (!controller.signal.aborted) setIsLoading(false);
+            });
+        return () => controller.abort();
+    }, [searchParams, query, retry, track]);
+
+    useEffect(() => () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+    }, []);
+
+    const changeQuery = (value: string) => {
+        setQuery(value);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-            if (query.length >= 2 || (query.length === 0 && hasActiveFilters(filters))) {
-                setCurrentPage(1);
-                setSearchParams({ q: query, ...filtersToParams(filters) }, { replace: true });
-            } else if (query.length === 0) {
-                setSearchParams({}, { replace: true });
-                setResults([]);
-                setTotal(0);
-                setHasSearched(false);
-            }
+            setSearchParams({q: value, ...filtersToParams(filters)}, {replace: true});
         }, 500);
-
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-        };
-    }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+    };
 
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
 
     const applyFilters = (newFilters: SearchFilters) => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
         setFilters(newFilters);
         setCurrentPage(1);
         if (query.length >= 2 || hasActiveFilters(newFilters)) {
             setSearchParams({ q: query, ...filtersToParams(newFilters) }, { replace: true });
-            performSearch(query, 1, newFilters);
         } else {
             setSearchParams({}, { replace: true });
             setResults([]);
@@ -200,7 +192,6 @@ export default function Search() {
         if (newPage < 1 || newPage > totalPages) return;
         setCurrentPage(newPage);
         setSearchParams({ q: query, page: newPage.toString(), ...filtersToParams(filters) }, { replace: true });
-        performSearch(query, newPage, filters);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -244,7 +235,7 @@ export default function Search() {
                                 ref={inputRef}
                                 type="text"
                                 value={query}
-                                onChange={(e) => setQuery(e.target.value)}
+                                onChange={(e) => changeQuery(e.target.value)}
                                 placeholder="Search by name, artist, title, or description..."
                                 className="w-full px-4 py-3 pl-12 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder-[var(--muted-foreground)]"
                             />
@@ -304,6 +295,13 @@ export default function Search() {
                     </div>
                 </div>
 
+                {searchError && (
+                    <div role="alert" className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+                        <p>Search could not be loaded. Please try again.</p>
+                        <button onClick={() => setRetry(value => value + 1)} className="mt-2 text-[var(--primary)] underline">Retry search</button>
+                    </div>
+                )}
+
                 {hasSearched && (
                     <div className="mb-4 text-[var(--muted-foreground)]">
                         <span>{`Found ${total} result${total !== 1 ? 's' : ''} for "${query}"`}</span>
@@ -326,7 +324,7 @@ export default function Search() {
                             } : null;
                             return (
                                 <div
-                                    key={result.id}
+                                    key={`${result.type}:${result.id}`}
                                     className={`flex flex-col gap-3 border border-[var(--border)] rounded-lg p-4 transition-colors group sm:flex-row sm:items-start ${
                                         result.type === 'audio' && (result.unavailableAt || result.removalRequestedAt)
                                             ? 'bg-amber-500/5 hover:bg-amber-500/10'
@@ -456,7 +454,7 @@ export default function Search() {
                     <div className="flex items-center justify-center gap-2 mt-8">
                         <button
                             onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={currentPage === 1}
+                            disabled={isLoading || currentPage === 1}
                             className="flex items-center gap-1 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-md hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             <ChevronLeft className="h-4 w-4" />
@@ -479,6 +477,7 @@ export default function Search() {
                                     <button
                                         key={pageNum}
                                         onClick={() => handlePageChange(pageNum)}
+                                        disabled={isLoading}
                                         className={`px-3 py-2 rounded-md transition-colors ${
                                             currentPage === pageNum
                                                 ? 'bg-[var(--primary)] text-white'
@@ -493,7 +492,7 @@ export default function Search() {
 
                         <button
                             onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages}
+                            disabled={isLoading || currentPage === totalPages}
                             className="flex items-center gap-1 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-md hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             <span className="hidden sm:inline">Next</span>
@@ -525,7 +524,7 @@ export default function Search() {
                     </div>
                 )}
 
-                {!hasSearched && !isLoading && (
+                {!hasSearched && !isLoading && !searchError && (
                     <div className="text-center py-12">
                         <SearchIcon className="h-12 w-12 mx-auto text-[var(--muted-foreground)] mb-4" />
                         <h2 className="text-lg font-medium mb-2">Search the entire library</h2>
