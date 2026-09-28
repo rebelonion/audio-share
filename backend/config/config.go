@@ -128,6 +128,7 @@ type Config struct {
 	SessionSecret string
 
 	RequestsAPIKey    string
+	AdminSessionTTL   string
 	IndexWebhookURL   string
 	IndexWebhookToken string
 
@@ -207,6 +208,7 @@ func Load() *Config {
 		SessionSecret: getEnv("SESSION_SECRET", ""),
 
 		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),
+		AdminSessionTTL:   getEnv("ADMIN_SESSION_TTL", "8h"),
 		IndexWebhookURL:   getEnv("INDEX_WEBHOOK_URL", ""),
 		IndexWebhookToken: getEnv("INDEX_WEBHOOK_TOKEN", ""),
 

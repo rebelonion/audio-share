@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {Helmet} from 'react-helmet-async';
 import {Activity, Copy, LockKeyhole, RefreshCw, LogOut} from 'lucide-react';
-import {AdminAccessError, getLibraryHealth, type LibraryHealth, type JobRun, type JobDetails, type HealthTrack} from '@/lib/operations';
+import {AdminAccessError, getLibraryHealth, getAdminSession, loginAdmin, logoutAdmin, type AdminSession, type LibraryHealth, type JobRun, type JobDetails, type HealthTrack} from '@/lib/operations';
 import {DEFAULT_TITLE} from '@/lib/config';
 
 const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm hover:bg-[var(--card-hover)] disabled:opacity-50';
@@ -157,27 +157,37 @@ function HealthView({health}: {health: LibraryHealth}) {
 
 export default function Admin() {
     const [draftKey, setDraftKey] = useState('');
-    const [connected, setConnected] = useState(false);
+    const [session, setSession] = useState<AdminSession | null>(null);
+    const [checking, setChecking] = useState(true);
+    const [working, setWorking] = useState(false);
+    const [logoutPending, setLogoutPending] = useState(false);
     const [health, setHealth] = useState<LibraryHealth | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const keyRef = useRef('');
     const requestRef = useRef<AbortController | null>(null);
+    const mounted = useRef(false);
+    const connected = session !== null;
+
+    const clearHealth = useCallback(() => {
+        requestRef.current?.abort();
+        requestRef.current = null;
+        setHealth(null);
+        setLoading(false);
+    }, []);
 
     const refresh = useCallback(async () => {
-        if (!keyRef.current || requestRef.current) return;
+        if (requestRef.current) return;
         const controller = new AbortController();
         requestRef.current = controller;
         setLoading(true);
         setError('');
         try {
-            const snapshot = await getLibraryHealth(keyRef.current, controller.signal);
+            const snapshot = await getLibraryHealth(controller.signal);
             if (!controller.signal.aborted) setHealth(snapshot);
         } catch (cause) {
             if (controller.signal.aborted) return;
             if (cause instanceof AdminAccessError) {
-                keyRef.current = '';
-                setConnected(false);
+                setSession(null);
                 setHealth(null);
             }
             setError(cause instanceof Error ? cause.message : 'Library health could not be refreshed.');
@@ -190,43 +200,75 @@ export default function Admin() {
     }, []);
 
     useEffect(() => {
-        if (!connected) return;
-        const refreshVisible = () => { if (!document.hidden) void refresh(); };
-        const interval = window.setInterval(refreshVisible, 30_000);
-        document.addEventListener('visibilitychange', refreshVisible);
-        return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refreshVisible); };
-    }, [connected, refresh]);
-    useEffect(() => () => { keyRef.current = ''; requestRef.current?.abort(); }, []);
+        mounted.current = true;
+        const controller = new AbortController();
+        void getAdminSession(controller.signal).then(value => {
+            if (!controller.signal.aborted) setSession(value);
+        }).catch(cause => {
+            if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not check your admin session.');
+        }).finally(() => { if (!controller.signal.aborted) setChecking(false); });
+        return () => { mounted.current = false; controller.abort(); requestRef.current?.abort(); requestRef.current = null; };
+    }, []);
 
-    const connect = (event: FormEvent) => {
+    useEffect(() => {
+        if (!session) return;
+        const expires = Date.parse(session.expiresAt);
+        const refreshVisible = () => {
+            if (Date.now() >= expires) {
+                clearHealth();
+                setSession(null);
+                setError('Your admin session expired. Unlock the dashboard again.');
+            } else if (!document.hidden) void refresh();
+        };
+        refreshVisible();
+        const interval = window.setInterval(refreshVisible, 30_000);
+        // Clamp long lifetimes to the browser's maximum timeout; the interval
+        // and visibility check also enforce expiry after suspension.
+        const timeout = window.setTimeout(refreshVisible, Math.min(Math.max(0, expires - Date.now()), 2_147_483_647));
+        document.addEventListener('visibilitychange', refreshVisible);
+        return () => { window.clearInterval(interval); window.clearTimeout(timeout); document.removeEventListener('visibilitychange', refreshVisible); };
+    }, [session, refresh, clearHealth]);
+
+    const connect = async (event: FormEvent) => {
         event.preventDefault();
-        keyRef.current = draftKey.trim();
-        setDraftKey('');
-        setConnected(true);
-        void refresh();
+        if (working) return;
+        const key = draftKey.trim();
+        setDraftKey(''); setWorking(true); setError('');
+        try {
+            const value = await loginAdmin(key);
+            if (mounted.current) setSession(value);
+        } catch (cause) {
+            if (mounted.current) setError(cause instanceof Error ? cause.message : 'Could not unlock the dashboard.');
+        } finally { if (mounted.current) setWorking(false); }
     };
-    const disconnect = () => {
-        keyRef.current = '';
-        requestRef.current?.abort();
-        requestRef.current = null;
-        setConnected(false); setHealth(null); setLoading(false); setError('');
+    const disconnect = async () => {
+        clearHealth(); setSession(null); setLogoutPending(true); setWorking(true); setError('');
+        try {
+            await logoutAdmin();
+            if (mounted.current) setLogoutPending(false);
+        } catch (cause) {
+            if (mounted.current) setError(cause instanceof Error ? cause.message : 'Could not clear the admin cookie. Retry locking the dashboard.');
+        } finally { if (mounted.current) setWorking(false); }
     };
 
     return <div className="mx-auto max-w-6xl">
         <Helmet><title>Library health - {DEFAULT_TITLE}</title><meta name="robots" content="noindex,nofollow" /></Helmet>
         <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Operations · read only</p><h1 className="text-4xl sm:text-5xl">Library health</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Scans, waveform coverage, and the files that need attention.</p></div>
-            {connected && <div className="flex gap-2"><button className={buttonClass} disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</button><button className={buttonClass} onClick={disconnect}><LogOut className="h-4 w-4" /> Lock dashboard</button></div>}
+            {connected && <div className="flex gap-2"><button className={buttonClass} disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</button><button className={buttonClass} onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</button></div>}
         </header>
         {error && <div role="alert" className="mb-5 rounded-md border border-[var(--error-border)] bg-[var(--error-bg)] p-4 text-sm text-[var(--error-text)]">{error}{health && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</div>}
-        {!connected && <form onSubmit={connect} className="max-w-lg rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+        {checking && <p role="status">Checking admin session…</p>}
+        {logoutPending && <button className={buttonClass} disabled={working} onClick={() => void disconnect()}>{working ? 'Locking dashboard…' : 'Retry locking dashboard'}</button>}
+        {!checking && !connected && !logoutPending && <form onSubmit={event => void connect(event)} className="max-w-lg rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
             <LockKeyhole className="mb-4 h-6 w-6 text-[var(--primary)]" />
             <h2 className="text-2xl">Unlock library health</h2>
-            <p className="mb-5 mt-2 text-sm text-[var(--muted-foreground)]">Use the server’s REQUESTS_API_KEY. The key stays in memory for this page and is cleared when you leave or lock the dashboard.</p>
+            <p className="mb-5 mt-2 text-sm text-[var(--muted-foreground)]">Enter the admin API key once to sign in. Your session survives refreshes and navigation until it expires or you lock the dashboard.</p>
             <label htmlFor="admin-key" className="mb-2 block text-sm">Admin API key</label>
             <input id="admin-key" type="password" autoComplete="off" required value={draftKey} onChange={event => setDraftKey(event.target.value)} className={`${inputClass} w-full`} />
-            <button className={`${buttonClass} mt-4 bg-[var(--primary)] text-white`} disabled={!draftKey.trim()}>Unlock dashboard</button>
+            <button className={`${buttonClass} mt-4 bg-[var(--primary)] text-white`} disabled={working || !draftKey.trim()}>{working ? 'Unlocking…' : 'Unlock dashboard'}</button>
         </form>}
+        {session && <p className="mb-3 text-xs text-[var(--muted-foreground)]">Session expires <Timestamp value={session.expiresAt} />.</p>}
         {connected && <p className="mb-5 text-xs text-[var(--muted-foreground)]">{health ? <>Snapshot: <Timestamp value={health.generatedAt} /> · refreshes every 30 seconds while visible</> : loading ? 'Loading library health…' : 'No snapshot loaded. Use Refresh to try again.'}</p>}
         {health && <HealthView health={health} />}
     </div>;

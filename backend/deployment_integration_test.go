@@ -73,7 +73,7 @@ func TestIntegrationAudioSurvivesShutdownAndGrantWorksOnNextInstance(t *testing.
 	cfg := &config.Config{
 		SessionSecret: "deployment-test-secret", AudioDir: audioDir + ":Audio",
 		StaticDir: t.TempDir(), ContentDir: t.TempDir(),
-		StreamKeyTTL: "1h", DownloadKeyTTL: "1h", DownloadSessionMinAge: "0s",
+		AdminSessionTTL: "8h", StreamKeyTTL: "1h", DownloadKeyTTL: "1h", DownloadSessionMinAge: "0s",
 		StreamKeyLimits: "100/1m", DownloadKeyLimits: "100/1m",
 		CapEnforcement: "off", DownloadCaptchaMode: "off", CapVerifyTimeout: "3s", StreamCaptchaClearanceTTL: "15m",
 		SourceNormalizerTimeout: "15s", RateLimitWindow: 60000, MaxRequestsPerWindow: 1000,

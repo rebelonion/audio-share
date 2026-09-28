@@ -30,11 +30,32 @@ export interface LibraryHealth {
 
 export class AdminAccessError extends Error {}
 
-export async function getLibraryHealth(key: string, signal: AbortSignal): Promise<LibraryHealth> {
-    const response = await fetch(`${API_BASE}/api/admin/health`, {
-        headers: {'X-API-Key': key}, cache: 'no-store', signal,
+export interface AdminSession {expiresAt: string}
+
+export async function getAdminSession(signal: AbortSignal): Promise<AdminSession | null> {
+    const response = await fetch(`${API_BASE}/api/admin/session`, {credentials: 'include', cache: 'no-store', signal});
+    if (response.status === 401) return null;
+    if (!response.ok) throw new Error('Could not check your admin session. Try unlocking again.');
+    return response.json();
+}
+
+export async function loginAdmin(key: string): Promise<AdminSession> {
+    const response = await fetch(`${API_BASE}/api/admin/session`, {
+        method: 'POST', credentials: 'include', headers: {'X-API-Key': key}, cache: 'no-store',
     });
-    if (response.status === 401 || response.status === 403) throw new AdminAccessError('The admin key was not accepted. Check REQUESTS_API_KEY on the server.');
+    if (response.status === 401) throw new AdminAccessError('The admin key was not accepted. Check REQUESTS_API_KEY on the server.');
+    if (!response.ok) throw new Error('Could not start an admin session. Check the server and allowed origin.');
+    return response.json();
+}
+
+export async function logoutAdmin(): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/admin/session`, {method: 'DELETE', credentials: 'include', cache: 'no-store'});
+    if (!response.ok) throw new Error('Could not clear the admin cookie. Retry locking the dashboard.');
+}
+
+export async function getLibraryHealth(signal: AbortSignal): Promise<LibraryHealth> {
+    const response = await fetch(`${API_BASE}/api/admin/health`, {credentials: 'include', cache: 'no-store', signal});
+    if (response.status === 401) throw new AdminAccessError('Your admin session expired or was invalidated. Unlock the dashboard again.');
     if (!response.ok) throw new Error('Library health could not be refreshed. Check the server and try again.');
     return response.json();
 }

@@ -17,3 +17,14 @@ func TestEnvFileDoesNotOverrideExplicitlyDisabledSchedule(t *testing.T) {
 		t.Fatalf("disabled schedule was re-enabled: %q", got)
 	}
 }
+
+func TestAdminSessionTTLConfiguration(t *testing.T) {
+	t.Setenv("ADMIN_SESSION_TTL", "")
+	if got := Load().AdminSessionTTL; got != "8h" {
+		t.Fatalf("default=%q", got)
+	}
+	t.Setenv("ADMIN_SESSION_TTL", "45m")
+	if got := Load().AdminSessionTTL; got != "45m" {
+		t.Fatalf("override=%q", got)
+	}
+}

@@ -58,6 +58,8 @@ Apply the configuration changes to both app and worker. Blank schedules disable 
 
 Set `REQUESTS_API_KEY`, apply the configuration, then open `/admin` and enter the key. The dashboard shows waveform coverage and backlog, media identity conflicts, recent error reports, and index/waveform job history. It also provides commands for manual maintenance after fixing affected files.
 
+You stay signed in for 8 hours by default, including across page refreshes. Set `ADMIN_SESSION_TTL` to change this duration, or click “Lock dashboard” to sign out. Use HTTPS when accessing the dashboard outside localhost.
+
 The dashboard is read-only and refreshes every 30 seconds while visible. Its schedules reflect the web server's configuration, so keep the worker's configuration in sync. Job history is collected even when ntfy error reporting is disabled.
 
 Inspect service status and logs with:

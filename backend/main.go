@@ -126,6 +126,10 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	if cfg.SessionSecret == "" {
 		return nil, fmt.Errorf("SESSION_SECRET is required but not set")
 	}
+	adminSessionTTL, err := time.ParseDuration(cfg.AdminSessionTTL)
+	if err != nil || adminSessionTTL < time.Second || adminSessionTTL%time.Second != 0 {
+		return nil, fmt.Errorf("Invalid ADMIN_SESSION_TTL %q: use a duration of at least one whole second", cfg.AdminSessionTTL)
+	}
 	streamKeyTTL, err := time.ParseDuration(cfg.StreamKeyTTL)
 	if err != nil || streamKeyTTL <= 0 {
 		return nil, fmt.Errorf("Invalid STREAM_KEY_TTL %q", cfg.StreamKeyTTL)
@@ -264,7 +268,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	)
 
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
-	apiKeyAuth := middleware.NewAPIKeyAuth(cfg.RequestsAPIKey)
+	adminAuth := middleware.NewAdminAuth(cfg.RequestsAPIKey, cfg.SessionSecret, adminSessionTTL, cfg.CORSOrigins)
 	if cfg.RequestsAPIKey == "" {
 		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are disabled")
 	}
@@ -301,7 +305,8 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	mux.HandleFunc("/api/likes/", libraryHandler.LikeItemHandler())
 
 	mux.Handle("/api/requests", requestsHandler)
-	mux.Handle("/api/admin/", apiKeyAuth.Middleware(adminHandler))
+	mux.HandleFunc("/api/admin/session", adminAuth.SessionHandler)
+	mux.Handle("/api/admin/", adminAuth.Middleware(adminHandler))
 
 	mux.HandleFunc("/sitemap.xml", contentHandler.SitemapHandler())
 	mux.HandleFunc("/robots.txt", contentHandler.RobotsHandler())
