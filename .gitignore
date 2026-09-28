@@ -38,3 +38,6 @@ content/
 # python
 __pycache__/
 *.pyc
+
+/frontend/test-results/
+/frontend/playwright-report/

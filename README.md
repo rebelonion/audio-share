@@ -368,6 +368,30 @@ npm run dev
 - Backend API: http://localhost:8080
 - Frontend dev server: http://localhost:5173 (proxies API calls to backend)
 
+### Checks
+
+Pull requests and pushes to `main` run frontend lint, unit tests, a production build, desktop/mobile Chromium smoke tests, and Go vet/build/tests with the race detector. The backend job uses a disposable PostgreSQL 17 service and FFmpeg.
+
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run lint
+npm --prefix frontend test
+npm --prefix frontend run build
+cd frontend
+npx playwright install chromium
+npm run test:browser
+```
+
+The browser suite serves the production frontend with deterministic API fixtures and real WAV audio. It checks playback/seeking, queue restoration, playback settings, and recovery between browser profiles; real API/database behavior is covered separately by Go integration tests. Failures upload traces and screenshots in CI. To inspect the fixture app manually, run `node e2e/server.mjs` from `frontend` and open `http://127.0.0.1:4175/share/rain`.
+
+```bash
+cd backend
+# Set TEST_DATABASE_URL to a QA database. Tests create and remove their own schemas.
+go test -race -p 1 -count=1 ./...
+```
+
+Use `-p 1` with a shared test database: advisory job locks span schemas and otherwise cause independent packages to skip each other’s jobs. The configured-database baseline check is read-only and expects an initialized database; CI initializes its disposable database with `go run . migrate` first. FFmpeg and FFprobe must be installed to exercise waveform integration tests.
+
 ### Production Build
 
 Build the frontend:

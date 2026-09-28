@@ -1,0 +1,82 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: audio_share
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: audio_share
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U audio_share"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://audio_share:test-only-password@localhost:5432/audio_share?sslmode=disable
+      TEST_DATABASE_URL: postgres://audio_share:test-only-password@localhost:5432/audio_share?sslmode=disable
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: go mod download
+      - name: Initialize disposable baseline database
+        run: go run . migrate
+      - run: go vet ./...
+      # Job advisory locks span schemas, so packages must share the DB serially.
+      - run: go test -race -p 1 -count=1 ./...
+      - run: go build ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests
+        run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 7
