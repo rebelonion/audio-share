@@ -23,7 +23,10 @@ yarn-error.log*
 
 # content (user-specific)
 content/
-/docs/
+/docs/*
+!/docs/setup.md
+!/docs/management.md
+!/docs/configuration.md
 
 # typescript
 *.tsbuildinfo

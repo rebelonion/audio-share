@@ -3,428 +3,74 @@
 Browse, play, and share audio files from a collection you host.
 
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Go](https://img.shields.io/badge/Go-1.24-00ADD8)
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38b2ac)
 ![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
 
 ## Features
 
-- Browse your audio library with folder-based navigation (including from external directories)
-- Search the entire library by name, artist, title, or description
-- Stream audio files directly in the browser
-- Use a persistent queue, folder playlists, autoplay, playback controls, and a waveform visualizer
-- Adjust playback speed, repeat a track, shuffle upcoming tracks, or set a sleep timer from the queue’s Playback settings
+- Browse folders and search by name, artist, title, or description
+- Stream audio in the browser with a persistent queue and waveform player
 - Save likes without an account and recover them with a text key or QR code
-- Display metadata for audio files including title, artist, and album art
-- Share links to specific audio files
-- Use the responsive layout on desktop and mobile
-- Request new artists/channels to be added via ntfy notifications
-- Add custom folder names, item counts, and source links
+- Share links to individual tracks
+- View artwork, track metadata, and links to original sources
+- Listen on desktop or mobile
 
-## Installation
+## Getting started
 
-### Docker
+The included [Docker Compose configuration](docker-compose.yml) runs the app, a background worker, and PostgreSQL.
 
-Build and run with Docker Compose:
-
-```bash
-docker compose up --build
-```
-
-Or build the image manually:
-
-```bash
-docker build -t audio-share .
-docker run -p 8080:8080 \
-  -v /path/to/your/audio:/audio:ro \
-  -v /path/to/your/content:/app/content:ro \
-  -e AUDIO_DIR=/audio:Audio \
-  -e SESSION_SECRET=replace-with-a-long-random-value \
-  audio-share
-```
-
-#### Docker Compose
-
-The included `docker-compose.yml`:
-
-```yaml
-services:
-  app:
-    image: ghcr.io/rebelonion/audio-share:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - AUDIO_DIR=/audio:Audio
-      - SESSION_SECRET=replace-with-a-long-random-value
-    volumes:
-      - /path/to/your/audio:/audio:ro
-      - /path/to/your/content:/app/content:ro
-    restart: unless-stopped
-```
-
-### Manual
-
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   cd audio-share
-   ```
-
-2. Install frontend dependencies:
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-3. Set up your audio directory:
-   - Configure the `AUDIO_DIR` environment variable
-   - Format: `/path/to/audio:Display Name` or comma-separated for multiple directories:
-     ```
-     AUDIO_DIR=/path/to/music:Music Library,/path/to/podcasts:Podcasts
-     ```
-   - Add your audio files and folders to your chosen directory/directories
-   - Optional: Add thumbnail images and metadata JSON files (see metadata section below)
-
-## Environment Variables
-
-All configuration is done via environment variables on the Go server. Frontend config is injected at runtime, so you can use a pre-built Docker image with different settings.
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `8080` |
-| `AUDIO_DIR` | Audio directories (format: `/path:Name,/path2:Name2`) | - |
-| `SESSION_SECRET` | Required secret used to sign anonymous sessions and media access keys | - |
-| `REQUESTS_API_KEY` | API key required in `X-API-Key` for `/api/admin` operations | - |
-| `STREAM_KEY_LIMITS` | Rolling per-session and per-IP stream-key limits in `count/duration` format, comma-separated | `10/1m` |
-| `DOWNLOAD_KEY_LIMITS` | Rolling per-session and per-IP download-key limits in `count/duration` format, comma-separated | `10/1m` |
-| `STREAM_KEY_TTL` | Lifetime of a stream access key | `30m` |
-| `DOWNLOAD_KEY_TTL` | Lifetime of a download access key | `10m` |
-| `DOWNLOAD_SESSION_MIN_AGE` | Minimum age of a signed anonymous session before it may request download keys (`0s` disables) | `0s` |
-| `CAP_ENFORCEMENT` | Cap rollout mode: `off`, `observe`, or `enforce` | `off` |
-| `CAP_PUBLIC_ENDPOINT` | Browser-facing Cap endpoint including the site key, ending in `/` | - |
-| `CAP_VERIFY_ENDPOINT` | Server-facing `<site-key>/siteverify` endpoint | - |
-| `CAP_SECRET_KEY` | Secret for the Cap site key (not the dashboard admin key) | - |
-| `CAP_VERIFY_TIMEOUT` | Timeout for server-side token verification | `3s` |
-| `STREAM_CAPTCHA_LIMITS` | Rolling per-session and per-IP thresholds that trigger a stream challenge | - |
-| `STREAM_CAPTCHA_CLEARANCE_TTL` | How long a successful stream challenge clears that signed session | `15m` |
-| `DOWNLOAD_CAPTCHA_MODE` | Download challenge mode: `always` or `off` | `always` |
-| `STREAM_BYTES_PER_SECOND` | Per-request audio streaming speed limit in bytes per second (`0` disables) | `0` |
-| `STREAM_BURST_BYTES` | Initial burst allowance for each streaming response (`0` disables) | `0` |
-| `DOWNLOAD_BYTES_PER_SECOND` | Per-request download speed limit in bytes per second (`0` disables) | `0` |
-| `DOWNLOAD_BURST_BYTES` | Initial burst allowance for each download response (`0` disables) | `0` |
-| `STREAM_IP_BYTES_PER_SECOND` | Aggregate streaming bandwidth per client IP across concurrent responses (`0` disables) | `0` |
-| `DOWNLOAD_IP_BYTES_PER_SECOND` | Aggregate download bandwidth per client IP across concurrent responses (`0` disables) | `0` |
-| `RATE_LIMIT_WINDOW` | General API rate-limit window in milliseconds | `60000` |
-| `MAX_REQUESTS_PER_WINDOW` | General API requests allowed per client IP per window | `100` |
-| `IMAGE_RATE_LIMIT_WINDOW` | Thumbnail and poster rate-limit window in milliseconds | `60000` |
-| `MAX_IMAGES_PER_WINDOW` | Thumbnail and poster requests allowed per client IP per window | `300` |
-| `CONTENT_DIR` | Directory for `about.md` | `./content` |
-| `STATIC_DIR` | Directory for built frontend files | `./static` |
-| `ARTWORK_CACHE_DIR` | Writable cache directory for card and blurred mature thumbnails | OS user cache directory + `/audio-share/artwork`; Docker: `/app/cache/artwork` |
-| `DATABASE_URL` | PostgreSQL connection URL; schema changes run with the `migrate` command | `postgres://audio_share:audio_share@localhost:5432/audio_share` |
-| `MANAGEMENT_ADDR` | Internal readiness, status, retire/resume/shutdown listener; never expose publicly | `127.0.0.1:9090` |
-| `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
-| `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
-| `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen...` |
-| `BANNER_MESSAGE` | Optional global info banner message (injected into frontend) | - |
-| `BANNER_VARIANT` | Banner style: `info`, `warning`, or `success` | `info` |
-| `BANNER_LINK_TEXT` | Optional banner link text | - |
-| `BANNER_LINK_URL` | Optional banner link URL, internal path or absolute URL | - |
-| `UMAMI_URL` | Umami analytics script URL | - |
-| `UMAMI_WEBSITE_ID` | Umami website ID | - |
-| `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |
-| `NTFY_TOPIC` | Ntfy topic for notifications | - |
-| `NTFY_TOKEN` | Ntfy authentication token | - |
-| `NTFY_ERROR_TOPIC` | Separate operational-error topic; blank disables error reporting | - |
-| `ERROR_REPORT_WINDOW` | Error counting window | `5m` |
-| `ERROR_ALERT_COOLDOWN` | Minimum time between alerts for the same error group | `30m` |
-| `ERROR_REPORT_RETENTION` | Raw report retention | `168h` |
-| `ERROR_BROWSER_THRESHOLD` | Browser reports required per group/window | `10` |
-| `ERROR_BROWSER_MIN_SOURCES` | Distinct browser sources required (signed session, or IP fallback) | `3` |
-| `ERROR_SERVER_THRESHOLD` | Server reports required per group/window | `5` |
-| `ERROR_MUTATION_THRESHOLD` | Lower threshold for failed likes/preferences writes, recovery, contact, source submissions | `3` |
-| `ERROR_JOB_THRESHOLD` | Failed or degraded job runs required | `1` |
-| `SOURCE_NORMALIZER_SCRIPT` | In-container path to the mounted Python source normalizer | - |
-| `SOURCE_NORMALIZER_TIMEOUT` | Maximum time allowed to resolve a creator URL | `15s` |
-| `WAVEFORM_CRON` | Cron expression for waveform generation (e.g., `0 3 * * *`) | - (disabled) |
-| `WAVEFORM_MAX_DURATION` | Max time to spend generating waveforms per run (e.g., `2h`, `30m`) | `2h` |
-
-Docker Compose mounts `SOURCE_NORMALIZER_PATH` from the host at `SOURCE_NORMALIZER_SCRIPT` inside the app container.
-
-Stream and download burst allowances are separate token-bucket capacities that refill at their corresponding per-request rates. When an aggregate IP limit is enabled, its shared bucket capacity is derived as the greater of one second at the IP rate or the matching per-request burst. This lets one response use its configured startup burst while concurrent responses from the same IP still share a single aggregate allowance.
-
-Key limits are evaluated as rolling windows, and every configured window must allow an issuance. For example:
-
-```env
-STREAM_KEY_LIMITS=2/1m,10/1h,20/24h
-DOWNLOAD_KEY_LIMITS=1/1m,5/1h,10/24h
-DOWNLOAD_SESSION_MIN_AGE=5m
-```
-
-Each rolling policy is enforced independently for the signed session and the resolved client IP, so replacing a browser session does not reset the IP allowance. When `DOWNLOAD_SESSION_MIN_AGE` is enabled, its delay begins when the server signs the session's creation-time cookie. Legacy sessions receive that cookie on their next session bootstrap.
-
-One key is issued for a logical playback or download. Browser Range requests made with that key do not consume additional key allowances. Limit state and aggregate IP bandwidth state are held in memory and are not shared between application replicas.
-
-### Targeted messages
-
-Send a message to an anonymous session through the admin API:
-
-```bash
-curl -X POST http://localhost:8080/api/admin/targeted-messages \
-  -H "X-API-Key: $REQUESTS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sessionId": "0123456789abcdef0123456789abcdef",
-    "title": "A note for you",
-    "message": "Please get in touch through the contact page."
-  }'
-```
-
-Each session can have one pending message, shown in a modal on app load until the server processes a dismissal. Multiple tabs may show it; repeated dismissals cannot delete a newer message. A failed acknowledgement may still have reached the server, so redelivery is not guaranteed.
-
-Displays emit the Rybbit event `targeted-message-displayed` with `messageId` only—no message text or session ID.
-
-### Cap CAPTCHA
-
-The optional `cap` Docker Compose profile runs Cap Standalone with a private Valkey instance:
+Copy the example configuration:
 
 ```bash
 cp .env.local.example .env.local
-# Set ADMIN_KEY to at least 32 random characters.
-docker compose --env-file .env.local --profile cap up -d cap
 ```
 
-Open `http://localhost:3000`, sign in with `ADMIN_KEY`, and create a site key. Keep instrumentation enabled. Then configure Audio Share:
+Edit `.env.local` to set a long, random `SESSION_SECRET` and the host path to your audio library:
 
 ```env
-CAP_ENFORCEMENT=observe
-CAP_PUBLIC_ENDPOINT=http://localhost:3000/<site-key>/
-CAP_VERIFY_ENDPOINT=http://localhost:3000/<site-key>/siteverify
-CAP_SECRET_KEY=<site-key-secret>
-STREAM_CAPTCHA_LIMITS=3/1m,10/1h
-STREAM_CAPTCHA_CLEARANCE_TTL=15m
-DOWNLOAD_CAPTCHA_MODE=always
+SESSION_SECRET=replace-with-a-long-random-value
+AUDIO_PATH=/path/to/your/audio
 ```
-## Audio Files Organization
 
-Organize your audio files in your configured audio directory. The application will automatically:
+Review the volume paths in `docker-compose.yml`. Optional source-request normalization uses an external Python script at `SOURCE_NORMALIZER_PATH`; set that path if you use it, or remove its mount and `SOURCE_NORMALIZER_SCRIPT` setting from the Compose file.
 
-1. Display folders and audio files in a browsable interface
-2. Show properly formatted artist and track names based on directory structure
-3. Support common audio formats: MP3, WAV, OGG, FLAC, AAC, M4A, OPUS
+Start the services and index your library:
 
-### File Metadata
+```bash
+docker compose --env-file .env.local up -d
+docker compose --env-file .env.local exec app ./audio-share-backend reindex
+```
 
-Each audio file requires a valid `.info.json` metadata file. Thumbnails are optional:
+Open [localhost:8080](http://localhost:8080). Compose runs database migrations through its `migrate` service before starting the app and worker. Run the reindex command again after adding files, or set `INDEX_SCHEDULE` in `.env.local` for automatic indexing.
 
-1. **Thumbnails**: Add an image file with the same base name as your audio file. Supported suffixes (checked in order):
-   `-thumb.jpg`, `-thumb.webp`, `-thumb.png`, `.jpg`, `.webp`, `.png`
-   - Example: For `song.mp3`, add `song-thumb.jpg` or `song.jpg` in the same directory
+## Preparing your library
 
-2. **Metadata JSON**: Add a JSON file with the same name as your audio file, but with ".info.json" suffix:
-   - Example: For `song.mp3`, add `song.info.json` in the same directory
+Organize audio into folders however you like. Supported formats include MP3, WAV, OGG, FLAC, AAC, M4A, and OPUS.
 
-The metadata JSON can include:
+Each audio file needs a matching `.info.json` metadata file, such as those produced by yt-dlp. For `song.mp3`, create `song.info.json`:
+
 ```json
 {
   "id": "stable-media-id",
   "title": "Song Title",
-  "meta_artist": "Artist Name",
-  "upload_date": "20230215",
-  "webpage_url": "https://original-source-url.com",
-  "description": "Description text about the song",
-  "epoch": 1707955200.0
+  "meta_artist": "Artist Name"
 }
 ```
 
-The optional `id` field should be stable and unique within its folder, allowing renamed or replaced audio to retain its share links, likes, and playback history. If omitted, the ID is taken from a final `[id]` in the filename, such as `Song [12345].m4a`.
+Keep the ID stable and unique within its folder to preserve share links and likes when files are renamed within that folder. Artwork is optional: place an image such as `song.jpg` or `song-thumb.jpg` alongside the audio file.
 
-The `epoch` field (Unix timestamp of when the file was downloaded) is used to generate stats. This is automatically present in `.info.json` files created by yt-dlp.
+## Configuration
 
-### Folder Metadata
+Start with [.env.local.example](.env.local.example) and see the [configuration reference](docs/configuration.md) for settings and defaults. Set `DEFAULT_TITLE` and `DEFAULT_DESCRIPTION` to name your site, and add `content/about.md` to customize the About page.
 
-You can add metadata for directories with a `folder.json` file in the parent directory:
+## Documentation
 
-```json
-[
-  {
-    "folder_name": "actual_folder_name",
-    "name": "Display Name",
-    "original_url": "https://source-url.com/channel",
-    "directory_size": "3.0G",
-    "url_broken": false
-  }
-]
-```
-
-## Content Directory
-
-The `content/` directory holds customizable content:
-
-- `about.md` - Markdown content for the About page
-
-## Stats
-
-The stats page (`/stats`) reads from the search index database. It does not need external scripts or static JSON files. It tracks:
-
-- **Audio by day**: Number of audio files downloaded per day, based on the `epoch` field in `.info.json` files
-- **Sources by day**: New sources (channels) discovered per day, based on the first download date of files in each source folder
-
-A folder is considered a "source" if it has an `original_url` in its `folder.json` metadata. All audio files within that folder (and its subfolders) are attributed to that source.
-
-## Search Index
-
-The application indexes your audio library in PostgreSQL. Run migrations and build the index before browsing or searching the library.
-
-### Building the Index
-
-Build the index before starting the server (or immediately after adding new files):
-
-```bash
-cd backend
-go run . migrate
-go run . reindex
-```
-
-This walks through all configured audio directories and indexes:
-- Folder names and metadata from `folder.json` files
-- Audio filenames and metadata from `.info.json` files
-
-### Automatic Reindexing
-
-Set the `INDEX_SCHEDULE` environment variable to a cron expression for automatic reindexing:
-
-```bash
-INDEX_SCHEDULE="0 */6 * * *" go run . worker  # Reindex every 6 hours
-INDEX_SCHEDULE="0 0 * * *" go run . worker    # Reindex daily at midnight
-```
-
-If not set, the index is only rebuilt when you manually run the `reindex` command. A PostgreSQL advisory lock prevents concurrent reindex attempts across containers. If a scheduled reindex is already running, a manual reindex exits without doing any work.
-
-## Playback settings
-
-Open the queue from either the regular or immersive player, then expand **Playback settings**.
-
-- Speed (0.5×–2×) and repeat-track preference are saved in this browser. Next-track controls still advance when repeat is enabled.
-- **Shuffle upcoming** rearranges queued tracks and folder tracks within their groups, preserving the current track and playback history. Explicitly queued tracks still play before folder tracks.
-- A sleep timer stops playback after 15–90 minutes, or at the next natural track ending before repeat/autoplay. Timed stops can fade during the last 10 seconds without changing your saved volume.
-- Timers use elapsed wall-clock time, including pauses, and are checked when a suspended page returns. They belong to the current tab and reset on reload or when the player is closed.
-
-## Waveform Visualization
-
-The audio player displays a filled waveform for each track. Waveform data is generated server-side using `ffmpeg` and stored in the database as 500 normalized amplitude peaks. The player shows the waveform immediately when available and falls back to a plain progress bar otherwise.
-
-Waveform generation requires `ffmpeg` and `ffprobe` to be available on the server (included in the Docker image).
-
-### Generating Waveforms
-
-Run manually to process all files that don't have waveform data yet (most recently downloaded first):
-
-```bash
-cd backend
-go run . waveform
-```
-
-Override the time limit for a single run:
-
-```bash
-WAVEFORM_MAX_DURATION=4h go run . waveform
-```
-
-### Automatic Waveform Generation
-
-Set `WAVEFORM_CRON` to run generation on a schedule. The job processes files until `WAVEFORM_MAX_DURATION` elapses, then stops cleanly and resumes at the next scheduled run:
-
-```bash
-WAVEFORM_CRON="0 3 * * *" go run . worker              # Run nightly at 3am, up to 2h
-WAVEFORM_CRON="0 3 * * *" WAVEFORM_MAX_DURATION="4h" go run . worker
-```
-
-If `WAVEFORM_CRON` is not set, no automatic generation occurs.
-
-### Database Connection
-
-Set `DATABASE_URL` in `.env.local` to your PostgreSQL connection URL, then initialize or adopt its schema:
-
-```bash
-go run . migrate
-```
-
-## Library health dashboard
-
-Open `/admin` and enter `REQUESTS_API_KEY` to view library and worker health. The dashboard is read-only and uses the existing admin authentication. The key stays in page memory, and locking or leaving the page clears it. Health responses use `Cache-Control: no-store`.
-
-The page shows waveform coverage and backlog, identity conflicts, recent error reports, and scan/waveform runs with counts and sampled failure details. It refreshes every 30 seconds while visible. Run history is collected even when ntfy error reporting is disabled; it starts with jobs run after this update and retains up to 1,000 finished/interrupted runs. The page displays the latest 30 runs and reports, plus up to 20 records per backlog/conflict sample. A lost job lock marks an unfinished run as interrupted, with its completion time unknown.
-
-Run `go run . migrate` from `backend` before starting the updated server and workers (schema version 6). Docker Compose runs the migration service automatically. Schedules shown are the web server's configured schedules; a worker must be running with the intended configuration to execute them. The dashboard provides commands to copy for manual maintenance after correcting affected files.
-
-## Development
-
-Build the frontend once (`npm --prefix frontend run build`) and run `go run . migrate` from `backend` before starting the Go backend and Vite dev server:
-
-```bash
-# Terminal 1 - Go backend
-cd backend
-STATIC_DIR=../frontend/dist CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run . serve
-
-# Terminal 2 - Vite dev server (with hot reload)
-cd frontend
-npm run dev
-```
-
-- Backend API: http://localhost:8080
-- Frontend dev server: http://localhost:5173 (proxies API calls to backend)
-
-### Checks
-
-Pull requests and pushes to `main` run frontend lint, unit tests, a production build, desktop/mobile Chromium smoke tests, and Go vet/build/tests with the race detector. The backend job uses a disposable PostgreSQL 17 service and FFmpeg.
-
-```bash
-npm --prefix frontend ci
-npm --prefix frontend run lint
-npm --prefix frontend test
-npm --prefix frontend run build
-cd frontend
-npx playwright install chromium
-npm run test:browser
-```
-
-The browser suite serves the production frontend with deterministic API fixtures and real WAV audio. It checks playback/seeking, queue restoration, playback settings, and recovery between browser profiles; real API/database behavior is covered separately by Go integration tests. Failures upload traces and screenshots in CI. To inspect the fixture app manually, run `node e2e/server.mjs` from `frontend` and open `http://127.0.0.1:4175/share/rain`.
-
-```bash
-cd backend
-# Set TEST_DATABASE_URL to a QA database. Tests create and remove their own schemas.
-go test -race -p 1 -count=1 ./...
-```
-
-Use `-p 1` with a shared test database: advisory job locks span schemas and otherwise cause independent packages to skip each other’s jobs. The configured-database baseline check is read-only and expects an initialized database; CI initializes its disposable database with `go run . migrate` first. FFmpeg and FFprobe must be installed to exercise waveform integration tests.
-
-### Production Build
-
-Build the frontend:
-
-```bash
-cd frontend
-npm run build
-```
-
-Run Go server with built frontend:
-
-```bash
-cd backend
-go run . migrate
-STATIC_DIR=../frontend/dist CONTENT_DIR=../content AUDIO_DIR=/path/to/audio:Audio go run . serve
-```
-
-Open http://localhost:8080 in your browser.
+- [Setup](docs/setup.md): installation, library metadata, site content, and CAPTCHA
+- [Configuration](docs/configuration.md): server environment variables and Docker Compose settings
+- [Management](docs/management.md): indexing, waveforms, scheduled jobs, health, and access limits
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Built with [React](https://react.dev) and [Go](https://go.dev)
-- Frontend tooling by [Vite](https://vitejs.dev)
-- Icons by [Lucide](https://lucide.dev)
+[MIT](LICENSE)
