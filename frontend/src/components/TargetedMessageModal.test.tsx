@@ -49,7 +49,9 @@ describe('TargetedMessageModal', () => {
         const dialog = await screen.findByRole('dialog', {name: 'A direct note'});
         expect(dialog.textContent).toContain('Hello <strong>listener</strong>.');
         expect(dialog.querySelector('strong')).toBeNull();
-        expect(screen.getByRole('button', {name: 'Got it'})).toBe(document.activeElement);
+        await waitFor(() => {
+            expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Got it'}));
+        });
         expect(fetchMock).toHaveBeenCalledOnce();
         expect(fetchMock).toHaveBeenCalledWith('/api/session/targeted-message', {
             method: 'POST',
