@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+func newTestAdminAuth(key, secret string, ttl time.Duration, origins []string) *AdminAuth {
+	limiter, _ := NewAdminFailureLimiter(10, "15m")
+	return NewAdminAuth(key, secret, ttl, origins, limiter)
+}
+
 func adminRequest(method, path string, cookie *http.Cookie) *http.Request {
 	r := httptest.NewRequest(method, "https://archive.test"+path, nil)
 	if cookie != nil {
@@ -32,7 +37,7 @@ func loginCookie(t *testing.T, auth *AdminAuth) *http.Cookie {
 
 func TestAdminCookieLifetimeAndRotation(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	auth := NewAdminAuth("private-key", "session-secret", 2*time.Hour, nil)
+	auth := newTestAdminAuth("private-key", "session-secret", 2*time.Hour, nil)
 	auth.now = func() time.Time { return now }
 	cookie := loginCookie(t, auth)
 	if !cookie.Secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Domain != "" || cookie.MaxAge != 7200 || !cookie.Expires.Equal(now.Add(2*time.Hour)) {
@@ -57,10 +62,10 @@ func TestAdminCookieLifetimeAndRotation(t *testing.T) {
 		}
 	}
 	for _, changed := range []*AdminAuth{
-		NewAdminAuth("rotated-key", "session-secret", 2*time.Hour, nil),
-		NewAdminAuth("private-key", "rotated-secret", 2*time.Hour, nil),
-		NewAdminAuth("", "session-secret", 2*time.Hour, nil),
-		NewAdminAuth("private-key", "session-secret", time.Hour, nil),
+		newTestAdminAuth("rotated-key", "session-secret", 2*time.Hour, nil),
+		newTestAdminAuth("private-key", "rotated-secret", 2*time.Hour, nil),
+		newTestAdminAuth("", "session-secret", 2*time.Hour, nil),
+		newTestAdminAuth("private-key", "session-secret", time.Hour, nil),
 	} {
 		changed.now = func() time.Time { return now }
 		if _, valid := changed.claims(adminRequest("GET", "/api/admin/health", cookie)); valid {
@@ -76,7 +81,7 @@ func TestAdminCookieLifetimeAndRotation(t *testing.T) {
 }
 
 func TestAdminCookieOriginProtectionAndAPIKeyCompatibility(t *testing.T) {
-	auth := NewAdminAuth("key", "secret", 8*time.Hour, []string{"http://localhost:5173"})
+	auth := newTestAdminAuth("key", "secret", 8*time.Hour, []string{"http://localhost:5173"})
 	cookie := loginCookie(t, auth)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
 	for _, origin := range []string{"", "null", "https://evil.test", "https://sub.archive.test", "https://archive.test", "http://localhost:5173"} {
@@ -114,7 +119,7 @@ func TestAdminCookieOriginProtectionAndAPIKeyCompatibility(t *testing.T) {
 }
 
 func TestAdminSessionEndpoints(t *testing.T) {
-	auth := NewAdminAuth("key", "secret", 8*time.Hour, nil)
+	auth := newTestAdminAuth("key", "secret", 8*time.Hour, nil)
 	cookie := loginCookie(t, auth)
 	for _, tc := range []struct {
 		method, key, origin string

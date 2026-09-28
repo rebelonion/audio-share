@@ -23,3 +23,17 @@ it('does not claim logout succeeded on server failure', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', {status: 500})));
     await expect(logoutAdmin()).rejects.toThrow('Could not clear');
 });
+
+it.each([
+    ['session probe', () => getAdminSession(new AbortController().signal)],
+    ['login', () => loginAdmin('key')],
+    ['health', () => getLibraryHealth(new AbortController().signal)],
+] as const)('shows the cooldown and distinguishes auth throttling for %s', async (_, request) => {
+    const message = 'Too many failed admin authentication attempts. Try again in 900 seconds.';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({code: 'admin_auth_rate_limited', error: message}), {status: 429})));
+    await expect(request()).rejects.toBeInstanceOf(AdminAccessError);
+    await expect(request()).rejects.toThrow(message);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('Too many requests', {status: 429})));
+    await expect(request()).rejects.not.toBeInstanceOf(AdminAccessError);
+    await expect(request()).rejects.toThrow('Too many requests. Try again later.');
+});

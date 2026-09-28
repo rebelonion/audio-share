@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,6 +19,7 @@ type AdminAuth struct {
 	ttl        time.Duration
 	origins    map[string]bool
 	now        func() time.Time
+	failures   *AdminFailureLimiter
 }
 
 type adminClaims struct {
@@ -25,7 +27,7 @@ type adminClaims struct {
 	ExpiresAt int64 `json:"exp"`
 }
 
-func NewAdminAuth(apiKey, secret string, ttl time.Duration, origins []string) *AdminAuth {
+func NewAdminAuth(apiKey, secret string, ttl time.Duration, origins []string, failures *AdminFailureLimiter) *AdminAuth {
 	// A separate signing purpose and the current credential bind cookies to this
 	// admin key, without putting the credential in the cookie itself.
 	mac := hmac.New(sha256.New, []byte(secret))
@@ -34,7 +36,7 @@ func NewAdminAuth(apiKey, secret string, ttl time.Duration, origins []string) *A
 	for _, origin := range origins {
 		allowed[origin] = true
 	}
-	return &AdminAuth{apiKey: apiKey, signingKey: mac.Sum(nil), ttl: ttl, origins: allowed, now: time.Now}
+	return &AdminAuth{apiKey: apiKey, signingKey: mac.Sum(nil), ttl: ttl, origins: allowed, now: time.Now, failures: failures}
 }
 
 func (a *AdminAuth) signature(payload string) []byte {
@@ -81,6 +83,16 @@ func (a *AdminAuth) sameOrigin(r *http.Request) bool {
 	return origin == scheme+"://"+r.Host || a.origins[origin]
 }
 
+// Browsers may omit Origin on GETs, so also reject cross-origin fetch metadata.
+// Requests without browser headers remain usable by API-key scripts.
+func (a *AdminAuth) trustedBrowserOrigin(r *http.Request) bool {
+	if r.Header.Get("Origin") != "" {
+		return a.sameOrigin(r)
+	}
+	site := r.Header.Get("Sec-Fetch-Site")
+	return site == "" || site == "same-origin" || site == "none"
+}
+
 func adminJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
@@ -92,18 +104,44 @@ func adminCookie(value string, expires time.Time, maxAge int) *http.Cookie {
 	return &http.Cookie{Name: adminCookieName, Value: value, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, Expires: expires, MaxAge: maxAge}
 }
 
+func (a *AdminAuth) authenticateKey(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("X-API-Key") == "" {
+		if _, err := r.Cookie(adminCookieName); err != nil {
+			a.rejectAuthentication(w, 0)
+			return false
+		}
+	}
+	valid, retry := a.failures.Check(r, a.now(), func() bool { return a.validKey(r) })
+	if !valid {
+		a.rejectAuthentication(w, retry)
+	}
+	return valid
+}
+
+func (a *AdminAuth) rejectAuthentication(w http.ResponseWriter, retry int) {
+	if retry > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(retry))
+		adminJSON(w, http.StatusTooManyRequests, map[string]string{"code": "admin_auth_rate_limited", "error": "Too many failed admin authentication attempts. Try again in " + strconv.Itoa(retry) + " seconds."})
+		return
+	}
+	adminJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+}
+
 // SessionHandler exchanges an API key for a fixed-lifetime signed cookie.
 // DELETE clears the browser cookie; stateless tokens are not individually revocable.
 func (a *AdminAuth) SessionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	if !a.trustedBrowserOrigin(r) {
+		adminJSON(w, http.StatusForbidden, map[string]string{"error": "Untrusted origin"})
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
-		if !a.validKey(r) {
-			adminJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-			return
-		}
 		if !a.sameOrigin(r) {
 			adminJSON(w, http.StatusForbidden, map[string]string{"error": "Untrusted origin"})
+			return
+		}
+		if !a.authenticateKey(w, r) {
 			return
 		}
 		now := a.now().UTC().Truncate(time.Second)
@@ -116,7 +154,12 @@ func (a *AdminAuth) SessionHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		claims, valid := a.claims(r)
 		if !valid {
-			adminJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+			// A normal signed-out session probe does not consume the login allowance.
+			retry := 0
+			if _, err := r.Cookie(adminCookieName); err == nil {
+				_, retry = a.failures.Check(r, a.now(), func() bool { return false })
+			}
+			a.rejectAuthentication(w, retry)
 			return
 		}
 		adminJSON(w, http.StatusOK, map[string]time.Time{"expiresAt": time.Unix(claims.ExpiresAt, 0).UTC()})
@@ -136,12 +179,21 @@ func (a *AdminAuth) SessionHandler(w http.ResponseWriter, r *http.Request) {
 func (a *AdminAuth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		if a.validKey(r) {
-			next.ServeHTTP(w, r)
+		if !a.trustedBrowserOrigin(r) {
+			adminJSON(w, http.StatusForbidden, map[string]string{"error": "Untrusted origin"})
 			return
 		}
 		if _, valid := a.claims(r); !valid {
-			adminJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+			if !a.authenticateKey(w, r) {
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		// A valid cookie keeps an established admin session usable during a
+		// key-login cooldown; scripts may still explicitly authenticate by key.
+		if a.validKey(r) {
+			next.ServeHTTP(w, r)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions && !a.sameOrigin(r) {

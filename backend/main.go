@@ -130,6 +130,10 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	if err != nil || adminSessionTTL < time.Second || adminSessionTTL%time.Second != 0 {
 		return nil, fmt.Errorf("Invalid ADMIN_SESSION_TTL %q: use a duration of at least one whole second", cfg.AdminSessionTTL)
 	}
+	adminFailures, err := middleware.NewAdminFailureLimiter(cfg.AdminAuthFailureLimit, cfg.AdminAuthFailureWindow)
+	if err != nil {
+		return nil, err
+	}
 	streamKeyTTL, err := time.ParseDuration(cfg.StreamKeyTTL)
 	if err != nil || streamKeyTTL <= 0 {
 		return nil, fmt.Errorf("Invalid STREAM_KEY_TTL %q", cfg.StreamKeyTTL)
@@ -268,7 +272,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	)
 
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
-	adminAuth := middleware.NewAdminAuth(cfg.RequestsAPIKey, cfg.SessionSecret, adminSessionTTL, cfg.CORSOrigins)
+	adminAuth := middleware.NewAdminAuth(cfg.RequestsAPIKey, cfg.SessionSecret, adminSessionTTL, cfg.CORSOrigins, adminFailures)
 	if cfg.RequestsAPIKey == "" {
 		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are disabled")
 	}

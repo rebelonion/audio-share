@@ -1,5 +1,5 @@
 import {API_BASE} from './api';
-import {AdminAccessError} from './operations';
+import {AdminAccessError, checkAdminThrottle} from './operations';
 import type {RequestStatus, RequestsByStatus, SourceRequest, Tag} from '@/types';
 
 export interface AudioSource {
@@ -24,6 +24,7 @@ async function request<T>(path: string, signal: AbortSignal, method = 'GET', bod
         method, signal, credentials: 'include', cache: 'no-store',
         ...(body === undefined ? {} : {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}),
     });
+    await checkAdminThrottle(response);
     if (response.status === 401) throw new AdminAccessError('Your admin session expired. Unlock the dashboard again.');
     if (!response.ok) {
         const result = await response.json().catch(() => null);

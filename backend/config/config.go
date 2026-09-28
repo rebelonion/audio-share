@@ -127,10 +127,12 @@ type Config struct {
 
 	SessionSecret string
 
-	RequestsAPIKey    string
-	AdminSessionTTL   string
-	IndexWebhookURL   string
-	IndexWebhookToken string
+	RequestsAPIKey         string
+	AdminSessionTTL        string
+	AdminAuthFailureLimit  int
+	AdminAuthFailureWindow string
+	IndexWebhookURL        string
+	IndexWebhookToken      string
 
 	CORSOrigins []string
 
@@ -207,10 +209,12 @@ func Load() *Config {
 
 		SessionSecret: getEnv("SESSION_SECRET", ""),
 
-		RequestsAPIKey:    getEnv("REQUESTS_API_KEY", ""),
-		AdminSessionTTL:   getEnv("ADMIN_SESSION_TTL", "8h"),
-		IndexWebhookURL:   getEnv("INDEX_WEBHOOK_URL", ""),
-		IndexWebhookToken: getEnv("INDEX_WEBHOOK_TOKEN", ""),
+		RequestsAPIKey:         getEnv("REQUESTS_API_KEY", ""),
+		AdminSessionTTL:        getEnv("ADMIN_SESSION_TTL", "8h"),
+		AdminAuthFailureLimit:  getEnvInt("ADMIN_AUTH_FAILURE_LIMIT", 10),
+		AdminAuthFailureWindow: getEnv("ADMIN_AUTH_FAILURE_WINDOW", "15m"),
+		IndexWebhookURL:        getEnv("INDEX_WEBHOOK_URL", ""),
+		IndexWebhookToken:      getEnv("INDEX_WEBHOOK_TOKEN", ""),
 
 		CORSOrigins: getEnvList("CORS_ORIGINS", []string{"http://localhost:5173"}),
 

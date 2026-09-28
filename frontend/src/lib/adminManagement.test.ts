@@ -35,3 +35,13 @@ it('distinguishes expiry, rejected writes, and server failures', async () => {
     await expect(deleteAdminRequest(1, signal)).rejects.toThrow('Duplicate request');
     await expect(deleteAdminRequest(1, signal)).rejects.toThrow('Check the current state');
 });
+
+it('distinguishes authentication cooldowns from other throttled writes', async () => {
+    const message = 'Too many failed admin authentication attempts. Try again in 30 seconds.';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({code: 'admin_auth_rate_limited', error: message}), {status: 429})));
+    const signal = new AbortController().signal;
+    await expect(deleteAdminRequest(1, signal)).rejects.toBeInstanceOf(AdminAccessError);
+    await expect(deleteAdminRequest(1, signal)).rejects.toThrow(message);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', {status: 429})));
+    await expect(deleteAdminRequest(1, signal)).rejects.not.toBeInstanceOf(AdminAccessError);
+});

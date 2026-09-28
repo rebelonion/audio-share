@@ -85,26 +85,6 @@ func (rl *RateLimiter) resetGeneralWindowLocked(data *rateLimitData, now int64) 
 	}
 }
 
-func (rl *RateLimiter) getClientIP(r *http.Request) string {
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
-	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
-	}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
-		}
-	}
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
-}
-
 func (rl *RateLimiter) isProtectedAudioRequest(path string) bool {
 	path = strings.TrimRight(path, "/")
 	if !strings.HasPrefix(path, "/api/audio/key/") {
@@ -124,7 +104,7 @@ func (rl *RateLimiter) isImageRequest(path string) bool {
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := rl.getClientIP(r)
+		ip := getClientIP(r)
 		now := time.Now().UnixMilli()
 		path := r.URL.Path
 

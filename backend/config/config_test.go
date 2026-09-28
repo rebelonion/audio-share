@@ -28,3 +28,18 @@ func TestAdminSessionTTLConfiguration(t *testing.T) {
 		t.Fatalf("override=%q", got)
 	}
 }
+
+func TestAdminFailureConfiguration(t *testing.T) {
+	t.Setenv("ADMIN_AUTH_FAILURE_LIMIT", "")
+	t.Setenv("ADMIN_AUTH_FAILURE_WINDOW", "")
+	cfg := Load()
+	if cfg.AdminAuthFailureLimit != 10 || cfg.AdminAuthFailureWindow != "15m" {
+		t.Fatal("incorrect admin failure defaults")
+	}
+	t.Setenv("ADMIN_AUTH_FAILURE_LIMIT", "3")
+	t.Setenv("ADMIN_AUTH_FAILURE_WINDOW", "30s")
+	cfg = Load()
+	if cfg.AdminAuthFailureLimit != 3 || cfg.AdminAuthFailureWindow != "30s" {
+		t.Fatal("admin failure overrides not loaded")
+	}
+}

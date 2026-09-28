@@ -13,6 +13,8 @@ The table below lists server environment variables and their application default
 | `SESSION_SECRET` | Required secret used to sign anonymous/admin sessions and media access keys | - |
 | `REQUESTS_API_KEY` | Admin login credential; scripts can supply it in `X-API-Key` for `/api/admin` operations | - |
 | `ADMIN_SESSION_TTL` | How long admins stay signed in (e.g. `30m`, `8h`, `24h`); whole seconds, minimum `1s` | `8h` |
+| `ADMIN_AUTH_FAILURE_LIMIT` | Failed admin authentication attempts allowed per client IP within the window; positive integer | `10` |
+| `ADMIN_AUTH_FAILURE_WINDOW` | Admin authentication failure window; whole seconds, minimum `1s` | `15m` |
 | `STREAM_KEY_LIMITS` | Rolling per-session and per-IP stream-key limits in `count/duration` format, comma-separated | `10/1m` |
 | `DOWNLOAD_KEY_LIMITS` | Rolling per-session and per-IP download-key limits in `count/duration` format, comma-separated | `10/1m` |
 | `STREAM_KEY_TTL` | Lifetime of a stream access key | `30m` |
