@@ -225,3 +225,15 @@ export function restoreQueue(value: string | null): QueueState {
         return EMPTY_QUEUE;
     }
 }
+
+export function shuffleUpcoming(state: QueueState, random = Math.random): QueueState {
+    const shuffle = (original: PlayerTrack[]) => {
+        const tracks = [...original];
+        for (let index = tracks.length - 1; index > 0; index--) {
+            const other = Math.floor(random() * (index + 1));
+            [tracks[index], tracks[other]] = [tracks[other], tracks[index]];
+        }
+        return tracks;
+    };
+    return {...state, manual: shuffle(state.manual), context: shuffle(state.context)};
+}

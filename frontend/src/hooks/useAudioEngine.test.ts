@@ -557,3 +557,38 @@ describe('proactive stream grant renewal', () => {
         expect(result.current.isPlaying).toBe(false);
     });
 });
+
+it('persists speed and reapplies it to new tracks and reconnects', async () => {
+    mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'speed-key', expiresAt: Date.now() + 3_600_000});
+    localStorage.setItem('audio-share:playback-rate', '1.5');
+    const currentTrackRef = {current: {id: 'a', src: '/audio/key/a', shareKey: 'a', name: 'a', source: 'manual' as const}};
+    const engine = renderHook(() => useAudioEngine({currentTrackRef, metadataRef: {current: null}, onEndedRef: {current: vi.fn()}, waveformDuration: 0}));
+    expect(engine.result.current.playbackRate).toBe(1.5);
+    act(() => engine.result.current.play());
+    await waitFor(() => expect(FakeAudio.instances[0]?.paused).toBe(false));
+    expect(FakeAudio.instances[0].playbackRate).toBe(1.5);
+    act(() => engine.result.current.setPlaybackRate(0.75));
+    expect(FakeAudio.instances[0].playbackRate).toBe(0.75);
+    expect(localStorage.getItem('audio-share:playback-rate')).toBe('0.75');
+    act(() => {
+        engine.result.current.resetForTrack();
+        currentTrackRef.current = {...currentTrackRef.current, id: 'b', shareKey: 'b', src: '/audio/key/b'};
+        engine.result.current.play();
+    });
+    await waitFor(() => expect(mediaAccess.requestMediaAccess).toHaveBeenCalledTimes(2));
+    expect(FakeAudio.instances[0].playbackRate).toBe(0.75);
+    act(() => engine.result.current.setPlaybackRate(NaN));
+    expect(engine.result.current.playbackRate).toBe(0.75);
+});
+
+it('ignores an ended event queued before a sleep timer paused playback', async () => {
+    mediaAccess.requestMediaAccess.mockResolvedValue({accessKey: 'sleep-key', expiresAt: Date.now() + 3_600_000});
+    const onEnded = vi.fn();
+    const currentTrackRef = {current: {id: 'a', src: '/audio/key/a', shareKey: 'a', name: 'a', source: 'manual' as const}};
+    const engine = renderHook(() => useAudioEngine({currentTrackRef, metadataRef: {current: null}, onEndedRef: {current: onEnded}, waveformDuration: 0}));
+    act(() => engine.result.current.play());
+    await waitFor(() => expect(FakeAudio.instances[0]?.paused).toBe(false));
+    act(() => engine.result.current.pause());
+    act(() => FakeAudio.instances[0].emit('ended'));
+    expect(onEnded).not.toHaveBeenCalled();
+});

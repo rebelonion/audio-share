@@ -14,6 +14,7 @@ Browse, play, and share audio files from a collection you host.
 - Search the entire library by name, artist, title, or description
 - Stream audio files directly in the browser
 - Use a persistent queue, folder playlists, autoplay, playback controls, and a waveform visualizer
+- Adjust playback speed, repeat a track, shuffle upcoming tracks, or set a sleep timer from the queue’s Playback settings
 - Save likes without an account and recover them with a text key or QR code
 - Display metadata for audio files including title, artist, and album art
 - Share links to specific audio files
@@ -300,6 +301,15 @@ INDEX_SCHEDULE="0 0 * * *" go run . worker    # Reindex daily at midnight
 ```
 
 If not set, the index is only rebuilt when you manually run the `reindex` command. A PostgreSQL advisory lock prevents concurrent reindex attempts across containers. If a scheduled reindex is already running, a manual reindex exits without doing any work.
+
+## Playback settings
+
+Open the queue from either the regular or immersive player, then expand **Playback settings**.
+
+- Speed (0.5×–2×) and repeat-track preference are saved in this browser. Next-track controls still advance when repeat is enabled.
+- **Shuffle upcoming** rearranges queued tracks and folder tracks within their groups, preserving the current track and playback history. Explicitly queued tracks still play before folder tracks.
+- A sleep timer stops playback after 15–90 minutes, or at the next natural track ending before repeat/autoplay. Timed stops can fade during the last 10 seconds without changing your saved volume.
+- Timers use elapsed wall-clock time, including pauses, and are checked when a suspended page returns. They belong to the current tab and reset on reload or when the player is closed.
 
 ## Waveform Visualization
 

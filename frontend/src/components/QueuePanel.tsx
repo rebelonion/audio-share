@@ -1,3 +1,4 @@
+import PlaybackSettings from './PlaybackSettings';
 import {ListMusic, Radio, Trash2, X} from 'lucide-react';
 import {useEffect, useRef, useState, type CSSProperties} from 'react';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
@@ -48,12 +49,12 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
     return (
         <div
             id={id}
-            className={`${className ?? 'fixed z-[60] sm:bottom-4 sm:right-[21rem] sm:w-80 sm:h-[min(34rem,calc(100vh-2rem))] max-sm:inset-4'} rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col animate-slideUp`}
+            className={`${className ?? 'fixed z-[60] sm:bottom-4 sm:right-[21rem] sm:w-80 sm:h-[min(34rem,calc(100vh-2rem))] max-sm:inset-4'} rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col overflow-y-auto animate-slideUp`}
             style={{contain: 'layout paint style', isolation: 'isolate', ...style}}
             role="dialog"
             aria-label="Playback queue"
         >
-            <div className="queue-heading flex items-center justify-between p-4 border-b border-[var(--border)]">
+            <div className="queue-heading shrink-0 flex items-center justify-between p-4 border-b border-[var(--border)]">
                 <div>
                     <div className="flex items-center gap-2 font-semibold"><ListMusic className="h-4 w-4 text-[var(--primary)]" /> Queue</div>
                     <div className="mt-0.5 text-xs text-[var(--muted-foreground)]">{contextLabel || 'Listening now'}</div>
@@ -62,7 +63,7 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
             </div>
 
             {currentTrack && (
-                <div className="queue-current p-3 border-b border-[var(--border)]">
+                <div className="queue-current shrink-0 p-3 border-b border-[var(--border)]">
                     <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Now playing</div>
                     <div className="rounded-md border border-[var(--primary-border)] bg-[var(--primary-wash)] p-3">
                         <div className="font-medium text-sm line-clamp-2">{currentTrack.name}</div>
@@ -80,7 +81,7 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
             ) : (
                 <div
                     ref={listRef}
-                    className="custom-scrollbar flex-1 min-h-0 overflow-y-auto"
+                    className="custom-scrollbar flex-1 min-h-[104px] overflow-y-auto"
                     onScroll={event => setScrollTop(event.currentTarget.scrollTop)}
                 >
                     <div className="relative" style={{height: upcoming.length * QUEUE_ROW_HEIGHT}}>
@@ -105,7 +106,9 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
                 </div>
             )}
 
-            <div className="queue-autoplay p-3 border-t border-[var(--border)]">
+            <PlaybackSettings />
+
+            <div className="queue-autoplay shrink-0 p-3 border-t border-[var(--border)]">
                 <button onClick={toggleAutoplay} className="w-full flex items-center justify-between gap-3 rounded-md bg-[var(--secondary)] px-3 py-2.5 text-left hover:bg-[var(--muted)]" role="switch" aria-checked={autoplay}>
                     <span className="flex items-center gap-2 text-sm"><Radio className="h-4 w-4 text-[var(--primary)]" /> Autoplay recommendations</span>
                     <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${autoplay ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}>

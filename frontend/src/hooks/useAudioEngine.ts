@@ -14,6 +14,8 @@ import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
 import {reportError as reportOperationalError} from '@/lib/errorReporting';
 
 export const POSITION_STORAGE_KEY = 'audio-share:position';
+export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+const RATE_STORAGE_KEY = 'audio-share:playback-rate';
 const VOLUME_STORAGE_KEY = 'audio-share:volume';
 const STREAM_EXPIRY_MARGIN_MS = 5 * 60_000;
 
@@ -41,6 +43,11 @@ export function useAudioEngine({
     const [currentTime, setCurrentTime] = useState(0);
     const [seekVersion, setSeekVersion] = useState(0);
     const [volume, setVolume] = useState(initialVolume);
+    const [playbackRate, setRate] = useState(() => {
+        const saved = Number(readLocalStorage(RATE_STORAGE_KEY));
+        return PLAYBACK_RATES.some(rate => rate === saved) ? saved : 1;
+    });
+    const playbackRateRef = useRef(playbackRate);
     const [isMuted, setIsMuted] = useState(() => volume === 0);
     const [error, setError] = useState<string | null>(null);
     const [audioLoaded, setAudioLoaded] = useState(false);
@@ -58,6 +65,7 @@ export function useAudioEngine({
     const readAudioLevel = useCallback(() => levelReaderRef.current?.read() ?? 0, []);
     const audioListenersRef = useRef<Array<[string, EventListener]>>([]);
     const volumeRef = useRef(volume);
+    const sleepGainRef = useRef(1);
     const isMutedRef = useRef(isMuted);
     const resumableTrackRef = useRef(currentTrackRef.current?.shareKey || null);
     const recordedPlaySrcRef = useRef<string | null>(null);
@@ -212,6 +220,8 @@ export function useAudioEngine({
             audioListenersRef.current.push([name, listener]);
         };
 
+        audio.defaultPlaybackRate = playbackRateRef.current;
+        audio.playbackRate = playbackRateRef.current;
         audio.preload = 'metadata';
         audio.crossOrigin = 'use-credentials';
         audio.src = mediaAccessURL(loadedTrack.shareKey, 'stream', grant.accessKey);
@@ -248,7 +258,7 @@ export function useAudioEngine({
             applyRequestedPosition(audio, resumeAt);
         });
         listen('ended', () => {
-            if (audioRef.current !== audio) return;
+            if (audioRef.current !== audio || !wantsPlaybackRef.current) return;
             setIsPlaying(false);
             onEndedRef.current();
         });
@@ -394,7 +404,7 @@ export function useAudioEngine({
             ) return;
 
             const audio = createAudio(selectedTrack, grant, resumeAt);
-            audio.volume = volumeRef.current;
+            audio.volume = volumeRef.current * sleepGainRef.current;
             audio.muted = isMutedRef.current;
             activeGrantRef.current = grant;
             recoveredExpiredKeyRef.current = null;
@@ -501,6 +511,22 @@ export function useAudioEngine({
         trackEvent('audio-pause');
     }, [cancelNetworkRetry, trackEvent]);
 
+    const setSleepGain = useCallback((gain: number) => {
+        sleepGainRef.current = Math.min(1, Math.max(0, gain));
+        if (audioRef.current) audioRef.current.volume = volumeRef.current * sleepGainRef.current;
+    }, []);
+
+    const setPlaybackRate = useCallback((rate: number) => {
+        if (!PLAYBACK_RATES.some(value => value === rate)) return;
+        playbackRateRef.current = rate;
+        setRate(rate);
+        writeLocalStorage(RATE_STORAGE_KEY, String(rate));
+        if (audioRef.current) {
+            audioRef.current.defaultPlaybackRate = rate;
+            audioRef.current.playbackRate = rate;
+        }
+    }, []);
+
     const toggleMute = useCallback(() => {
         const muted = !isMutedRef.current;
         isMutedRef.current = muted;
@@ -522,7 +548,7 @@ export function useAudioEngine({
         setIsMuted(muted);
         writeLocalStorage(VOLUME_STORAGE_KEY, String(clamped));
         if (audioRef.current) {
-            audioRef.current.volume = clamped;
+            audioRef.current.volume = clamped * sleepGainRef.current;
             audioRef.current.muted = muted;
         }
     }, []);
@@ -553,6 +579,9 @@ export function useAudioEngine({
 
     return {
         audioRef,
+        playbackRate,
+        setPlaybackRate,
+        setSleepGain,
         enableAudioLevels,
         readAudioLevel,
         isPlaying,

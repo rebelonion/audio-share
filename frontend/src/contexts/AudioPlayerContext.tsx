@@ -27,11 +27,12 @@ import {
     retreat,
     startContext,
     startSingleton,
+    shuffleUpcoming,
     type PlayerTrack,
     type QueueState,
     type TrackSource,
 } from '@/lib/playerQueue';
-import {removeLocalStorage, writeLocalStorage} from '@/lib/storage';
+import {readLocalStorage, removeLocalStorage, writeLocalStorage} from '@/lib/storage';
 import {
     POSITION_STORAGE_KEY,
     useAudioEngine,
@@ -44,6 +45,7 @@ import {
     usePlayerMetadata,
     type PlayerMetadata,
 } from '@/hooks/usePlayerMetadata';
+import {useSleepTimer, type SleepTimer} from '@/hooks/useSleepTimer';
 import {useRybbit} from '@/hooks/useRybbit';
 
 export interface AudioPlayerTrack {
@@ -64,6 +66,16 @@ interface PlayTrackOptions {
 type QueueActionResult = 'ignored' | 'ready' | 'queued' | 'playing';
 
 interface AudioPlayerContextValue {
+    sleepFadeOut: boolean;
+    setSleepFadeOut: (enabled: boolean) => void;
+    playbackRate: number;
+    setPlaybackRate: (rate: number) => void;
+    repeatOne: boolean;
+    toggleRepeatOne: () => void;
+    shuffleQueue: () => void;
+    sleepTimer: SleepTimer;
+    sleepRemainingSeconds: number;
+    setSleepTimer: (value: 'off' | 'track' | number) => void;
     enableAudioLevels: () => void;
     readAudioLevel: () => number;
     currentTrack: PlayerTrack | null;
@@ -162,6 +174,9 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
     const advancePlaybackRef = useRef<() => void>(() => {});
     const {
         audioRef,
+        playbackRate,
+        setPlaybackRate,
+        setSleepGain,
         enableAudioLevels,
         readAudioLevel,
         isPlaying,
@@ -199,6 +214,27 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
     const seekToRef = useRef(seekTo);
     const recommendationControllerRef = useRef<AbortController | null>(null);
     seekToRef.current = seekTo;
+
+    const [repeatOne, setRepeatOne] = useState(() => readLocalStorage('audio-share:repeat-one') === 'true');
+    const repeatOneRef = useRef(repeatOne);
+    const stopForSleep = useCallback(() => {
+        recommendationControllerRef.current?.abort();
+        pendingPlayRef.current = false;
+        pendingStartTimeRef.current = undefined;
+        pendingMatureMetadataPlayRef.current = null;
+        setShowMatureDialog(false);
+        pause();
+    }, [pause]);
+    const {sleepTimer, remainingSeconds: sleepRemainingSeconds, setSleepTimer, consumeTimer, fadeOut: sleepFadeOut, setFadeOut: setSleepFadeOut} = useSleepTimer(stopForSleep, setSleepGain);
+    const toggleRepeatOne = useCallback(() => {
+        const next = !repeatOneRef.current;
+        repeatOneRef.current = next;
+        setRepeatOne(next);
+        writeLocalStorage('audio-share:repeat-one', String(next));
+    }, []);
+    const shuffleQueue = useCallback(() => {
+        updateQueue(shuffleUpcoming(queueRef.current));
+    }, [queueRef, updateQueue]);
 
     const upcoming = useMemo(() => [...queue.manual, ...queue.context], [queue.context, queue.manual]);
 
@@ -305,6 +341,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
     }, [queueRef, transitionQueue]);
 
     const closePlayer = useCallback(() => {
+        setSleepTimer('off');
         recommendationControllerRef.current?.abort();
         setShowMatureDialog(false);
         resetForTrack();
@@ -320,9 +357,10 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         pendingStartTimeRef.current = undefined;
         pendingMatureMetadataPlayRef.current = null;
         removeLocalStorage(POSITION_STORAGE_KEY);
-    }, [queueRef, resetForTrack, updateQueue]);
+    }, [queueRef, resetForTrack, setSleepTimer, updateQueue]);
 
     const requestPlayCurrent = useCallback(() => {
+        if (consumeTimer()) return;
         recommendationControllerRef.current?.abort();
         const selectedTrack = queueRef.current.current;
         if (shouldWaitForMaturePlaybackMetadata(
@@ -345,7 +383,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         const startTime = pendingStartTimeRef.current;
         pendingStartTimeRef.current = undefined;
         play(startTime);
-    }, [play, queueRef]);
+    }, [consumeTimer, play, queueRef]);
 
     const togglePlay = useCallback(() => {
         const audio = audioRef.current;
@@ -425,6 +463,12 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
 
     advancePlaybackRef.current = () => {
         removeLocalStorage(POSITION_STORAGE_KEY);
+        if (consumeTimer(true)) return;
+        if (repeatOneRef.current) {
+            pendingStartTimeRef.current = 0;
+            requestPlayCurrentRef.current();
+            return;
+        }
         void advancePlayback();
     };
 
@@ -453,12 +497,14 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         return registerMediaSessionActions(navigator.mediaSession, {
             play: () => requestPlayCurrentRef.current(),
             pause: () => pauseCurrentRef.current(),
-            next: () => advancePlaybackRef.current(),
+            next: () => skipNext(),
             previous: () => skipPrevious(),
         });
-    }, [currentTrack, skipPrevious]);
+    }, [currentTrack, skipNext, skipPrevious]);
 
     const value = useMemo<AudioPlayerContextValue>(() => ({
+        playbackRate, setPlaybackRate, repeatOne, toggleRepeatOne, shuffleQueue,
+        sleepTimer, sleepRemainingSeconds, setSleepTimer, sleepFadeOut, setSleepFadeOut,
         enableAudioLevels,
         readAudioLevel,
         currentTrack,
@@ -497,6 +543,8 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         adjustVolume,
         setVolume: setPlayerVolume,
     }), [
+        playbackRate, setPlaybackRate, repeatOne, toggleRepeatOne, shuffleQueue,
+        sleepTimer, sleepRemainingSeconds, setSleepTimer, sleepFadeOut, setSleepFadeOut,
         addToQueue,
         clearQueue,
         closePlayer,

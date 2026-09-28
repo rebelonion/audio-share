@@ -157,3 +157,20 @@ describe('player queue', () => {
         expect(live.manual).toHaveLength(MAX_PERSISTED_CONTEXT_TRACKS + 25);
     });
 });
+
+it('shuffles upcoming occurrences without changing current or history', async () => {
+    const {shuffleUpcoming} = await import('./playerQueue');
+    const base = enqueue(startContext(EMPTY_QUEUE, [track('a'), track('b'), track('c')], 0, 'Folder'), track('b'));
+    const originalIds = [...base.manual, ...base.context].map(item => item.id);
+    const shuffled = shuffleUpcoming(base, () => 0);
+    expect(shuffled.current).toBe(base.current);
+    expect(shuffled.history).toBe(base.history);
+    expect([...shuffled.manual, ...shuffled.context].map(item => item.id).sort()).toEqual([...originalIds].sort());
+    expect([...shuffled.manual, ...shuffled.context].map(item => item.id)).not.toEqual(originalIds);
+    expect([...base.manual, ...base.context].map(item => item.id)).toEqual(originalIds);
+    expect(shuffled.context).toHaveLength(2);
+    const nextFolder = startContext(shuffled, [track('new'), track('next')], 0, 'New folder');
+    expect(nextFolder.manual).toEqual(base.manual);
+    expect(nextFolder.context.map(item => item.shareKey)).toEqual(['next']);
+    expect(advance(shuffled).current?.id).toBe(shuffled.manual[0].id);
+});
