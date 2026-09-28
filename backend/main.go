@@ -235,6 +235,8 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	preferencesHandler := handlers.NewPreferencesHandler(cfg.SessionSecret)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
 	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
+	adminHandler.HealthConfig = services.HealthConfig{BuildID: buildID, IndexSchedule: cfg.IndexSchedule,
+		WaveformSchedule: cfg.WaveformCron, ErrorReportsEnabled: cfg.NtfyErrorTopic != ""}
 
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,

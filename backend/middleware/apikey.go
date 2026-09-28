@@ -15,6 +15,7 @@ func NewAPIKeyAuth(apiKey string) *APIKeyAuth {
 
 func (a *APIKeyAuth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return

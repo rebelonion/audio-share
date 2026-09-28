@@ -241,6 +241,8 @@ func (h *SPAHandler) getPageMetaWithAudio(r *http.Request, row *audioRow) pageMe
 		return pageMeta{title: "Likes - " + h.config.DefaultTitle, description: h.config.DefaultDescription + " · Your liked tracks", h1: "Your likes"}
 	case "/recover":
 		return pageMeta{title: "Recover Likes - " + h.config.DefaultTitle, description: h.config.DefaultDescription + " · Recover your likes", h1: "Recover your likes"}
+	case "/admin":
+		return pageMeta{title: "Library health - " + h.config.DefaultTitle, description: "Authenticated library health dashboard", h1: "Library health"}
 	}
 
 	// Unknown route — return 404
@@ -298,6 +300,10 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cacheControl := "no-cache"
+	if r.URL.Path == "/admin" {
+		cacheControl = "no-store"
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	}
 	if shareRow != nil && shareRow.removalRequestedAt.Valid {
 		cacheControl = "private, no-store"
 	}

@@ -103,7 +103,7 @@ func TestNewLibraryRoutesHavePageMetadata(t *testing.T) {
 		DefaultDescription: "Test description",
 	}}
 
-	for _, path := range []string{"/likes", "/recover"} {
+	for _, path := range []string{"/likes", "/recover", "/admin"} {
 		request := httptest.NewRequest("GET", "https://example.test"+path, nil)
 		meta := handler.getPageMeta(request)
 		if meta.notFound {
@@ -112,6 +112,18 @@ func TestNewLibraryRoutesHavePageMetadata(t *testing.T) {
 		if meta.title == "" || meta.h1 == "" {
 			t.Errorf("route %s missing metadata: %#v", path, meta)
 		}
+	}
+}
+
+func TestAdminRouteServesPrivateShell(t *testing.T) {
+	handler := newSnapshotTestHandler(t)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "https://example.test/admin", nil))
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Cache-Control") != "no-store" || recorder.Header().Get("X-Robots-Tag") != "noindex, nofollow" {
+		t.Fatalf("status=%d headers=%v", recorder.Code, recorder.Header())
+	}
+	if !strings.Contains(recorder.Body.String(), "enter the admin API key") {
+		t.Fatal("missing admin page shell")
 	}
 }
 

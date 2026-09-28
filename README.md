@@ -351,6 +351,14 @@ Set `DATABASE_URL` in `.env.local` to your PostgreSQL connection URL, then initi
 go run . migrate
 ```
 
+## Library health dashboard
+
+Open `/admin` and enter `REQUESTS_API_KEY` to view library and worker health. The dashboard is read-only and uses the existing admin authentication. The key stays in page memory, and locking or leaving the page clears it. Health responses use `Cache-Control: no-store`.
+
+The page shows waveform coverage and backlog, identity conflicts, recent error reports, and scan/waveform runs with counts and sampled failure details. It refreshes every 30 seconds while visible. Run history is collected even when ntfy error reporting is disabled; it starts with jobs run after this update and retains up to 1,000 finished/interrupted runs. The page displays the latest 30 runs and reports, plus up to 20 records per backlog/conflict sample. A lost job lock marks an unfinished run as interrupted, with its completion time unknown.
+
+Run `go run . migrate` from `backend` before starting the updated server and workers (schema version 6). Docker Compose runs the migration service automatically. Schedules shown are the web server's configured schedules; a worker must be running with the intended configuration to execute them. The dashboard provides commands to copy for manual maintenance after correcting affected files.
+
 ## Development
 
 Build the frontend once (`npm --prefix frontend run build`) and run `go run . migrate` from `backend` before starting the Go backend and Vite dev server:

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -15,8 +16,9 @@ import (
 )
 
 type AdminHandler struct {
-	db       *sql.DB
-	requests *services.RequestsService
+	db           *sql.DB
+	requests     *services.RequestsService
+	HealthConfig services.HealthConfig
 }
 
 func NewAdminHandler(db *sql.DB, requests *services.RequestsService) *AdminHandler {
@@ -28,6 +30,8 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path = strings.Trim(path, "/")
 
 	switch {
+	case path == "health" && r.Method == http.MethodGet:
+		h.handleHealth(w, r)
 	// Audio
 	case path == "audio/sources" && r.Method == http.MethodGet:
 		h.handleAudioSources(w, r)
@@ -336,4 +340,18 @@ func (h *AdminHandler) handleRequestDelete(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *AdminHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	health, err := services.ReadLibraryHealth(ctx, h.db)
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not load library health"})
+		return
+	}
+	health.Config = h.HealthConfig
+	writeJSON(w, http.StatusOK, health)
 }

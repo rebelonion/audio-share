@@ -48,14 +48,25 @@ func (s *WaveformService) GetByShareKey(shareKey string) (string, float64, error
 }
 
 func (s *WaveformService) RunJob(maxDuration time.Duration) error {
-	err := withJobLock(s.db, "waveform", func(conn *sql.Conn) error { return s.runJob(conn, maxDuration) })
+	err := withJobLock(s.db, "waveform", func(conn *sql.Conn) error {
+		run := beginJobRun(conn, "waveform")
+		var summary JobSummary
+		err := s.runJob(conn, maxDuration, &summary)
+		run.finish(summary, err)
+		return err
+	})
 	if err != nil {
 		s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "unexpected", Outcome: "blocked", Context: ErrorDetails(err)})
 	}
 	return err
 }
 
-func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) error {
+func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration, summary *JobSummary) error {
+	var processed, failed, attempted atomic.Int64
+	var examples FailureExamples
+	defer func() {
+		*summary = JobSummary{Attempted: attempted.Load(), Processed: processed.Load(), Issues: failed.Load(), Details: examples.Context()}
+	}()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
 	start := time.Now()
@@ -78,8 +89,6 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 		revision, size, mtimeNS int64
 	}
 	var files []fileRow
-	var failed, attempted atomic.Int64
-	var examples FailureExamples
 	defer func() {
 		if failed.Load() > 0 {
 			s.Errors.Report("worker", ErrorEvent{Operation: "waveform", Stage: "run", Cause: "partial-failure", Outcome: "degraded", FailedItems: int(failed.Load()), AttemptedItems: int(attempted.Load()), Context: examples.Context()})
@@ -102,7 +111,6 @@ func (s *WaveformService) runJob(conn *sql.Conn, maxDuration time.Duration) erro
 
 	log.Printf("Waveform: %d files pending, workers=%d", len(files), s.workers)
 
-	var processed atomic.Int64
 	sem := make(chan struct{}, s.workers)
 	var wg sync.WaitGroup
 
@@ -162,15 +170,27 @@ dispatch:
 			}
 			if info.Size() != f.size || info.ModTime().UnixNano() != f.mtimeNS {
 				log.Printf("Waveform: file changed while generating %s; retry after indexing", f.path)
+				examples.Add("validate", f.path, fmt.Errorf("file changed during generation; reindex before retrying"))
+				failed.Add(1)
 				return
 			}
 			encoded := base64.StdEncoding.EncodeToString(peaks)
-			_, err = storeWaveform(ctx, conn, f.id, f.revision, encoded, duration)
+			result, err := storeWaveform(ctx, conn, f.id, f.revision, encoded, duration)
 			if err != nil {
 				cancel(fmt.Errorf("waveform store %s: %w", f.path, err))
 				return
 			}
-			processed.Add(1)
+			stored, err := result.RowsAffected()
+			if err != nil {
+				cancel(fmt.Errorf("waveform store result %s: %w", f.path, err))
+				return
+			}
+			if stored == 0 {
+				examples.Add("store", f.path, fmt.Errorf("media changed or was deleted during generation; waveform discarded"))
+				failed.Add(1)
+				return
+			}
+			processed.Add(stored)
 		}(f)
 	}
 

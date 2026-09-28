@@ -165,6 +165,11 @@ func (h *SPAHandler) renderSnapshotBody(r *http.Request, meta pageMeta, shareRow
 	}
 
 	switch {
+	case path == "/admin":
+		return executeSnapshotTemplate(snapshotListTemplate, snapshotListPage{
+			Heading:     "Library health",
+			Description: "Enable JavaScript and enter the admin API key to view library health.",
+		})
 	case path == "/about":
 		return h.renderAboutSnapshot(r, responses)
 	case path == "/contact":

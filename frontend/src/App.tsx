@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router'
 import Layout from './components/Layout'
 import TargetedMessageModal from './components/TargetedMessageModal'
 
+const Admin = lazy(() => import('./pages/Admin'))
 const Home = lazy(() => import('./pages/Home'))
 const About = lazy(() => import('./pages/About'))
 const Contact = lazy(() => import('./pages/Contact'))
@@ -21,6 +22,7 @@ export default function App() {
       <TargetedMessageModal />
       <Routes>
         <Route element={<Layout />}>
+          <Route path="/admin" element={<Admin />} />
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />

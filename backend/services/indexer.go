@@ -85,7 +85,11 @@ func nullIfEmpty(s string) interface{} {
 func (s *SearchService) RebuildIndex() error {
 	err := withJobLock(s.db.DB(), "reindex", func(conn *sql.Conn) error {
 		job := &indexJob{conn: conn, fs: s.fs, webhookService: s.webhookService, reporter: s.db.Errors}
-		return job.rebuildIndex()
+		run := beginJobRun(conn, "reindex")
+		err := job.rebuildIndex()
+		run.finish(JobSummary{Issues: int64(job.metadataFailures + job.skippedFiles), Folders: job.foldersVisited,
+			DeferredFolders: len(job.deferredFolders), Details: job.failures.Context()}, err)
+		return err
 	})
 	if err != nil {
 		s.db.Errors.Report("worker", ErrorEvent{Operation: "reindex", Stage: "run", Cause: "unexpected", Outcome: "blocked", Context: ErrorDetails(err)})
@@ -98,6 +102,7 @@ type indexJob struct {
 	fs               *FileSystemService
 	webhookService   *WebhookService
 	reporter         *ErrorReporter
+	foldersVisited   int
 	metadataFailures int
 	deferredFolders  []string
 	skippedFiles     int
@@ -250,6 +255,7 @@ func (s *indexJob) getIndexedFoldersWithURLForWebhook(start time.Time) ([]NewFol
 }
 
 func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath string) error {
+	s.foldersVisited++
 	fullPath := filepath.Join(basePath, relativePath)
 
 	entries, err := os.ReadDir(fullPath)
