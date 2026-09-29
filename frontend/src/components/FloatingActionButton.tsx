@@ -49,7 +49,7 @@ export default function FloatingActionButton() {
                     setIsDialogOpen(true);
                     track('artist-request-dialog-open');
                 }}
-                className={`floating-action-button ${footerClearance !== null ? 'footer-is-near' : ''} fixed bottom-6 left-6 bg-[var(--primary)] text-white shadow-lg hover:bg-[var(--primary-hover)] z-10 flex items-center justify-center transition-all duration-300 ${isRequestsPage ? 'px-5 py-3 rounded-full gap-2' : 'p-3 rounded-full'}`}
+                className={`floating-action-button ${footerClearance !== null ? 'footer-is-near' : ''} fixed bottom-6 left-6 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-lg hover:bg-[var(--primary-hover)] z-10 flex items-center justify-center transition-all duration-300 ${isRequestsPage ? 'px-5 py-3 rounded-full gap-2' : 'p-3 rounded-full'}`}
                 style={footerClearance === null ? undefined : {'--footer-clearance': `${footerClearance}px`} as CSSProperties}
                 title="Request new artist"
                 aria-label="Request new artist"

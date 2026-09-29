@@ -1,3 +1,5 @@
+import {IconButton} from '@/components/ui/Button';
+import {Slider} from '@/components/ui/Slider';
 import {startTransition, Suspense, useCallback, useEffect, useId, useRef, useState, type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {ArrowLeft, ListMusic, Loader2, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume2, VolumeX, Wind} from 'lucide-react';
@@ -5,7 +7,8 @@ import {useRybbit} from '@/hooks/useRybbit';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 import CustomSelect from '@/components/CustomSelect';
 import QueuePanel from '@/components/QueuePanel';
-import {clamp} from '@/lib/utils';
+import PlaybackSettings from '@/components/PlaybackSettings';
+import PlaybackSeek from '@/components/PlaybackSeek';
 import {loadPlayerWaveform} from '@/lib/playerWaveform';
 import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
 import {defaultScene, scenes} from './scenes/registry';
@@ -35,7 +38,6 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     const queueId = useId();
     const closeQueue = useCallback(() => {
         setQueueOpen(false);
-        queueButtonRef.current?.focus({preventScroll: true});
     }, []);
     const {fullscreen, supported: fullscreenSupported, pending: fullscreenPending, error: fullscreenError, toggleFullscreen} = useImmersiveFullscreen();
     const {rootRef, closeRef, controlsVisible, revealControls, motion, setMotion} = useImmersiveControls(() => {
@@ -71,7 +73,6 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     const Scene = scene.Component;
     const SceneIcon = scene.icon;
     const [previewTime, setPreviewTime] = useState<number | null>(null);
-    const timelineDrag = useRef<{pointerId: number; target: number | null} | null>(null);
     const total = duration || metadata?.duration || 0;
     const position = previewTime ?? currentTime;
     const canSeek = audioLoaded && total > 0;
@@ -87,22 +88,8 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     }, [currentTrack?.id, isPlaying, revealControls]);
 
     useEffect(() => {
-        timelineDrag.current = null;
         setPreviewTime(null);
     }, [currentTrack?.id, scene.id, canSeek]);
-
-    useEffect(() => {
-        if (queueOpen) document.getElementById(queueId)?.querySelector<HTMLButtonElement>('button')?.focus({preventScroll: true});
-    }, [queueOpen, queueId]);
-
-    const finishTimelineSeek = (input: HTMLInputElement, commit: boolean) => {
-        const drag = timelineDrag.current;
-        if (!drag) return;
-        timelineDrag.current = null;
-        if (commit && canSeek && drag.target !== null) player.seekTo(drag.target);
-        setPreviewTime(null);
-        if (input.hasPointerCapture(drag.pointerId)) input.releasePointerCapture(drag.pointerId);
-    };
 
     if (!currentTrack) return null;
     const visible = controlsVisible || scenePickerOpen || queueOpen || sceneFailed || !isPlaying || !!error || !!notice || !!fullscreenError || previewTime !== null;
@@ -188,35 +175,8 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
                 {fullscreenError && <p className="immersive-notice" role="alert">{fullscreenError}</p>}
                 <div className="immersive-timeline">
                     <span>{formatTime(position)}</span>
-                    <input
-                        key={sceneKey}
-                        type="range" aria-label="Playback position"
-                        aria-valuetext={`${formatTime(position)} of ${formatTime(total)}`}
-                        min={0} max={total || 1} step={0.1} value={clamp(position, 0, total || 1)} disabled={!canSeek}
-                        onPointerDown={event => {
-                            if (!canSeek || !event.isPrimary || event.button !== 0) return;
-                            timelineDrag.current = {pointerId: event.pointerId, target: null};
-                            event.currentTarget.setPointerCapture(event.pointerId);
-                        }}
-                        onChange={event => {
-                            const time = Number(event.target.value);
-                            if (timelineDrag.current) {
-                                timelineDrag.current.target = time;
-                                setPreviewTime(time);
-                            } else if (canSeek) player.seekTo(time);
-                        }}
-                        onPointerUp={event => {
-                            if (timelineDrag.current?.pointerId === event.pointerId) finishTimelineSeek(event.currentTarget, true);
-                        }}
-                        onPointerCancel={event => {
-                            if (timelineDrag.current?.pointerId === event.pointerId) finishTimelineSeek(event.currentTarget, false);
-                        }}
-                        onLostPointerCapture={event => {
-                            if (timelineDrag.current?.pointerId === event.pointerId) finishTimelineSeek(event.currentTarget, false);
-                        }}
-                        onBlur={event => finishTimelineSeek(event.currentTarget, false)}
-                        style={{'--immersive-progress': `${total ? clamp(position / total, 0, 1) * 100 : 0}%`} as CSSProperties}
-                    />
+                    <PlaybackSeek key={sceneKey} position={position} duration={total} disabled={!canSeek}
+                        onPreview={setPreviewTime} onSeek={player.seekTo} />
                     <span>{formatTime(total)}</span>
                 </div>
                 <div className="immersive-toolbar">
@@ -225,19 +185,20 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
                         <p className="immersive-caption">{waveformPeaks?.length ? scene.waveformCaption : scene.fallbackCaption}</p>
                     </div>
                     <div className="immersive-transport">
-                        <button type="button" onClick={player.skipPrevious} aria-label="Previous track"><SkipBack size={18} /></button>
-                        <button type="button" onClick={() => player.seekBy(-10)} disabled={!canSeek} aria-label="Seek backward 10 seconds" className="immersive-skip"><RotateCcw size={22} /><span>10</span></button>
-                        <button type="button" className="immersive-play" onClick={player.togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+                        <IconButton type="button" onClick={player.skipPrevious} aria-label="Previous track"><SkipBack size={18} /></IconButton>
+                        <IconButton type="button" onClick={() => player.seekBy(-10)} disabled={!canSeek} aria-label="Seek backward 10 seconds" className="immersive-skip"><RotateCcw size={22} /><span>10</span></IconButton>
+                        <IconButton type="button" className="immersive-play" onClick={player.togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
                             {isLoading ? <Loader2 size={23} className="animate-spin" /> : isPlaying ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}
-                        </button>
-                        <button type="button" onClick={() => player.seekBy(30)} disabled={!canSeek} aria-label="Seek forward 30 seconds" className="immersive-skip"><RotateCw size={22} /><span>30</span></button>
-                        <button type="button" onClick={player.skipNext} aria-label="Next track"><SkipForward size={18} /></button>
+                        </IconButton>
+                        <IconButton type="button" onClick={() => player.seekBy(30)} disabled={!canSeek} aria-label="Seek forward 30 seconds" className="immersive-skip"><RotateCw size={22} /><span>30</span></IconButton>
+                        <IconButton type="button" onClick={player.skipNext} aria-label="Next track"><SkipForward size={18} /></IconButton>
                     </div>
                     <div className="immersive-tools">
                         <div className="immersive-volume">
-                            <button type="button" onClick={player.toggleMute} aria-label={player.isMuted ? 'Unmute' : 'Mute'}>{player.isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-                            <input type="range" aria-label="Volume" min={0} max={1} step={0.01} value={player.isMuted ? 0 : player.volume} onChange={event => player.setVolume(Number(event.target.value))} />
+                            <IconButton type="button" onClick={player.toggleMute} aria-label={player.isMuted ? 'Unmute' : 'Mute'}>{player.isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</IconButton>
+                            <Slider aria-label="Volume" min={0} max={1} step={0.01} value={player.isMuted ? 0 : player.volume} onChange={event => player.setVolume(Number(event.target.value))} />
                         </div>
+                        <PlaybackSettings compact />
                         <button ref={queueButtonRef} type="button" className="immersive-queue-toggle" aria-label={`Queue, ${player.upcoming.length} ${player.upcoming.length === 1 ? 'track' : 'tracks'} upcoming`} aria-expanded={queueOpen} aria-controls={queueOpen ? queueId : undefined} title="Playback queue" onClick={() => {
                             setQueueOpen(!queueOpen);
                             if (!queueOpen) trackEvent('immersive-queue-open', {scene: scene.id});
@@ -248,7 +209,7 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
                 </div>
                 <div className="immersive-footer"><span><span className="immersive-playback-hint">K to {isPlaying ? 'pause' : 'play'} <b>·</b> </span>Esc to {fullscreen ? 'exit fullscreen' : queueOpen ? 'close queue' : 'leave'}</span></div>
             </div>
-            {queueOpen && <QueuePanel id={queueId} className="immersive-queue" style={paletteStyle} onClose={closeQueue} />}
+            {queueOpen && <QueuePanel triggerRef={queueButtonRef} id={queueId} className="immersive-queue" style={paletteStyle} onClose={closeQueue} />}
         </div>,
         document.body,
     );

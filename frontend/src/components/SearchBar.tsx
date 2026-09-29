@@ -1,37 +1,26 @@
-import { Search, X } from "lucide-react";
+import {Input} from '@/components/ui/Field';
+import {Loader2, Search, X} from 'lucide-react';
+import type {Ref} from 'react';
+import {IconButton} from '@/components/ui/Button';
 
 interface SearchBarProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    label?: string;
+    loading?: boolean;
+    size?: 'md' | 'lg';
+    ref?: Ref<HTMLInputElement>;
 }
 
-export default function SearchBar({
-  value,
-  onChange,
-  placeholder = "Filter current directory...",
-}: SearchBarProps) {
-  return (
-    <div className="relative w-full px-0.5">
-      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-        <Search className="w-4 h-4 text-[var(--muted-foreground)]" />
-      </div>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full pl-10 pr-10 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] transition-colors"
-      />
-      {value && (
-        <button
-          onClick={() => onChange("")}
-          className="absolute right-3.5 top-1/2 -translate-y-1/2 hover:bg-[var(--card-hover)] rounded p-0.5 transition-colors"
-          aria-label="Clear search"
-        >
-          <X className="w-4 h-4 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" />
-        </button>
-      )}
-    </div>
-  );
+export default function SearchBar({value, onChange, placeholder = 'Filter current directory...', label = 'Filter current directory', loading = false, size = 'md', ref}: SearchBarProps) {
+    return <div className="relative w-full">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" aria-hidden="true" />
+        <Input variant="search" fieldSize={size} ref={ref} type="text" aria-label={label} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder}
+            className={`pl-10 ${loading && value ? 'pr-20' : loading || value ? 'pr-12' : 'pr-3'}`} />
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            {loading && <span role="status" aria-label="Searching"><Loader2 className="h-4 w-4 animate-spin text-[var(--primary)]" aria-hidden="true" /></span>}
+            {value && <IconButton size="sm" aria-label="Clear search" onClick={() => onChange('')}><X className="h-4 w-4" /></IconButton>}
+        </div>
+    </div>;
 }

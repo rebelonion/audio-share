@@ -23,6 +23,19 @@ export default tseslint.config(
         },
     },
     {
+        files: ['src/**/*.{ts,tsx}'],
+        ignores: ['src/components/ui/Slider.tsx', 'src/**/*.test.{ts,tsx}'],
+        rules: {
+            'no-restricted-syntax': ['error', {
+                selector: "JSXOpeningElement[name.name=/^(input|Input)$/]:has(JSXAttribute[name.name='type'][value.value='range'])",
+                message: 'Use the shared Slider component so range controls keep the same styling and focus behavior.',
+            }, {
+                selector: "JSXOpeningElement[name.name='select']",
+                message: 'Use CustomSelect so dropdowns share the same menu and keyboard behavior.',
+            }],
+        },
+    },
+    {
         files: ['src/contexts/**/*.{ts,tsx}'],
         rules: {'react-refresh/only-export-components': 'off'},
     },

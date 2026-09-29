@@ -71,7 +71,8 @@ it('filters runs and explains interrupted jobs and disabled reporting', async ()
     fireEvent.click(screen.getByText('Interrupted'));
     expect(screen.getByText(/Worker disconnected before recording completion/)).toBeTruthy();
     expect(screen.getByText(/Error reporting is disabled/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Filter maintenance runs'), {target: {value: 'waveform'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Filter maintenance runs'}));
+    fireEvent.click(screen.getByRole('option', {name: 'Waveforms'}));
     await waitFor(() => expect(screen.getByText('No runs match these filters.')).toBeTruthy());
 });
 

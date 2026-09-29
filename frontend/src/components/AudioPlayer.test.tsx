@@ -33,7 +33,7 @@ const player = vi.hoisted(() => ({
         isLoading: false,
         artist: 'Artist',
         track: 'First track',
-        waveformPeaks: null,
+        waveformPeaks: null as Uint8Array | null,
         upcoming: [],
         skipNext: vi.fn(),
         skipPrevious: vi.fn(),
@@ -103,15 +103,16 @@ afterEach(() => {
 });
 
 describe('immersive player', () => {
-    it.each([false, true])('highlights discovery once and tracks entry and exit (compact: %s)', async compact => {
-        setMobile(compact);
+    it.each([false, true])('highlights discovery once and tracks entry and exit (mobile: %s)', async mobile => {
+        setMobile(mobile);
         const view = render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        if (mobile) fireEvent.click(screen.getByRole('button', {name: 'Expand player'}));
         const opener = screen.getByRole('button', {name: 'Open immersive player'});
         expect(within(opener).getByText('New')).toBeTruthy();
         fireEvent.click(opener);
         const dialog = await screen.findByRole('dialog', {name: 'Immersive player'});
         expect(analytics.track).toHaveBeenCalledWith('immersive-player-open', {
-            entryPoint: compact ? 'compact' : 'expanded', highlighted: true,
+            entryPoint: 'expanded', highlighted: true,
         });
         expect(analytics.track.mock.calls.filter(([event]) => event === 'immersive-player-open')).toHaveLength(1);
         fireEvent.keyDown(within(dialog).getByRole('button', {name: 'Exit immersive player'}), {key: 'Escape'});
@@ -119,12 +120,13 @@ describe('immersive player', () => {
         expect(localStorage.getItem('audio-share:immersive-discovered')).toBe('true');
         view.unmount();
         render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        if (mobile) fireEvent.click(screen.getByRole('button', {name: 'Expand player'}));
         const returningOpener = screen.getByRole('button', {name: 'Open immersive player'});
         expect(within(returningOpener).queryByText('New')).toBeNull();
         fireEvent.click(returningOpener);
         await screen.findByRole('dialog', {name: 'Immersive player'});
         expect(analytics.track).toHaveBeenCalledWith('immersive-player-open', {
-            entryPoint: compact ? 'compact' : 'expanded', highlighted: false,
+            entryPoint: 'expanded', highlighted: false,
         });
     });
 
@@ -136,6 +138,7 @@ describe('immersive player', () => {
     ] as const)('can switch scenes without interrupting audio (mobile: %s, scene: %s)', async (mobile, scene, caption) => {
         setMobile(mobile);
         render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        if (mobile) fireEvent.click(screen.getByRole('button', {name: 'Expand player'}));
         fireEvent.click(screen.getByRole('button', {name: 'Open immersive player'}));
         const dialog = within(await screen.findByRole('dialog', {name: 'Immersive player'}));
         fireEvent.click(dialog.getByRole('button', {name: 'Scene'}));
@@ -155,6 +158,7 @@ describe('immersive player', () => {
     it.each([false, true])('opens and exits without interrupting audio (mobile: %s)', async mobile => {
         setMobile(mobile);
         render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        if (mobile) fireEvent.click(screen.getByRole('button', {name: 'Expand player'}));
         const opener = screen.getByRole('button', {name: 'Open immersive player'});
         opener.focus();
         fireEvent.click(opener);
@@ -288,5 +292,51 @@ describe('AudioPlayer sharing', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Copy share link'}));
 
         expect((await screen.findByRole('alert')).textContent).toBe('Failed to copy to clipboard');
+    });
+});
+
+it.each([false, true])('restores queue focus after closing (mobile: %s)', mobile => {
+    setMobile(mobile);
+    render(<ToastProvider><AudioPlayer /></ToastProvider>);
+    const trigger = screen.getByRole('button', {name: /^Open queue/});
+    fireEvent.click(trigger);
+    expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Close queue'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Close queue'}));
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document.activeElement!, {key: 'Escape'});
+    expect(screen.queryByRole('dialog', {name: 'Playback queue'})).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+});
+
+
+describe('normal player seeking', () => {
+    it.each([false, true])('uses the same seek control with waveform=%s', withWaveform => {
+        setMobile(false);
+        player.value.waveformPeaks = withWaveform ? Uint8Array.of(10, 100, 20) : null;
+        try {
+            render(<ToastProvider><AudioPlayer /></ToastProvider>);
+            const slider = screen.getByRole('slider', {name: 'Playback position'});
+            expect(slider.getAttribute('aria-valuetext')).toBe('0:00 of 2:00');
+            expect(document.querySelector('svg[aria-label="Audio waveform"]') !== null).toBe(withWaveform);
+            fireEvent.change(slider, {target: {value: '45'}});
+            expect(player.value.seekTo).toHaveBeenCalledExactlyOnceWith(45);
+        } finally {
+            player.value.waveformPeaks = null;
+        }
+    });
+
+    it('disables seeking until audio has loaded', () => {
+        setMobile(false);
+        player.value.audioLoaded = false;
+        try {
+            render(<ToastProvider><AudioPlayer /></ToastProvider>);
+            const slider = screen.getByRole('slider', {name: 'Playback position'}) as HTMLInputElement;
+            expect(slider.disabled).toBe(true);
+            fireEvent.change(slider, {target: {value: '45'}});
+            expect(player.value.seekTo).not.toHaveBeenCalled();
+        } finally {
+            player.value.audioLoaded = true;
+        }
     });
 });

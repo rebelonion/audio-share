@@ -1,3 +1,5 @@
+import SiteBanner from '@/components/ui/SiteBanner'
+import {IconButton} from '@/components/ui/Button'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
@@ -84,47 +86,34 @@ export default function InfoBanner() {
   }
 
   return (
-    <section className={`border-b ${variantStyle.className}`} aria-label="Site notice">
-      <div className="px-4 sm:px-6 lg:px-8 py-3">
-        <div className="flex items-center gap-3">
-          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <div className="min-w-0 flex-1 text-sm leading-6">
-            <span>{INFO_BANNER.message}</span>
-            {hasLink && (
-              <>
-                {' '}
-                {isExternalUrl(INFO_BANNER.linkUrl) ? (
-                  <a
-                    href={INFO_BANNER.linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={handleLinkClick}
-                    className={`font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`}
-                  >
-                    {INFO_BANNER.linkText}
-                  </a>
-                ) : (
-                  <Link
-                    to={INFO_BANNER.linkUrl}
-                    onClick={handleLinkClick}
-                    className={`font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`}
-                  >
-                    {INFO_BANNER.linkText}
-                  </Link>
-                )}
-              </>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleDismiss}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-            aria-label="Dismiss notice"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    </section>
+    <SiteBanner className={variantStyle.className} aria-label="Site notice"
+      icon={<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      action={<IconButton size="sm" onClick={handleDismiss} aria-label="Dismiss notice"><X className="h-4 w-4" aria-hidden="true" /></IconButton>}>
+      <span>{INFO_BANNER.message}</span>
+      {hasLink && (
+        <>
+          {' '}
+          {isExternalUrl(INFO_BANNER.linkUrl) ? (
+            <a
+              href={INFO_BANNER.linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleLinkClick}
+              className={`font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`}
+            >
+              {INFO_BANNER.linkText}
+            </a>
+          ) : (
+            <Link
+              to={INFO_BANNER.linkUrl}
+              onClick={handleLinkClick}
+              className={`font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`}
+            >
+              {INFO_BANNER.linkText}
+            </Link>
+          )}
+        </>
+      )}
+    </SiteBanner>
   )
 }

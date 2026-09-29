@@ -1,5 +1,9 @@
+import Checkbox from '@/components/ui/Checkbox';
 import {useId, useState} from 'react';
-import {Repeat1, Shuffle, Timer} from 'lucide-react';
+import Dialog from '@/components/ui/Dialog';
+import {Button, IconButton} from '@/components/ui/Button';
+import CustomSelect from '@/components/CustomSelect';
+import {Repeat1, Shuffle, SlidersHorizontal, Timer, X} from 'lucide-react';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 import {PLAYBACK_RATES} from '@/hooks/useAudioEngine';
 
@@ -7,23 +11,21 @@ function SettingsControls() {
     const id = useId();
     const {playbackRate, setPlaybackRate, repeatOne, toggleRepeatOne, shuffleQueue, upcoming,
         sleepTimer, sleepRemainingSeconds, setSleepTimer, sleepFadeOut, setSleepFadeOut} = useGlobalAudioPlayer();
-    const selectClass = 'w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-2 text-sm';
     return <div className="space-y-3 pt-3">
         <div className="grid grid-cols-2 gap-3">
             <div>
                 <label htmlFor={`${id}-speed`} className="mb-1 block text-xs text-[var(--muted-foreground)]">Playback speed</label>
-                <select id={`${id}-speed`} value={playbackRate} onChange={event => setPlaybackRate(Number(event.target.value))} className={selectClass}>
-                    {PLAYBACK_RATES.map(rate => <option key={rate} value={rate}>{rate}×</option>)}
-                </select>
+                <CustomSelect id={`${id}-speed`} ariaLabel="Playback speed" fieldSize="md"
+                    value={String(playbackRate)} onChange={value => setPlaybackRate(Number(value))}
+                    options={PLAYBACK_RATES.map(rate => ({value: String(rate), label: `${rate}×`}))} />
             </div>
             <div>
                 <label htmlFor={`${id}-sleep`} className="mb-1 block text-xs text-[var(--muted-foreground)]">Sleep timer</label>
-                <select id={`${id}-sleep`} value={sleepTimer.mode === 'deadline' ? sleepTimer.minutes : sleepTimer.mode}
-                    onChange={event => { const value = event.target.value; setSleepTimer(value === 'off' || value === 'track' ? value : Number(value)); }} className={selectClass}>
-                    <option value="off">Off</option>
-                    <option value="track">After this track</option>
-                    {[15, 30, 45, 60, 90].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
-                </select>
+                <CustomSelect id={`${id}-sleep`} ariaLabel="Sleep timer" fieldSize="md"
+                    value={String(sleepTimer.mode === 'deadline' ? sleepTimer.minutes : sleepTimer.mode)}
+                    onChange={value => setSleepTimer(value === 'off' || value === 'track' ? value : Number(value))}
+                    options={[{value: 'off', label: 'Off'}, {value: 'track', label: 'After this track'},
+                        ...[15, 30, 45, 60, 90].map(minutes => ({value: String(minutes), label: `${minutes} minutes`}))]} />
             </div>
         </div>
         {sleepTimer.mode !== 'off' && <p className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
@@ -31,24 +33,45 @@ function SettingsControls() {
             <span>{sleepTimer.mode === 'track' ? 'Stops when the track ends, before repeat or autoplay.' : `Stops in ${Math.floor(sleepRemainingSeconds / 60)}:${String(sleepRemainingSeconds % 60).padStart(2, '0')}.`}</span>
         </p>}
         {sleepTimer.mode === 'deadline' && <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={sleepFadeOut} onChange={event => setSleepFadeOut(event.target.checked)} />
+            <Checkbox checked={sleepFadeOut} onChange={event => setSleepFadeOut(event.target.checked)} />
             Fade out over the last 10 seconds
         </label>}
         <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={toggleRepeatOne} aria-pressed={repeatOne} className={`flex items-center gap-2 rounded-md border px-2 py-2 text-xs ${repeatOne ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-[var(--border)]'}`}>
+            <Button size="sm" variant={repeatOne ? 'selected' : 'secondary'} onClick={toggleRepeatOne} aria-pressed={repeatOne}>
                 <Repeat1 className="h-4 w-4" /> Repeat track
-            </button>
-            <button type="button" onClick={shuffleQueue} title="Shuffle queued and folder tracks separately; added tracks stay first" disabled={upcoming.length < 2} className="flex items-center gap-2 rounded-md border border-[var(--border)] px-2 py-2 text-xs disabled:opacity-40">
+            </Button>
+            <Button size="sm" variant="secondary" onClick={shuffleQueue} title="Shuffle queued and folder tracks separately; added tracks stay first" disabled={upcoming.length < 2}>
                 <Shuffle className="h-4 w-4" /> Shuffle upcoming
-            </button>
+            </Button>
         </div>
     </div>;
 }
 
-export default function PlaybackSettings() {
+function SettingsDialog({onClose}: {onClose: () => void}) {
+    const titleId = useId();
+
+    return <Dialog open onClose={onClose} labelledBy={titleId} className="playback-settings max-w-sm p-4">
+        <div className="flex items-center justify-between gap-3">
+            <div id={titleId} className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal className="h-4 w-4 text-[var(--primary)]" /> Playback settings</div>
+            <IconButton onClick={onClose} aria-label="Close playback settings"><X className="h-4 w-4" /></IconButton>
+        </div>
+        <SettingsControls />
+    </Dialog>;
+}
+
+export default function PlaybackSettings({compact = false}: {compact?: boolean}) {
     const [open, setOpen] = useState(false);
-    return <details className="shrink-0 border-t border-[var(--border)] px-3 py-3" onToggle={event => setOpen(event.currentTarget.open)}>
-        <summary className="cursor-pointer text-sm">Playback settings</summary>
-        {open && <SettingsControls />}
-    </details>;
+    return <>
+        <Button variant="ghost" size="sm"
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Playback settings"
+            aria-haspopup="dialog"
+            title="Playback settings"
+        >
+            <SlidersHorizontal className="h-4 w-4" />
+            {!compact && <span>Playback</span>}
+        </Button>
+        {open && <SettingsDialog onClose={() => setOpen(false)} />}
+    </>;
 }

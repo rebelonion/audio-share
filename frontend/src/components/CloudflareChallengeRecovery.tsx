@@ -1,3 +1,4 @@
+import {Button} from '@/components/ui/Button';
 import {useEffect, useRef, useState} from 'react';
 import {CLOUDFLARE_CHALLENGE_EVENT} from '@/lib/cloudflareChallenge';
 
@@ -54,14 +55,14 @@ export default function CloudflareChallengeRecovery() {
                     <> Your message draft is saved, but you&apos;ll need to reattach any image.</>
                 )}
             </p>
-            <button
+            <Button size="lg"
                 ref={reloadButtonRef}
                 type="button"
-                className="mt-5 w-full rounded-lg bg-[var(--primary)] px-4 py-3 font-medium text-white transition-colors hover:bg-[var(--primary-hover)]"
+                className="mt-5 w-full"
                 onClick={() => window.location.reload()}
             >
                 Reload and verify
-            </button>
+            </Button>
         </dialog>
     );
 }

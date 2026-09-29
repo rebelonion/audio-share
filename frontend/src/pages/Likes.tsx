@@ -1,3 +1,10 @@
+import Badge from '@/components/ui/Badge';
+import EmptyState from '@/components/ui/EmptyState';
+import Card from '@/components/ui/Card';
+import {buttonClass} from '@/components/ui/buttonStyles';
+import Alert from '@/components/ui/Alert';
+import ErrorState from '@/components/ui/ErrorState';
+import {Button} from '@/components/ui/Button';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Heart, ListMusic, Music, Play, ShieldAlert, Unlink} from 'lucide-react';
 import {Link} from 'react-router';
@@ -87,37 +94,29 @@ export default function Likes() {
                     )}
                 </div>
                 {playable.length > 0 && (
-                    <button onClick={() => playTrack(playable[0].shareKey)} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors">
+                    <Button onClick={() => playTrack(playable[0].shareKey)}>
                         <Play className="h-4 w-4 fill-current" /> Play all
-                    </button>
+                    </Button>
                 )}
             </div>
 
             {error && likedTracks.length > 0 && (
-                <div className="mb-5 flex items-center justify-between gap-4 rounded-md border border-[var(--error-border)] bg-[var(--error-bg)] p-4 text-sm text-[var(--error-text)]">
+                <Alert className="mb-5 flex items-center justify-between gap-4">
                     <span>{error}</span>
-                    <button type="button" onClick={() => void retry()} className="shrink-0 underline underline-offset-2">Try again</button>
-                </div>
+                    <Button variant="link" onClick={() => void retry()} className="shrink-0">Try again</Button>
+                </Alert>
             )}
             {isLoading ? (
                 <div className="mb-10 space-y-px overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--border)]">{[0, 1, 2, 3].map(item => <div key={item} className="h-20 skeleton" />)}</div>
             ) : error && likedTracks.length === 0 ? (
-                <div className="mb-10 rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-6 py-10 text-center">
-                    <h2 className="text-xl font-semibold text-[var(--error-text)]">Likes aren’t available right now</h2>
-                    <p className="mt-2 text-sm text-[var(--muted-foreground)]">{error}</p>
-                    <button type="button" onClick={() => void retry()} className="mt-5 rounded-md bg-[var(--primary)] px-5 py-2.5 text-white transition-colors hover:bg-[var(--primary-hover)]">
-                        Try again
-                    </button>
-                </div>
+                <ErrorState title="Likes aren’t available right now" onRetry={() => void retry()} className="mb-10">{error}</ErrorState>
             ) : likedTracks.length === 0 ? (
-                <div className="mb-10 py-14 rounded-lg border border-dashed border-[var(--border)] text-center bg-[var(--card-translucent)]">
-                    <Heart className="h-10 w-10 mx-auto text-[var(--muted-foreground)] mb-3" />
-                    <h2 className="text-2xl font-semibold">Nothing liked yet</h2>
-                    <p className="mt-2 text-sm text-[var(--muted-foreground)]">Tap the heart beside a track to save it here.</p>
-                    <Link to="/browse" className="mt-5 inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-5 py-2.5 text-white hover:bg-[var(--primary-hover)] transition-colors"><ListMusic className="h-4 w-4" /> Browse audio</Link>
-                </div>
+                <EmptyState title="Nothing liked yet" icon={Heart} variant="dashed" className="mb-10"
+                    action={<Link to="/browse" className={buttonClass({})}><ListMusic className="h-4 w-4" /> Browse audio</Link>}>
+                    Tap the heart beside a track to save it here.
+                </EmptyState>
             ) : (
-                <div className="mb-10 min-w-0 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                <Card padding="none" className="mb-10 min-w-0">
                     {likedTracks.map(track => {
                         const missing = !!track.deleted;
                         const sourceUnavailable = !!track.unavailableAt;
@@ -133,9 +132,9 @@ export default function Likes() {
                                         </span>
                                     )}
                                     {!missing && removalRequested && (
-                                        <span className="absolute right-1 top-1 rounded bg-black/75 p-1 text-amber-300" title="Removal requested">
+                                        <Badge variant="overlay" size="sm" className="absolute right-1 top-1" title="Removal requested">
                                             <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-                                        </span>
+                                        </Badge>
                                     )}
                                 </button>
                                 <button disabled={missing} onClick={() => playTrack(track.shareKey)} className="min-w-0 flex-1 text-left disabled:cursor-default">
@@ -143,7 +142,7 @@ export default function Likes() {
                                     <div className="text-xs text-[var(--muted-foreground)] truncate mt-1">
                                         {missing ? 'Audio file no longer available' : track.artist || track.parentFolderName || 'Unknown artist'}
                                         {!missing && removalRequested
-                                            ? <span className="ml-2 text-amber-500">Removal requested</span>
+                                            ? <Badge size="sm" className="ml-2">Removal requested</Badge>
                                             : sourceUnavailable && <span className="ml-2 text-amber-500">Original source unavailable</span>}
                                     </div>
                                 </button>
@@ -151,7 +150,7 @@ export default function Likes() {
                             </div>
                         );
                     })}
-                </div>
+                </Card>
             )}
 
             {isReady && <RecoveryPanel />}

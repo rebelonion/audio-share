@@ -1,10 +1,13 @@
-import { Suspense, useState } from 'react'
+import { Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { Outlet, Link, useLocation } from 'react-router'
+import { Outlet, Link, useLocation, useMatch } from 'react-router'
 import { Helmet } from 'react-helmet-async'
 import { Music, Menu, X } from 'lucide-react'
 import FloatingActionButton from './FloatingActionButton'
 import GlobalSearchBar from './GlobalSearchBar'
+import Disclosure from './ui/Disclosure'
+import useDisclosure from './ui/useDisclosure'
+import { IconButton } from './ui/Button'
 import InfoBanner from './InfoBanner'
 import UpdateBanner from './UpdateBanner'
 import PageLoadBoundary from './PageLoadBoundary'
@@ -21,8 +24,10 @@ function FloatingAudioPlayerSlot() {
 }
 
 function LayoutContent() {
-  const [menuOpen, setMenuOpen] = useState(false)
+  const menu = useDisclosure()
+  const menuOpen = menu.open
   const location = useLocation()
+  const isContactPage = useMatch('/contact') !== null
   // const maturePreference = useMatureContentPreference()
   // const { track } = useRybbit()
 
@@ -77,38 +82,38 @@ function LayoutContent() {
                     )
                   })}
                 </nav>
-                <button
-                  className="sm:hidden relative h-6 w-6 text-[var(--foreground)] hover:text-[var(--primary)] transition-colors"
-                  onClick={() => setMenuOpen(o => !o)}
+                <IconButton
+                  className="sm:hidden"
+                  {...menu.triggerProps}
                   aria-label="Toggle menu"
                 >
-                  <Menu className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} />
-                  <X className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} />
-                </button>
+                  <span className="relative h-6 w-6">
+                    <Menu className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} />
+                    <X className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} />
+                  </span>
+                </IconButton>
               </div>
             </div>
           </div>
-          <div className={`sm:hidden grid transition-[grid-template-rows] duration-300 ease-in-out ${menuOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-            <div className="overflow-hidden">
-              <div className="border-t border-[var(--border)] px-4 py-3 space-y-1">
-                {(['Likes', 'About', 'Stats', 'Requests', 'Contact'] as const).map(page => {
-                  const isActive = location.pathname === `/${page.toLowerCase()}`
-                  return (
-                    <Link
-                      key={page}
-                      to={`/${page.toLowerCase()}`}
-                      className={`block py-2 text-[0.7rem] uppercase tracking-[0.12em] font-medium transition-colors ${
-                        isActive ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                      }`}
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      {page}
-                    </Link>
-                  )
-                })}
-              </div>
+          <Disclosure {...menu.panelProps} className="sm:hidden">
+            <div className="border-t border-[var(--border)] px-4 py-3 space-y-1">
+              {(['Likes', 'About', 'Stats', 'Requests', 'Contact'] as const).map(page => {
+                const isActive = location.pathname === `/${page.toLowerCase()}`
+                return (
+                  <Link
+                    key={page}
+                    to={`/${page.toLowerCase()}`}
+                    className={`block py-2 text-[0.7rem] uppercase tracking-[0.12em] font-medium transition-colors ${
+                      isActive ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                    }`}
+                    onClick={() => menu.setOpen(false)}
+                  >
+                    {page}
+                  </Link>
+                )
+              })}
             </div>
-          </div>
+          </Disclosure>
         </header>
 
         <InfoBanner />
@@ -128,7 +133,7 @@ function LayoutContent() {
           </PageLoadBoundary>
         </main>
 
-        {!(location.pathname === '/admin' || location.pathname.startsWith('/admin/')) && <FloatingActionButton />}
+        {!isContactPage && !(location.pathname === '/admin' || location.pathname.startsWith('/admin/')) && <FloatingActionButton />}
         <FloatingAudioPlayerSlot />
 
         <footer className="bg-[var(--card)] border-t border-[var(--border)] mt-auto">

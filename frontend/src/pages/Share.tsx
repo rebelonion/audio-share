@@ -1,3 +1,8 @@
+import Card from '@/components/ui/Card';
+import Alert from '@/components/ui/Alert';
+import Badge from '@/components/ui/Badge';
+import {Button} from '@/components/ui/Button';
+import {buttonClass} from '@/components/ui/buttonStyles';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router';
 import { Helmet } from 'react-helmet-async';
@@ -190,7 +195,7 @@ export default function Share() {
                     </p>
                     <Link
                         to="/"
-                        className="flex items-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm"
+                        className={buttonClass({})}
                     >
                         <Home className="h-4 w-4" />
                         Go to home page
@@ -210,7 +215,7 @@ export default function Share() {
                     </p>
                     <Link
                         to="/"
-                        className="flex items-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm"
+                        className={buttonClass({})}
                     >
                         <Home className="h-4 w-4" />
                         Go to home page
@@ -232,7 +237,7 @@ export default function Share() {
                     </p>
                     <Link
                         to="/"
-                        className="flex items-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm"
+                        className={buttonClass({})}
                     >
                         <Home className="h-4 w-4" />
                         Go to home page
@@ -240,15 +245,15 @@ export default function Share() {
                 </div>
             ) : (
                 <div className="container mx-auto p-4 max-w-4xl animate-slideUp">
-                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg p-5 sm:p-6 mb-8 relative overflow-clip">
+                    <Card padding="none" className="shadow-lg p-5 sm:p-6 mb-8 relative overflow-clip">
                         {meta?.removalRequestedAt && meta.localAccess && (
-                            <div className="relative z-10 mb-5 flex items-start gap-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-200" role="status">
+                            <Alert variant="warning" className="relative z-10 mb-5 flex items-start gap-3">
                                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                                 <div>
                                     <span className="font-semibold">Removal requested.</span>{' '}
                                     This audio remains available because you are accessing the site from a local network.
                                 </div>
-                            </div>
+                            </Alert>
                         )}
                         {meta?.thumbnail && (
                             <div
@@ -281,7 +286,7 @@ export default function Share() {
                                             {displayTitle}
                                         </h1>
                                         {meta?.isMature && (
-                                            <span className="mt-1 px-2 py-0.5 rounded border border-amber-500/40 text-xs font-semibold text-amber-500 flex-shrink-0">18+</span>
+                                            <Badge className="mt-1">18+</Badge>
                                         )}
                                     </div>
 
@@ -303,20 +308,19 @@ export default function Share() {
                                                 source: 'share',
                                             }} />
                                         )}
-                                        <button
+                                        <Button variant="link"
                                             type="button"
                                             disabled={isDownloading}
                                             onClick={handleDownloadClick}
-                                            className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors disabled:opacity-60"
                                         >
                                             <Download className="h-4 w-4" /> {
                                                 isDownloading
                                                     ? downloadPhase === 'verifying' ? 'Verifying download…' : 'Preparing download…'
                                                     : 'Download'
                                             }
-                                        </button>
+                                        </Button>
                                         {meta?.parentPath && (
-                                            <Link to={folderPath} className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
+                                            <Link to={folderPath} className={buttonClass({variant: 'link'})}>
                                                 <FolderOpen className="h-4 w-4" /> Browse folder
                                             </Link>
                                         )}
@@ -385,7 +389,7 @@ export default function Share() {
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </Card>
 
                     {recommendations.length > 0 && (
                         <TrackListSection title="You Might Also Like" tracks={recommendations} source="share" />

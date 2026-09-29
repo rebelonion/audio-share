@@ -1,3 +1,4 @@
+import Badge from '@/components/ui/Badge';
 import {Folder, Music, ShieldAlert, Unlink} from "lucide-react";
 import {formatDate, formatDuration, formatFileSize} from "@/lib/utils";
 import DesktopItemActions from "@/components/DesktopItemActions";
@@ -67,7 +68,7 @@ function TableItem({ item, showDurationColumn, handleAudioSelect, copiedShareKey
                         </div>
                         <span className="truncate" title={item.title || item.name}>{item.title || item.name}</span>
                         {item.removalRequestedAt && (
-                            <span className="ml-2 shrink-0 rounded border border-amber-500/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-500">Removal requested</span>
+                            <Badge size="sm" className="ml-2">Removal requested</Badge>
                         )}
                     </div>
                 )}

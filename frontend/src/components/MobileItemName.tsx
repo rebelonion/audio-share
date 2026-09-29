@@ -1,3 +1,4 @@
+import Badge from '@/components/ui/Badge';
 import {Folder, Music, ShieldAlert, Unlink} from "lucide-react";
 import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
@@ -57,7 +58,7 @@ function MobileItemName({ item }: ItemNameProps) {
                     </div>
                 )}
                 {item.type === 'audio' && item.removalRequestedAt && (
-                    <span className="mt-1 inline-block rounded border border-amber-500/40 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-500">Removal requested</span>
+                    <Badge size="sm" className="mt-1">Removal requested</Badge>
                 )}
             </div>
         </div>

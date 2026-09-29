@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {useState} from 'react';
 import {MemoryRouter} from 'react-router';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -148,4 +148,22 @@ describe('FolderView', () => {
         finishDownload?.();
         await waitFor(() => expect(screen.queryByText('Verifying download…')).toBeNull());
     });
+});
+
+
+it('sorts through focusable table-header controls and exposes the active direction', () => {
+    render(<ToastProvider><MemoryRouter><FolderView currentPath="audio" items={[
+        {...track, name: 'A.wav', title: 'A track', path: 'A.wav', shareKey: 'a', size: 40000},
+        {...track, name: 'B.wav', title: 'B track', path: 'B.wav', shareKey: 'b', size: 10000},
+    ]} /></MemoryRouter></ToastProvider>);
+    const size = within(screen.getByRole('columnheader', {name: 'Size'})).getByRole('button');
+    size.focus();
+    expect(document.activeElement).toBe(size);
+    fireEvent.click(size);
+    expect(size.closest('th')?.getAttribute('aria-sort')).toBe('descending');
+    expect(within(screen.getAllByRole('row')[1]).getByText('A track')).toBeTruthy();
+    fireEvent.click(size);
+    expect(size.closest('th')?.getAttribute('aria-sort')).toBe('ascending');
+    expect(within(screen.getAllByRole('row')[1]).getByText('B track')).toBeTruthy();
+    expect(within(screen.getByRole('columnheader', {name: 'Name'})).getByRole('button').closest('th')?.getAttribute('aria-sort')).toBe('none');
 });

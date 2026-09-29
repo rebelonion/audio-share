@@ -10,11 +10,15 @@
         --card-hover: #1b1712;
         --card-foreground: #ece7de;
         --primary: #c4882a;
+        --primary-foreground: #3b2914;
         --primary-hover: #d49940;
         --primary-wash: rgba(196, 136, 42, 0.05);
         --primary-tint: rgba(196, 136, 42, 0.1);
         --primary-soft: rgba(196, 136, 42, 0.2);
         --primary-soft-hover: rgba(196, 136, 42, 0.3);
+        --primary-soft-foreground: #f3d49c;
+        --primary-selected: #1b150d;
+        --primary-selected-hover: #251c10;
         --primary-border: rgba(196, 136, 42, 0.4);
         --primary-border-hover: rgba(196, 136, 42, 0.5);
         --secondary: #251f15;
@@ -34,6 +38,9 @@
         --success-bg: rgba(65, 48, 8, 0.88);
         --success-border: rgba(196, 136, 42, 0.55);
         --success-text: #d4a040;
+        --warning-bg: rgba(245, 158, 11, 0.1);
+        --warning-border: rgba(245, 158, 11, 0.35);
+        --warning-text: #fde68a;
 
         --font-display: 'Cormorant Garamond', Georgia, serif;
         --font-sans: 'Jost', system-ui, sans-serif;
@@ -151,45 +158,6 @@
 /* ─── Components ────────────────────────────────────────────── */
 
 @layer components {
-    input[type="range"] {
-        @apply appearance-none bg-transparent h-1.5;
-    }
-
-    input[type="range"]::-webkit-slider-runnable-track {
-        @apply bg-[var(--muted)] h-1.5 rounded-full;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-        @apply appearance-none w-3.5 h-3.5 rounded-full bg-[var(--primary)] cursor-pointer;
-        margin-top: -4px;
-        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary);
-    }
-
-    input[type="range"]::-webkit-slider-thumb:hover {
-        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary-hover);
-    }
-
-    input[type="range"]::-moz-range-thumb {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: var(--primary);
-        border: none;
-        cursor: pointer;
-        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary);
-    }
-
-    input[type="range"]::-moz-range-thumb:hover {
-        box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--primary-hover);
-    }
-
-    input[type="range"]::-moz-range-track {
-        background: var(--muted);
-        height: 6px;
-        border-radius: 9999px;
-        border: none;
-    }
-
     .file-row {
         @apply transition-colors duration-150 ease-in-out;
     }

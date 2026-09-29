@@ -26,19 +26,21 @@ test('plays real audio, seeks, and restores a paused queue after reload', async 
 test('playback settings remain usable on desktop and mobile', async ({page}) => {
     await page.goto('/share/rain');
     await page.getByRole('button', {name: 'Add to queue', exact: true}).click();
-    await page.getByRole('button', {name: /^Open queue/}).click();
-    await page.getByText('Playback settings', {exact: true}).click();
-    await page.getByLabel('Playback speed', {exact: true}).selectOption('1.5');
-    await page.getByLabel('Sleep timer', {exact: true}).selectOption('15');
+    await expandPlayer(page);
+    await page.getByRole('button', {name: 'Playback settings', exact: true}).click();
+    await page.getByRole('button', {name: 'Playback speed', exact: true}).click();
+    await page.getByRole('option', {name: '1.5×', exact: true}).click();
+    await page.getByRole('button', {name: 'Sleep timer', exact: true}).click();
+    await page.getByRole('option', {name: '15 minutes', exact: true}).click();
     await page.getByLabel('Fade out over the last 10 seconds').check();
     await page.getByRole('button', {name: 'Repeat track', exact: true}).click();
     await expect(page.getByRole('button', {name: 'Repeat track', exact: true})).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText(/^Stops in 14:|^Stops in 15:/)).toBeVisible();
     await page.reload();
-    await page.getByRole('button', {name: /^Open queue/}).click();
-    await page.getByText('Playback settings', {exact: true}).click();
-    await expect(page.getByLabel('Playback speed', {exact: true})).toHaveValue('1.5');
-    await expect(page.getByLabel('Sleep timer', {exact: true})).toHaveValue('off');
+    await expandPlayer(page);
+    await page.getByRole('button', {name: 'Playback settings', exact: true}).click();
+    await expect(page.getByRole('button', {name: 'Playback speed', exact: true})).toHaveText('1.5×');
+    await expect(page.getByRole('button', {name: 'Sleep timer', exact: true})).toHaveText('Off');
 });
 
 test('recovers likes in a separate browser profile', async ({page, browser}) => {

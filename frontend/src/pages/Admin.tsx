@@ -1,3 +1,9 @@
+import Card from '@/components/ui/Card';
+import Checkbox from '@/components/ui/Checkbox';
+import Alert from '@/components/ui/Alert';
+import {Button} from '@/components/ui/Button';
+import {Input} from '@/components/ui/Field';
+import CustomSelect from '@/components/CustomSelect';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {Helmet} from 'react-helmet-async';
 import {Activity, Copy, LockKeyhole, RefreshCw, LogOut} from 'lucide-react';
@@ -7,8 +13,6 @@ import AdminAudio from '@/components/admin/AdminAudio';
 import AdminMessages from '@/components/admin/AdminMessages';
 import {DEFAULT_TITLE} from '@/lib/config';
 
-const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm hover:bg-[var(--card-hover)] disabled:opacity-50';
-const inputClass = 'rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm';
 const number = (value: number) => value.toLocaleString();
 const jobName = (job: string) => job === 'reindex' ? 'Library scan' : 'Waveform generation';
 
@@ -67,7 +71,7 @@ function HealthView({health}: {health: LibraryHealth}) {
         } catch { setCopyMessage('Could not copy. Select the command below and copy it manually.'); }
     };
     return <div className="space-y-8">
-        <section aria-labelledby="coverage-heading" className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
+        <Card as="section" aria-labelledby="coverage-heading">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 id="coverage-heading" className="text-2xl">Library coverage</h2>
                 <p className="font-mono text-sm text-[var(--primary)]">{number(counts.tracks)} indexed {counts.tracks === 1 ? 'track' : 'tracks'} · {number(counts.folders)} {counts.folders === 1 ? 'folder' : 'folders'}</p>
@@ -82,14 +86,14 @@ function HealthView({health}: {health: LibraryHealth}) {
                     <dd className="font-mono text-xl tabular-nums">{number(Number(value))}</dd><dt className="mt-1 text-xs text-[var(--muted-foreground)]">{label}</dt>
                 </div>)}
             </dl>
-        </section>
+        </Card>
 
         <section aria-labelledby="jobs-heading">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                 <div><h2 id="jobs-heading" className="text-2xl">Maintenance runs</h2><p className="text-xs text-[var(--muted-foreground)]">Latest 30 runs. History starts after this update.</p></div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <label className="text-sm">Job <select aria-label="Filter maintenance runs" value={jobFilter} onChange={event => setJobFilter(event.target.value)} className={inputClass}><option value="all">All jobs</option><option value="reindex">Library scans</option><option value="waveform">Waveforms</option></select></label>
-                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyIssues} onChange={event => setOnlyIssues(event.target.checked)} /> Only issues</label>
+                    <label className="text-sm">Job <CustomSelect ariaLabel="Filter maintenance runs" fieldSize="md" value={jobFilter} onChange={setJobFilter} options={[{value: 'all', label: 'All jobs'}, {value: 'reindex', label: 'Library scans'}, {value: 'waveform', label: 'Waveforms'}]} /></label>
+                    <label className="flex items-center gap-2 text-sm"><Checkbox checked={onlyIssues} onChange={event => setOnlyIssues(event.target.checked)} /> Only issues</label>
                 </div>
             </div>
             <p className="mb-3 text-xs text-[var(--muted-foreground)]">Schedules reflect this server’s configuration. A worker must be running to execute them.</p>
@@ -100,7 +104,7 @@ function HealthView({health}: {health: LibraryHealth}) {
                     <p className="mt-1 text-xs text-[var(--muted-foreground)]">Schedule: <code>{(job === 'reindex' ? health.config.indexSchedule : health.config.waveformSchedule) || 'Manual only'}</code></p>
                 </div>)}
             </div>
-            <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)]">
+            <Card padding="none" className="overflow-hidden">
                 {!runs.length && <p className="p-5 text-sm text-[var(--muted-foreground)]">{health.jobs.length ? 'No runs match these filters.' : 'No runs recorded yet. The next scheduled or manual job will appear here.'}</p>}
                 {runs.map(run => <details key={run.id} className="group border-b border-[var(--border)] last:border-0">
                     <summary className="flex cursor-pointer list-none items-center gap-3 p-4 hover:bg-[var(--card-hover)] [&::-webkit-details-marker]:hidden">
@@ -117,32 +121,32 @@ function HealthView({health}: {health: LibraryHealth}) {
                         <Details details={run.summary.details || {}} />
                     </div>
                 </details>)}
-            </div>
+            </Card>
         </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
-            <section aria-labelledby="conflicts-heading" className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+            <Card as="section" aria-labelledby="conflicts-heading">
                 <h2 id="conflicts-heading" className="text-2xl">Identity conflicts</h2>
                 <p className="mt-1 text-xs text-[var(--muted-foreground)]">Up to 20 recent records. Check duplicate media IDs and sidecars before reindexing.</p>
                 <TrackSample tracks={health.conflicts} empty="No blocked identity records." />
-            </section>
-            <section aria-labelledby="backlog-heading" className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+            </Card>
+            <Card as="section" aria-labelledby="backlog-heading">
                 <h2 id="backlog-heading" className="text-2xl">Missing waveforms</h2>
                 <p className="mt-1 text-xs text-[var(--muted-foreground)]">Up to 20 recently indexed tracks. Tracks needing reindexing must be scanned before waveform generation.</p>
                 <TrackSample tracks={health.pendingWaveforms} empty="Every indexed track has a waveform." />
-            </section>
+            </Card>
         </div>
 
         <section aria-labelledby="errors-heading">
             <h2 id="errors-heading" className="text-2xl">Recent errors</h2>
             <p className="mb-4 text-xs text-[var(--muted-foreground)]">Latest 30 retained reports. {health.config.errorReportsEnabled ? 'Reporting is enabled.' : 'Error reporting is disabled; any reports shown were retained from earlier runs. Job history is still collected.'}</p>
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--card)]">
+            <Card padding="none">
                 {!health.errors.length && <p className="p-5 text-sm text-[var(--muted-foreground)]">No retained error reports.</p>}
                 {health.errors.map(error => <details key={error.id} className="border-b border-[var(--border)] last:border-0">
                     <summary className="cursor-pointer p-4 text-sm"><span className="ml-2">{error.operation} · {error.stage} · {error.cause}</span><span className="ml-3 text-xs text-[var(--muted-foreground)]"><Timestamp value={error.createdAt} /></span></summary>
                     <div className="space-y-3 border-t border-[var(--border)] p-4 sm:px-8"><p className="text-xs text-[var(--muted-foreground)]">{error.origin} · {error.outcome} · {number(error.failedItems)} failed items</p><Details details={error.context} /></div>
                 </details>)}
-            </div>
+            </Card>
         </section>
 
         <details className="rounded-lg border border-[var(--border)] p-5">
@@ -150,7 +154,7 @@ function HealthView({health}: {health: LibraryHealth}) {
             <p className="my-3 text-sm text-[var(--muted-foreground)]">Correct the affected files, then run the appropriate command. A job already in progress keeps its lock; another invocation skips it.</p>
             {['reindex', 'waveform'].map(job => <div key={job} className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <code className="break-all text-xs">docker compose run --rm worker ./audio-share-backend {job}</code>
-                <button className={buttonClass} onClick={() => void copyCommand(job)}><Copy className="h-3.5 w-3.5" /> Copy {job} command</button>
+                <Button variant="secondary" onClick={() => void copyCommand(job)}><Copy className="h-3.5 w-3.5" /> Copy {job} command</Button>
             </div>)}
             <p role="status" className="mt-3 text-xs text-[var(--muted-foreground)]">{copyMessage}</p>
         </details>
@@ -263,21 +267,21 @@ export default function Admin() {
         <Helmet><title>Admin - {DEFAULT_TITLE}</title><meta name="robots" content="noindex,nofollow" /></Helmet>
         <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Administration</p><h1 className="text-4xl sm:text-5xl">Library management</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Library health, source requests, audio flags, and messages.</p></div>
-            {connected && <div className="flex gap-2">{section === 'health' && <button className={buttonClass} disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</button>}<button className={buttonClass} onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</button></div>}
+            {connected && <div className="flex gap-2">{section === 'health' && <Button variant="secondary" disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</Button>}<Button variant="secondary" onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</Button></div>}
         </header>
-        {error && <div role="alert" className="mb-5 rounded-md border border-[var(--error-border)] bg-[var(--error-bg)] p-4 text-sm text-[var(--error-text)]">{error}{health && section === 'health' && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</div>}
+        {error && <Alert className="mb-5">{error}{health && section === 'health' && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</Alert>}
         {checking && <p role="status">Checking admin session…</p>}
-        {logoutPending && <button className={buttonClass} disabled={working} onClick={() => void disconnect()}>{working ? 'Locking dashboard…' : 'Retry locking dashboard'}</button>}
-        {!checking && !connected && !logoutPending && <form onSubmit={event => void connect(event)} className="max-w-lg rounded-lg border border-[var(--border)] bg-[var(--card)] p-6">
+        {logoutPending && <Button variant="secondary" disabled={working} onClick={() => void disconnect()}>{working ? 'Locking dashboard…' : 'Retry locking dashboard'}</Button>}
+        {!checking && !connected && !logoutPending && <Card as="form" onSubmit={event => void connect(event)} className="max-w-lg">
             <LockKeyhole className="mb-4 h-6 w-6 text-[var(--primary)]" />
             <h2 className="text-2xl">Unlock administration</h2>
             <p className="mb-5 mt-2 text-sm text-[var(--muted-foreground)]">Enter the admin API key once to sign in. Your session survives refreshes and navigation until it expires or you lock the dashboard.</p>
             <label htmlFor="admin-key" className="mb-2 block text-sm">Admin API key</label>
-            <input id="admin-key" type="password" autoComplete="off" required value={draftKey} onChange={event => setDraftKey(event.target.value)} className={`${inputClass} w-full`} />
-            <button className={`${buttonClass} mt-4 bg-[var(--primary)] text-white`} disabled={working || !draftKey.trim()}>{working ? 'Unlocking…' : 'Unlock dashboard'}</button>
-        </form>}
+            <Input id="admin-key" type="password" autoComplete="off" required value={draftKey} onChange={event => setDraftKey(event.target.value)} />
+            <Button type="submit" variant="primary" className="mt-4" disabled={working || !draftKey.trim()}>{working ? 'Unlocking…' : 'Unlock dashboard'}</Button>
+        </Card>}
         {session && <p className="mb-3 text-xs text-[var(--muted-foreground)]">Session expires <Timestamp value={session.expiresAt} />.</p>}
-        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages']].map(([value, label]) => <button key={value} aria-pressed={section === value} className={`${buttonClass} ${section === value ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : ''}`} onClick={() => setSection(value)}>{label}</button>)}</nav>}
+        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages']].map(([value, label]) => <Button variant={section === value ? 'selected' : 'secondary'} key={value} aria-pressed={section === value} onClick={() => setSection(value)}>{label}</Button>)}</nav>}
         {connected && section === 'health' && <p className="mb-5 text-xs text-[var(--muted-foreground)]">{health ? <>Snapshot: <Timestamp value={health.generatedAt} /> · refreshes every 30 seconds while visible</> : loading ? 'Loading library health…' : 'No snapshot loaded. Use Refresh to try again.'}</p>}
         {connected && section === 'health' && health && <HealthView health={health} />}
         {connected && section === 'requests' && <AdminRequests onAuthFailure={onAuthFailure} />}

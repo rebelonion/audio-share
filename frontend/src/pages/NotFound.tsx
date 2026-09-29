@@ -1,3 +1,4 @@
+import {buttonClass} from '@/components/ui/buttonStyles';
 import { Link } from 'react-router'
 import { Helmet } from 'react-helmet-async'
 import { DEFAULT_TITLE } from '@/lib/config'
@@ -16,7 +17,7 @@ export default function NotFound() {
                 </p>
                 <Link
                     to="/"
-                    className="px-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-lg transition-colors font-medium"
+                    className={buttonClass({size: 'lg'})}
                 >
                     Back to Home
                 </Link>

@@ -1,10 +1,8 @@
-import React, { useId, useMemo } from 'react';
+import { useId, useMemo } from 'react';
 
 interface WaveformDisplayProps {
     peaks: Uint8Array;
     progress: number; // 0..1
-    onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-    progressRef: React.RefObject<HTMLDivElement | null>;
     height?: number;
     className?: string;
 }
@@ -12,8 +10,6 @@ interface WaveformDisplayProps {
 export default function WaveformDisplay({
     peaks,
     progress,
-    onClick,
-    progressRef,
     height = 40,
     className = '',
 }: WaveformDisplayProps) {
@@ -41,10 +37,9 @@ export default function WaveformDisplay({
 
     return (
         <div
-            ref={progressRef}
-            className={`w-full cursor-pointer ${className}`}
+            aria-hidden="true"
+            className={`pointer-events-none ${className}`}
             style={{ height: `${height}px` }}
-            onClick={onClick}
         >
             <svg
                 width='100%'

@@ -1,4 +1,8 @@
-import {lazy, Suspense, useState, useRef, useEffect, type MouseEvent} from 'react';
+import Alert from '@/components/ui/Alert';
+import Badge from '@/components/ui/Badge';
+import {Slider} from '@/components/ui/Slider';
+import {Button, IconButton} from '@/components/ui/Button';
+import {lazy, Suspense, useState, useRef, useEffect, useId} from 'react';
 import {
     Play,
     Pause,
@@ -23,10 +27,12 @@ import {
     Mountain,
     X
 } from 'lucide-react';
+import PlaybackSeek from '@/components/PlaybackSeek';
 import WaveformDisplay from '@/components/WaveformDisplay';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 import {useAudioPlayerKeybinds} from '@/hooks/useAudioPlayerKeybinds';
 import QueuePanel from '@/components/QueuePanel';
+import PlaybackSettings from '@/components/PlaybackSettings';
 import {useLikes} from '@/contexts/LikesContext';
 import {useToast} from '@/contexts/ToastContext';
 import {audioShareUrl} from '@/lib/share';
@@ -50,7 +56,9 @@ export default function AudioPlayer() {
     const [showImmersive, setShowImmersive] = useState(false);
     const [immersiveIsNew, setImmersiveIsNew] = useState(() => readLocalStorage(IMMERSIVE_DISCOVERED_KEY) !== 'true');
     const {track: trackEvent} = useRybbit();
-    const progressRef = useRef<HTMLDivElement>(null);
+    const queueButtonRef = useRef<HTMLButtonElement>(null);
+    const queueId = useId();
+    const [previewTime, setPreviewTime] = useState<number | null>(null);
 
     const {
         currentTrack,
@@ -129,15 +137,18 @@ export default function AudioPlayer() {
         closePlayer();
     };
 
-    const handleProgressClick = (event: MouseEvent<HTMLDivElement>) => {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        seekTo(((event.clientX - bounds.left) / bounds.width) * duration);
-    };
+    const total = duration || metadata?.duration || 0;
+    const position = previewTime ?? currentTime;
+    const canSeek = audioLoaded && total > 0;
+
+    useEffect(() => {
+        setPreviewTime(null);
+    }, [currentTrack?.id, canSeek]);
 
     if (!currentTrack) return null;
 
     const immersiveEntry = (
-        <button
+        <Button size="sm" variant={immersiveIsNew ? 'selected' : 'ghost'}
             type="button"
             onClick={() => {
                 setShowQueue(false);
@@ -146,18 +157,18 @@ export default function AudioPlayer() {
                 setImmersiveIsNew(false);
                 writeLocalStorage(IMMERSIVE_DISCOVERED_KEY, 'true');
                 trackEvent('immersive-player-open', {
-                    entryPoint: isMinimized ? 'compact' : 'expanded',
+                    entryPoint: 'expanded',
                     highlighted: immersiveIsNew,
                 });
             }}
-            className={`flex flex-shrink-0 items-center gap-1 rounded px-1.5 py-1 transition-colors ${immersiveIsNew ? 'bg-[var(--primary-tint)] text-[var(--primary)] hover:bg-[var(--primary-wash)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            className="min-h-9 shrink-0"
             aria-label="Open immersive player"
             aria-description={immersiveIsNew ? 'New: explore waveform landscapes while you listen' : undefined}
             title={immersiveIsNew ? 'New: explore immersive waveform scenes' : 'Open immersive player'}
         >
             <Mountain className="h-4 w-4" />
             {immersiveIsNew && <span className="text-[9px] font-semibold uppercase tracking-wide">New</span>}
-        </button>
+        </Button>
     );
 
     const copyShareLink = async () => {
@@ -186,9 +197,8 @@ export default function AudioPlayer() {
             {isMinimized ? (
                 <div className="flex items-center gap-2 px-2.5 py-2.5">
                     <div className="relative flex-shrink-0">
-                        <button
+                        <IconButton variant="primary" size="md"
                             onClick={togglePlay}
-                            className="relative p-2 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors duration-200 focus:outline-none"
                             aria-label={isPlaying ? "Pause" : "Play"}
                         >
                             {isLoading ? (
@@ -198,7 +208,7 @@ export default function AudioPlayer() {
                             ) : (
                                 <Play className="h-4 w-4"/>
                             )}
-                        </button>
+                        </IconButton>
                     </div>
                     <button type="button" onClick={toggleMinimize} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label="Open full player">
                         <span className="flex h-10 w-14 flex-shrink-0 overflow-hidden rounded bg-[var(--secondary)]">
@@ -218,50 +228,50 @@ export default function AudioPlayer() {
                             </span>
                         </span>
                     </button>
-                    <button
+                    <Button variant="subtle" size="sm"
                         type="button"
-                        onClick={() => setShowQueue(value => !value)}
-                        className="flex flex-shrink-0 items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                        ref={queueButtonRef} aria-controls={showQueue ? queueId : undefined} onClick={() => setShowQueue(value => !value)}
+                        className="shrink-0"
+                        aria-expanded={showQueue}
                         aria-label={`Open queue, ${upcoming.length} ${upcoming.length === 1 ? 'track' : 'tracks'} upcoming`}
                         title="Open queue"
                     >
                         <ListMusic className="h-3.5 w-3.5" />
                         <span className="min-w-3 text-center text-[10px] font-medium tabular-nums text-[var(--foreground)]">{upcoming.length > 99 ? '99+' : upcoming.length}</span>
-                    </button>
-                    {immersiveEntry}
-                    <button
+                    </Button>
+                    <IconButton
                         type="button"
                         onClick={toggleMinimize}
-                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex-shrink-0"
                         aria-label="Expand player"
                         title="Expand player"
                     >
                         <Expand className="h-3.5 w-3.5"/>
-                    </button>
+                    </IconButton>
                 </div>
             ) : (
                 <>
                 <div className="flex items-center justify-between p-2.5 border-b border-[var(--border)]">
-                    <button
+                    <IconButton
                         onClick={() => void toggleLike(currentTrack.shareKey, currentTrack.source)}
                         disabled={!likesReady || likesLoading || likePending}
-                        className={`p-1 text-[var(--muted-foreground)] hover:text-[var(--primary)] ${liked ? 'text-[var(--primary)]' : ''}`}
+                        variant={liked ? 'selected' : 'ghost'}
+                        aria-pressed={liked}
                         aria-label={liked ? 'Unlike track' : 'Like track'}
                         title={liked ? 'Unlike track' : 'Like track'}
                     >
                         <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />
-                    </button>
+                    </IconButton>
                     <div className="flex items-center gap-1">
                         {immersiveEntry}
-                        <button type="button" onClick={() => void copyShareLink()} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Copy share link" title="Copy share link">
+                        <IconButton type="button" onClick={() => void copyShareLink()} aria-label="Copy share link" title="Copy share link">
                             <Share2 className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => setShowQueue(value => !value)} className="relative p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Open queue" title="Open queue">
+                        </IconButton>
+                        <IconButton ref={queueButtonRef} aria-controls={showQueue ? queueId : undefined} onClick={() => setShowQueue(value => !value)} className="relative" aria-expanded={showQueue} aria-label="Open queue" title="Open queue">
                             <ListMusic className="h-4 w-4" />
-                            {upcoming.length > 0 && <span className="absolute -right-1 -top-1 min-w-3 h-3 px-0.5 rounded-full bg-[var(--primary)] text-white text-[8px] flex items-center justify-center">{Math.min(99, upcoming.length)}</span>}
-                        </button>
-                        <button onClick={toggleMinimize} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Minimize player" title="Minimize player"><MinusCircle className="h-4 w-4"/></button>
-                        <button onClick={handleClosePlayer} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--error-text)]" aria-label="Close and clear queue" title="Close and clear queue"><X className="h-4 w-4"/></button>
+                            {upcoming.length > 0 && <span className="absolute -right-1 -top-1 min-w-3 h-3 px-0.5 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[8px] flex items-center justify-center">{Math.min(99, upcoming.length)}</span>}
+                        </IconButton>
+                        <IconButton onClick={toggleMinimize} aria-label="Minimize player" title="Minimize player"><MinusCircle className="h-4 w-4"/></IconButton>
+                        <IconButton onClick={handleClosePlayer} variant="danger" aria-label="Close and clear queue" title="Close and clear queue"><X className="h-4 w-4"/></IconButton>
                     </div>
                 </div>
 
@@ -290,7 +300,7 @@ export default function AudioPlayer() {
                                 <div className="font-medium text-[var(--foreground)] line-clamp-3">
                                     {metadata?.title || track}
                                 </div>
-                                {isMature && <span className="mt-0.5 flex-shrink-0 text-[10px] font-semibold text-amber-400">18+</span>}
+                                {isMature && <Badge size="sm" className="mt-0.5">18+</Badge>}
                             </div>
                             <div className="text-sm text-[var(--muted-foreground)] truncate">
                                 {metadata?.artist || artist}
@@ -299,70 +309,44 @@ export default function AudioPlayer() {
                     </div>
 
                     {error && (
-                        <div className="mb-3 flex items-center rounded border border-[var(--error-border)] bg-[var(--error-bg)] p-2 text-[var(--error-text)] animate-fadeIn">
+                        <Alert size="sm" className="mb-3 flex items-center animate-fadeIn">
                             <Info className="mr-2 h-4 w-4 flex-shrink-0"/>
-                            <span className="text-xs">{error}</span>
-                        </div>
+                            <span>{error}</span>
+                        </Alert>
                     )}
                     {notice && (
-                        <div
-                            className="mb-3 flex items-center rounded border border-[var(--border)] bg-[var(--secondary)] p-2 text-[var(--foreground)] animate-fadeIn"
-                            role="status"
-                        >
+                        <Alert variant="info" size="sm" className="mb-3 flex items-center animate-fadeIn">
                             <AlertCircle className="mr-2 h-4 w-4 flex-shrink-0"/>
-                            <span className="text-xs">{notice}</span>
-                        </div>
+                            <span>{notice}</span>
+                        </Alert>
                     )}
 
                     <div className="mb-3">
-                        {waveformPeaks ? (
-                            <WaveformDisplay
-                                peaks={waveformPeaks}
-                                progress={currentTime / (duration || (metadata?.duration || 1))}
-                                onClick={handleProgressClick}
-                                progressRef={progressRef}
-                                height={32}
-                                className="mb-2"
-                            />
-                        ) : (
-                            <div
-                                ref={progressRef}
-                                className="group flex h-8 w-full cursor-pointer items-center mb-2"
-                                onClick={handleProgressClick}
-                            >
-                                <div
-                                    className="h-2 w-full overflow-hidden rounded-full bg-[var(--muted)] transition-[height] duration-150 group-hover:h-3"
-                                >
-                                    <div
-                                        className="h-full bg-[var(--primary)] rounded-full"
-                                        style={{
-                                            width: `${(currentTime / (duration || (metadata?.duration || 1))) * 100 || 0}%`,
-                                            opacity: audioLoaded ? 1 : 0.7
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        )}
+                        <div className="relative mb-2 flex h-8 items-center">
+                            {waveformPeaks && <WaveformDisplay peaks={waveformPeaks} progress={position / (total || 1)} height={32} className="absolute inset-x-2" />}
+                            <PlaybackSeek key={currentTrack.id} position={position} duration={total} disabled={!canSeek}
+                                onPreview={setPreviewTime} onSeek={seekTo}
+                                className={`relative w-full ${waveformPeaks ? 'slider-waveform' : ''}`} />
+                        </div>
 
                         <div className="flex justify-between items-center">
                             <span className="text-xs text-[var(--muted-foreground)] tabular-nums">
-                                {isPlaying || currentTime > 0 ? formatTime(currentTime) : "0:00"}
+                                {isPlaying || position > 0 ? formatTime(position) : "0:00"}
                             </span>
 
-                            <div className="flex items-center gap-2">
-                                <button onClick={skipPrevious} className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Previous track" title="Previous track"><SkipBack className="h-4 w-4 fill-current" /></button>
-                                <button
+                            <div className="flex items-center gap-1">
+                                <IconButton onClick={skipPrevious} aria-label="Previous track" title="Previous track"><SkipBack className="h-4 w-4 fill-current" /></IconButton>
+                                <IconButton
                                     onClick={() => seekBy(-10)}
-                                    className="relative p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                                    className="relative"
                                     aria-label="Seek backward 10 seconds"
                                     title="Seek backward 10 seconds"
                                 >
                                     <RotateCcw className="h-5 w-5" />
                                     <span className="absolute inset-0 flex items-center justify-center pt-0.5 text-[8px] font-bold" aria-hidden="true">10</span>
-                                </button>
-                                <button
+                                </IconButton>
+                                <IconButton variant="primary" size="lg"
                                     onClick={togglePlay}
-                                    className="p-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors duration-200 focus:outline-none"
                                     aria-label={isPlaying ? "Pause" : "Play"}
                                 >
                                     {isLoading ? (
@@ -372,17 +356,17 @@ export default function AudioPlayer() {
                                     ) : (
                                         <Play className="h-6 w-6"/>
                                     )}
-                                </button>
-                                <button
+                                </IconButton>
+                                <IconButton
                                     onClick={() => seekBy(30)}
-                                    className="relative p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                                    className="relative"
                                     aria-label="Seek forward 30 seconds"
                                     title="Seek forward 30 seconds"
                                 >
                                     <RotateCw className="h-5 w-5" />
                                     <span className="absolute inset-0 flex items-center justify-center pt-0.5 text-[8px] font-bold" aria-hidden="true">30</span>
-                                </button>
-                                <button onClick={skipNext} className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label="Next track" title="Next track"><SkipForward className="h-4 w-4 fill-current" /></button>
+                                </IconButton>
+                                <IconButton onClick={skipNext} aria-label="Next track" title="Next track"><SkipForward className="h-4 w-4 fill-current" /></IconButton>
                             </div>
 
                             <span className="text-xs text-[var(--muted-foreground)] tabular-nums">
@@ -391,25 +375,24 @@ export default function AudioPlayer() {
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 mb-2">
-                        <button
+                    <div className="flex items-center gap-2 mb-2">
+                        <IconButton
                             onClick={toggleMute}
-                            className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors focus:outline-none"
                             aria-label={isMuted ? "Unmute" : "Mute"}
                         >
                             {isMuted ? <VolumeX className="h-4 w-4"/> : <Volume2 className="h-4 w-4"/>}
-                        </button>
+                        </IconButton>
 
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
+                        <Slider
+                            min={0}
+                            max={1}
+                            step={0.01}
                             value={volume}
                             onChange={event => setVolume(Number.parseFloat(event.target.value))}
-                            className="flex-grow"
+                            className="min-w-0 flex-1"
                             aria-label="Volume"
                         />
+                        <PlaybackSettings />
                     </div>
 
                     <div>
@@ -466,7 +449,7 @@ export default function AudioPlayer() {
             </>
             )}
         </div>
-        {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
+        {showQueue && <QueuePanel id={queueId} triggerRef={queueButtonRef} onClose={() => setShowQueue(false)} />}
         {showImmersive && (
             <ImmersiveErrorBoundary onError={() => {
                 setShowImmersive(false);

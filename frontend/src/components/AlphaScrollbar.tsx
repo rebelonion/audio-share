@@ -56,7 +56,7 @@ export default function AlphaScrollbar({ letters, onScrollToLetterAction }: Alph
                         data-letter={letter}
                         className={`w-5 h-5 md:w-6 md:h-6 text-[0.65rem] md:text-xs flex items-center justify-center rounded-md shrink-0 ${
                             activeLetter === letter
-                                ? 'bg-[var(--primary)] text-white'
+                                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
                                 : 'hover:bg-[var(--card-hover)] text-[var(--foreground)]'
                         }`}
                         onClick={() => handleLetterClick(letter)}

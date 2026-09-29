@@ -1,3 +1,6 @@
+import Switch from '@/components/ui/Switch';
+import Alert from '@/components/ui/Alert';
+import {Button} from '@/components/ui/Button';
 import {useState, useEffect} from 'react';
 import {Link} from 'react-router';
 import {LineChart, Line, BarChart, Bar, Rectangle, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush, type BarShapeProps} from 'recharts';
@@ -381,21 +384,21 @@ export function UnavailableChart({data}: AudioChartProps) {
                     Current total: <span className="text-amber-500 font-bold text-xl">{data.total.toLocaleString()}</span>
                 </p>
                 {hasLaterDays && (
-                    <button
+                    <Button variant={showInitialBacklog ? 'selected' : 'secondary'} size="sm"
                         type="button"
                         aria-pressed={showInitialBacklog}
                         onClick={() => setShowInitialBacklog(current => !current)}
-                        className="self-start sm:self-auto rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:border-amber-500/60 hover:text-[var(--foreground)]"
+                        className="self-start sm:self-auto"
                     >
                         {showInitialBacklog ? 'Hide' : 'Show'} initial record
-                    </button>
+                    </Button>
                 )}
             </div>
 
-            <div className="mb-5 rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-sm text-[var(--muted-foreground)]">
+            <Alert variant="warning" className="mb-5">
                 <span className="font-semibold text-amber-500">Initial record: {initialDay.count.toLocaleString()} on {initialDay.date}.</span>{' '}
                 It may include older unavailable audio collected when tracking began{hasLaterDays && !showInitialBacklog ? ', so it is excluded from the chart scale' : ''}.
-            </div>
+            </Alert>
 
             <ResponsiveContainer width="100%" height={chartHeight} key={`unavailable-${showInitialBacklog}`}>
                 <BarChart data={visibleDays} margin={chartMargin}>
@@ -744,24 +747,8 @@ export function SourceAvailabilityChart({data}: {data: SourceAvailabilityData}) 
     return (
         <>
             <div className="flex flex-wrap items-center justify-end gap-4 sm:gap-6 mb-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                    <span className="text-sm text-[var(--muted-foreground)]">Hide fully available</span>
-                    <div
-                        className={`relative w-11 h-6 rounded-full transition-colors ${hideAvailable ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}
-                        onClick={() => setHideAvailable(!hideAvailable)}
-                    >
-                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${hideAvailable ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </div>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                    <span className="text-sm text-[var(--muted-foreground)]">Show ratio</span>
-                    <div
-                        className={`relative w-11 h-6 rounded-full transition-colors ${showRatio ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'}`}
-                        onClick={() => setShowRatio(!showRatio)}
-                    >
-                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${showRatio ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </div>
-                </label>
+                <Switch checked={hideAvailable} onChange={setHideAvailable}>Hide fully available</Switch>
+                <Switch checked={showRatio} onChange={setShowRatio}>Show ratio</Switch>
             </div>
             {!anyUnavailable && (
                 <p className="text-[var(--muted-foreground)] text-sm mb-4">All sources fully available.</p>

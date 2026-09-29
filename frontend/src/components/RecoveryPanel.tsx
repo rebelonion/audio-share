@@ -1,3 +1,7 @@
+import Card from '@/components/ui/Card';
+import {buttonClass} from '@/components/ui/buttonStyles';
+import {Button} from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 import {useEffect, useRef, useState} from 'react';
 import {Check, Clipboard, Download, KeyRound, RefreshCw, ShieldCheck} from 'lucide-react';
 import {Link} from 'react-router';
@@ -105,7 +109,7 @@ export default function RecoveryPanel() {
     };
 
     return (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+        <Card as="section" padding="none" className="overflow-hidden">
             <div className="p-5 sm:p-6 border-b border-[var(--border)]">
                 <div className="flex items-start gap-3">
                     <div className="p-2 rounded-md bg-[var(--secondary)] text-[var(--primary)]"><ShieldCheck className="h-5 w-5" /></div>
@@ -119,7 +123,7 @@ export default function RecoveryPanel() {
             </div>
 
             <div className="p-5 sm:p-6">
-                {error && <p id="recovery-panel-error" role="alert" className="mb-4 text-sm text-[var(--error-text)]">{error.message}</p>}
+                {error && <Alert id="recovery-panel-error" className="mb-4">{error.message}</Alert>}
                 {!recoveryKey && !confirmRotation && (
                     <div className="flex flex-col items-start gap-4">
                         <div className="text-sm text-[var(--muted-foreground)]">
@@ -132,17 +136,16 @@ export default function RecoveryPanel() {
                                 </Link>
                             </div>
                         </div>
-                        <button
+                        <Button
                             ref={triggerRef}
                             type="button"
                             disabled={!isProfileReady || isProfileLoading || isWorking}
                             onClick={() => hasRecoveryKey ? setConfirmRotation(true) : void generate()}
                             aria-describedby={error?.source === 'create' ? 'recovery-panel-error' : undefined}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors whitespace-nowrap"
                         >
                             {hasRecoveryKey ? <RefreshCw className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
                             {hasRecoveryKey ? 'Replace recovery key' : 'Create recovery key'}
-                        </button>
+                        </Button>
                     </div>
                 )}
 
@@ -155,27 +158,26 @@ export default function RecoveryPanel() {
                         <p id="recovery-rotation-heading" className="font-medium text-[var(--primary)]">Replace the existing recovery key?</p>
                         <p className="mt-1 text-sm text-[var(--muted-foreground)]">Any previously saved text or QR code will stop working immediately.</p>
                         <div className="mt-4 flex gap-2">
-                            <button
+                            <Button
                                 ref={replaceButtonRef}
                                 type="button"
                                 onClick={() => void generate()}
                                 disabled={isWorking}
                                 aria-describedby={error?.source === 'create' ? 'recovery-panel-error' : undefined}
-                                className="px-4 py-2 rounded-md bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
                             >
                                 {isWorking ? 'Creating…' : 'Replace key'}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
                                 disabled={isWorking}
                                 onClick={() => {
                                     restoreTriggerFocusRef.current = true;
                                     setConfirmRotation(false);
                                 }}
-                                className="px-4 py-2 rounded-md border border-[var(--border)] hover:bg-[var(--card-hover)] disabled:opacity-50"
+                                variant="secondary"
                             >
                                 Cancel
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -205,26 +207,26 @@ export default function RecoveryPanel() {
                             </p>
                             <div className="mt-4 rounded-md bg-[var(--background)] border border-[var(--border)] p-3 font-mono text-xs break-all select-all">{recoveryKey}</div>
                             <div className="mt-3 flex flex-wrap gap-2">
-                                <button
+                                <Button
                                     type="button"
                                     onClick={() => void copy(recoveryKey, 'key')}
                                     aria-describedby={error?.source === 'copy-key' ? 'recovery-panel-error' : undefined}
-                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--border)] hover:border-[var(--primary)] text-sm"
+                                    variant="secondary"
                                 >
                                     {copied === 'key' ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
                                     {copied === 'key' ? 'Copied' : 'Copy key'}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                     type="button"
                                     onClick={() => void copy(recoveryUrl, 'link')}
                                     aria-describedby={error?.source === 'copy-link' ? 'recovery-panel-error' : undefined}
-                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--border)] hover:border-[var(--primary)] text-sm"
+                                    variant="secondary"
                                 >
                                     {copied === 'link' ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
                                     {copied === 'link' ? 'Copied' : 'Copy recovery link'}
-                                </button>
+                                </Button>
                                 {qrDataUrl && (
-                                    <a href={qrDataUrl} download="audio-share-recovery.png" className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--border)] hover:border-[var(--primary)] text-sm">
+                                    <a href={qrDataUrl} download="audio-share-recovery.png" className={buttonClass({variant: 'secondary'})}>
                                         <Download className="h-4 w-4" /> Save QR code
                                     </a>
                                 )}
@@ -233,6 +235,6 @@ export default function RecoveryPanel() {
                     </div>
                 )}
             </div>
-        </section>
+        </Card>
     );
 }

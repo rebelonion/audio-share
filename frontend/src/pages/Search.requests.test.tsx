@@ -37,9 +37,57 @@ it('fetches once per page or filter change and preserves a directly linked page'
     fireEvent.click(screen.getByRole('button', {name: 'Next'}));
     await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(2));
     expect(vi.mocked(searchAudio).mock.calls[1][2]).toBe(100);
+    fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
     fireEvent.click(screen.getByRole('button', {name: 'Audio'}));
     await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(3));
     expect(vi.mocked(searchAudio).mock.calls[2].slice(2, 4)).toEqual([0, {type: 'audio'}]);
+});
+
+it('hides collapsed filters and applies duration changes without a pointer release', async () => {
+    mount('/search');
+    const trigger = screen.getByRole('button', {name: 'Filters'});
+    const panel = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(panel.hasAttribute('inert')).toBe(true);
+    expect(screen.queryByRole('slider', {name: 'Minimum duration'})).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(panel.hasAttribute('inert')).toBe(false);
+    const minimum = screen.getByRole('slider', {name: 'Minimum duration'});
+    fireEvent.change(minimum, {target: {value: '1'}});
+    await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(searchAudio).mock.calls[0][3]).toEqual({durationMin: 60});
+    expect(minimum.getAttribute('aria-valuetext')).toBe('1 minute');
+
+    fireEvent.change(screen.getByRole('slider', {name: 'Maximum duration'}), {target: {value: '30'}});
+    await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(searchAudio).mock.calls[1][3]).toEqual({durationMin: 60, durationMax: 1800});
+    fireEvent.click(trigger);
+    expect(panel.hasAttribute('inert')).toBe(true);
+    expect(screen.queryByRole('switch')).toBeNull();
+});
+
+it('applies a dragged duration only on release and exposes filter selection state', async () => {
+    mount('/search');
+    fireEvent.click(screen.getByRole('button', {name: 'Filters'}));
+    const minimum = screen.getByRole('slider', {name: 'Minimum duration'});
+    fireEvent.pointerDown(minimum);
+    fireEvent.change(minimum, {target: {value: '10'}});
+    fireEvent.change(minimum, {target: {value: '15'}});
+    expect(searchAudio).not.toHaveBeenCalled();
+    fireEvent.pointerUp(minimum);
+    await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(searchAudio).mock.calls[0][3]).toEqual({durationMin: 900});
+
+    const unavailable = screen.getByRole('switch', {name: 'Source unavailable only'});
+    fireEvent.click(unavailable);
+    await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(2));
+    expect(unavailable.getAttribute('aria-checked')).toBe('true');
+    expect(vi.mocked(searchAudio).mock.calls[1][3]).toEqual({durationMin: 900, unavailableOnly: true});
+    fireEvent.click(screen.getByRole('button', {name: 'Audio'}));
+    await waitFor(() => expect(searchAudio).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole('button', {name: 'Audio'}).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', {name: 'All'}).getAttribute('aria-pressed')).toBe('false');
 });
 
 it('ignores late results after navigation even if the transport ignores abort', async () => {

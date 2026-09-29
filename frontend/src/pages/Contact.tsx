@@ -1,3 +1,6 @@
+import {Button} from '@/components/ui/Button';
+import {Input, Textarea} from '@/components/ui/Field';
+import Alert from '@/components/ui/Alert';
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Helmet } from 'react-helmet-async';
@@ -169,7 +172,7 @@ export default function Contact() {
                                 }
                             }}
                             disabled={isSubmitting}
-                            triggerClassName="px-4 py-3 bg-[var(--card)] rounded-lg focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                            fieldSize="lg"
                             options={[
                                 { value: '', label: 'Select a topic...' },
                                 ...contactTopicOptions,
@@ -181,13 +184,13 @@ export default function Contact() {
                         <label htmlFor="email" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
                             Email {isAbuseReport ? <span className="text-[var(--primary)]">*</span> : '(optional)'}
                         </label>
-                        <input
+                        <Input
                             type="email"
                             id="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="your.email@example.com"
-                            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] transition-colors"
+                            fieldSize="lg"
                             disabled={isSubmitting}
                             required={isAbuseReport}
                         />
@@ -200,13 +203,14 @@ export default function Contact() {
                         <label htmlFor="message" className="block text-sm font-medium mb-2 text-[var(--foreground)]">
                             Message <span className="text-[var(--primary)]">*</span>
                         </label>
-                        <textarea
+                        <Textarea
                             id="message"
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
                             placeholder={isAbuseReport ? 'Describe the issue and include proof that you own the content...' : "Tell us what's on your mind..."}
                             rows={8}
-                            className="w-full px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] resize-none transition-colors"
+                            fieldSize="lg"
+                            className="resize-none"
                             disabled={isSubmitting}
                         />
                         {isAbuseReport && (
@@ -236,33 +240,25 @@ export default function Contact() {
                     )}
 
                     {submitMessage && (
-                        <div
-                            className={`p-4 rounded-lg border ${
-                                submitMessage.type === 'success'
-                                    ? 'bg-[var(--success-bg)] border-[var(--success-border)] text-[var(--success-text)]'
-                                    : 'bg-[var(--error-bg)] border-[var(--error-border)] text-[var(--error-text)]'
-                            }`}
-                        >
-                            {submitMessage.text}
-                        </div>
+                        <Alert variant={submitMessage.type}>{submitMessage.text}</Alert>
                     )}
 
                     <div className="flex gap-4">
-                        <button
+                        <Button size="lg"
                             type="submit"
                             disabled={isSubmitting}
-                            className="flex-1 px-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors text-white"
+                            className="flex-1"
                         >
                             {isSubmitting ? 'Sending…' : 'Send message'}
-                        </button>
-                        <button
+                        </Button>
+                        <Button size="lg"
                             type="button"
                             onClick={() => navigate('/')}
                             disabled={isSubmitting}
-                            className="px-6 py-3 bg-[var(--card)] hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed border border-[var(--border)] rounded-lg font-medium transition-colors text-[var(--foreground)]"
+                            variant="secondary"
                         >
                             Cancel
-                        </button>
+                        </Button>
                     </div>
                 </form>
             </div>

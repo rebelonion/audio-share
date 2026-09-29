@@ -1,3 +1,4 @@
+import {Button} from '@/components/ui/Button';
 import {AlertCircle, Loader2, Pause, Play, Radio} from 'lucide-react';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 
@@ -64,14 +65,14 @@ export default function SharePagePlayer({src, name, artist, ageLimit, startTime}
         <div className="flex min-h-20 w-full items-center justify-center border-y border-[var(--border-strong)] py-3" aria-live="polite">
             {isActiveTrack ? status : (
                 <div className="flex w-full flex-col items-center gap-2 text-center">
-                    <button
+                    <Button size="lg"
                         type="button"
                         onClick={handlePlay}
-                        className="flex min-w-52 items-center justify-center gap-3 rounded-full bg-[var(--primary)] px-7 py-3 font-medium text-white transition-[background-color,transform] duration-200 hover:scale-[1.02] hover:bg-[var(--primary-hover)]"
+                        className="min-w-52"
                     >
                         <Play className="h-5 w-5 fill-current" />
                         <span>{startTime && startTime > 0 ? `Play from ${formatStartTime(startTime)}` : 'Play this track'}</span>
-                    </button>
+                    </Button>
                     {currentTrack && (
                         <p className="max-w-sm text-xs text-[var(--muted-foreground)]">
                             Replaces <span className="text-[var(--foreground)]">{currentTrack.name}</span> in the player.

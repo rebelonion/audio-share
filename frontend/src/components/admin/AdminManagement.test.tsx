@@ -13,6 +13,10 @@ const existing: SourceRequest = {id: 7, title: 'Quiet rain', submittedUrl: 'http
 const authFailure = vi.fn();
 const change = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), {target: {value}});
 const click = (name: string) => fireEvent.click(screen.getByRole('button', {name}));
+const select = (label: string, option: string) => {
+    click(label);
+    fireEvent.click(screen.getByRole('option', {name: option}));
+};
 beforeEach(() => {
     vi.resetAllMocks();
     HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -26,7 +30,7 @@ afterEach(cleanup);
 it('creates requests with tags and an initial status', async () => {
     render(<AdminRequests onAuthFailure={authFailure} />);
     await screen.findByText('Quiet rain');
-    click('New request'); change('Title', 'Night train'); change('Source URL', 'https://example.test/train'); change('Source key (optional)', 'train-source'); change('Initial status', 'downloading');
+    click('New request'); change('Title', 'Night train'); change('Source URL', 'https://example.test/train'); change('Source key (optional)', 'train-source'); select('Initial status', 'Downloading');
     click('Add tag'); change('Tag 1 name', 'Train'); change('Tag 1 color', '#123456');
     click('Create request');
     await screen.findByText('Edit request #8');
@@ -42,7 +46,7 @@ it('saves details and status separately, clears folder associations, and confirm
     await screen.findByText('Request details saved.');
     expect(api.editAdminRequest).toHaveBeenCalledWith(7, {title: 'Rain at night', tags: [{name: 'ASMR', color: '#abcdef'}]}, expect.any(AbortSignal));
     expect(api.changeRequestStatus).not.toHaveBeenCalled();
-    change('Status', 'added'); change('Folder share key (optional)', ''); click('Save status');
+    select('Status', 'Added'); change('Folder share key (optional)', ''); click('Save status');
     await screen.findByText('Request status saved.');
     expect(api.changeRequestStatus).toHaveBeenCalledWith(7, {status: 'added', folderShareKey: null}, expect.any(AbortSignal));
     click('Delete request');
@@ -68,7 +72,7 @@ it('filters and paginates request lists', async () => {
     await screen.findByText('Page 1 of 2 · 26 results');
     expect(screen.queryByText('Track 25')).toBeNull(); click('Next');
     expect(screen.getByText('Track 25')).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole('heading', {name: 'Source requests'})); change('Filter status', 'rejected');
+    expect(document.activeElement).toBe(screen.getByRole('heading', {name: 'Source requests'})); select('Filter status', 'Rejected');
     expect(screen.getByText('Page 1 of 1 · 1 results')).toBeTruthy(); change('Search requests', 'not found');
     expect(screen.getByText('No requests match these filters.')).toBeTruthy();
 });

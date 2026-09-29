@@ -1,6 +1,10 @@
+import EmptyState from '@/components/ui/EmptyState';
+import SortableHeader from '@/components/ui/SortableHeader';
+import Card from '@/components/ui/Card';
+import SelectionGroup from '@/components/ui/SelectionGroup';
 import React, {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Calendar, Clock, Loader2, SortAsc} from 'lucide-react';
+import {Calendar, ChartNoAxesColumnIncreasing, Clock, Loader2, SortAsc} from 'lucide-react';
 import {FileSystemItem} from '@/types';
 import AlphaScrollbar from './AlphaScrollbar';
 import MobileItemName from "@/components/MobileItemName";
@@ -275,6 +279,10 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
             .map(({item}) => item);
     }, [items, searchableItems, searchQuery]);
 
+    const sortDirection = sortMethod === 'size' || sortMethod === 'modified'
+        ? sortOrder === 'asc' ? 'desc' : 'asc'
+        : sortOrder;
+
     const sortedItems = useMemo(() => {
         switch (sortMethod) {
             case 'alpha': {
@@ -497,9 +505,7 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
             )}
 
             {items.length === 0 ? (
-                <div className="text-center py-8 text-[var(--muted-foreground)]">
-                    <p>This folder is empty</p>
-                </div>
+                <EmptyState title="This folder is empty" compact />
             ) : (
                 <>
                     <div className="mb-4">
@@ -511,86 +517,33 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                             {/* Sort Controls */}
                             <div className="flex items-center justify-end md:justify-start space-x-2 flex-shrink-0">
                                 <div className="text-[0.7rem] uppercase tracking-[0.1em] text-[var(--muted-foreground)]">Sort by:</div>
-                                <div className="flex border border-[var(--border)] rounded-md overflow-hidden">
-                                    <button
-                                        onClick={() => handleOrderToggle('alpha')}
-                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'alpha' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                        title="Sort alphabetically"
-                                    >
-                                        <SortAsc className="h-3.5 w-3.5 mr-1 hidden md:block"/> A-Z
-                                    </button>
-                                    {showDurationColumn && (
-                                        <button
-                                            onClick={() => handleOrderToggle('duration')}
-                                            className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'duration' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                            title="Sort by playtime"
-                                        >
-                                            <Clock className="h-3.5 w-3.5 mr-1 hidden md:block"/> Time
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => handleOrderToggle('modified')}
-                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'modified' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                        title="Sort by modified date"
-                                    >
-                                        <Calendar className="h-3.5 w-3.5 mr-1 hidden md:block"/> Date
-                                    </button>
-                                    <button
-                                        onClick={() => handleOrderToggle('size')}
-                                        className={`px-3 py-1.5 text-[0.7rem] uppercase tracking-[0.1em] flex items-center ${sortMethod === 'size' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'}`}
-                                        title="Sort by size"
-                                    >
-                                        <svg className="h-3.5 w-3.5 mr-1 hidden md:block" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                             strokeWidth="2">
-                                            <rect x="4" y="14" width="4" height="6" rx="1"/>
-                                            <rect x="10" y="9" width="4" height="11" rx="1"/>
-                                            <rect x="16" y="4" width="4" height="16" rx="1"/>
-                                        </svg>
-                                        Size
-                                    </button>
-                                </div>
+                                <SelectionGroup<SortMethod> label="Sort by"
+                                    options={[
+                                        {value: 'alpha', label: <><SortAsc className="hidden h-3.5 w-3.5 md:block" /> A-Z</>, selected: sortMethod === 'alpha', title: 'Sort alphabetically'},
+                                        ...(showDurationColumn ? [{value: 'duration' as const, label: <><Clock className="hidden h-3.5 w-3.5 md:block" /> Time</>, selected: sortMethod === 'duration', title: 'Sort by playtime'}] : []),
+                                        {value: 'modified', label: <><Calendar className="hidden h-3.5 w-3.5 md:block" /> Date</>, selected: sortMethod === 'modified', title: 'Sort by modified date'},
+                                        {value: 'size', label: <><ChartNoAxesColumnIncreasing className="hidden h-3.5 w-3.5 md:block" /> Size</>, selected: sortMethod === 'size', title: 'Sort by size'},
+                                    ]}
+                                    onSelect={handleOrderToggle} />
                             </div>
                         </div>
                     </div>
 
                     {isDesktop ? (
                         <div className="flex items-start gap-2">
-                            <div
-                                className="flex-1 min-w-0 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] overflow-hidden">
+                            <Card padding="none" className="flex-1 min-w-0 shadow-lg overflow-hidden">
                                 <div className="overflow-x-auto custom-scrollbar" id="table-container">
                                     <table className="w-full min-w-[70rem] table-fixed border-collapse">
                                         <thead className="bg-[var(--secondary)] sticky top-0 z-20">
                                         <tr>
-                                            <th scope="col"
-                                                className="px-6 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                                style={{width: nameColumnWidth}}
-                                                onClick={() => handleOrderToggle('alpha')}>
-                                                Name
-                                                {sortMethod === 'alpha' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                            </th>
-                                            <th scope="col"
-                                                className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                                style={{width: sizeColumnWidth}}
-                                                onClick={() => handleOrderToggle('size')}>
-                                                Size
-                                                {sortMethod === 'size' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                            </th>
-                                            {showDurationColumn && (
-                                                <th scope="col"
-                                                    className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                                    style={{width: '13%'}}
-                                                    onClick={() => handleOrderToggle('duration')}>
-                                                    Playtime
-                                                    {sortMethod === 'duration' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                                </th>
-                                            )}
-                                            <th scope="col"
-                                                className="px-6 py-3 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider cursor-pointer"
-                                                style={{width: '15%'}}
-                                                onClick={() => handleOrderToggle('modified')}>
-                                                Modified
-                                                {sortMethod === 'modified' && (sortOrder === 'asc' ? ' ↓' : ' ↑')}
-                                            </th>
+                                            <SortableHeader align="left" style={{width: nameColumnWidth}}
+                                                direction={sortMethod === 'alpha' ? sortDirection : undefined} onSort={() => handleOrderToggle('alpha')}>Name</SortableHeader>
+                                            <SortableHeader style={{width: sizeColumnWidth}}
+                                                direction={sortMethod === 'size' ? sortDirection : undefined} onSort={() => handleOrderToggle('size')}>Size</SortableHeader>
+                                            {showDurationColumn && <SortableHeader style={{width: '13%'}}
+                                                direction={sortMethod === 'duration' ? sortDirection : undefined} onSort={() => handleOrderToggle('duration')}>Playtime</SortableHeader>}
+                                            <SortableHeader style={{width: '15%'}}
+                                                direction={sortMethod === 'modified' ? sortDirection : undefined} onSort={() => handleOrderToggle('modified')}>Modified</SortableHeader>
                                             <th scope="col"
                                                 className="px-6 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
                                                 style={{width: '20%'}}>
@@ -646,7 +599,7 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                                         </tbody>
                                     </table>
                                 </div>
-                            </div>
+                            </Card>
                             {showAlphaScrollbar && (
                                 <div className="sticky top-4 self-start">
                                     <AlphaScrollbar letters={availableLetters} onScrollToLetterAction={scrollToLetter}/>

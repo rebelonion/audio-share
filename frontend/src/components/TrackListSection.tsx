@@ -1,3 +1,6 @@
+import Card from '@/components/ui/Card';
+import Badge from '@/components/ui/Badge';
+import {IconButton} from '@/components/ui/Button';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link} from 'react-router';
 import {ChevronLeft, ChevronRight, Music, Play, ShieldAlert} from 'lucide-react';
@@ -101,22 +104,22 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                 </h2>
                 {needsScroll && (
                     <div className="flex gap-1">
-                        <button
+                        <IconButton
                             onClick={() => scroll('left')}
                             disabled={!canScrollLeft}
-                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] disabled:opacity-30"
+                            variant="secondary" size="sm"
                             aria-label={`Scroll ${title} left`}
                         >
                             <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <button
+                        </IconButton>
+                        <IconButton
                             onClick={() => scroll('right')}
                             disabled={!canScrollRight}
-                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] disabled:opacity-30"
+                            variant="secondary" size="sm"
                             aria-label={`Scroll ${title} right`}
                         >
                             <ChevronRight className="h-4 w-4" />
-                        </button>
+                        </IconButton>
                     </div>
                 )}
             </div>
@@ -129,10 +132,10 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                 {tracks.map((track, index) => (
                         <div
                             key={track.shareKey || track.path}
-                            className="flex-shrink-0 w-36 md:w-44 snap-start group animate-fadeIn"
+                            className="flex-shrink-0 w-44 snap-start group animate-fadeIn"
                             style={{animationDelay: `${index * 35}ms`, animationFillMode: 'both'}}
                         >
-                            <div className="relative rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-all duration-200">
+                            <Card padding="none" className="relative overflow-hidden group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-all duration-200">
                                 <Link
                                     to={`/share/${track.shareKey}`}
                                     onClick={() => trackEvent('carousel-click', {
@@ -146,10 +149,10 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                                 <div className="relative pointer-events-none">
                                     <TrackPoster track={track} />
                                     {track.removalRequestedAt && (
-                                        <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded border border-amber-400/50 bg-black/75 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-300">
+                                        <Badge size="sm" variant="overlay" className="absolute right-2 top-2">
                                             <ShieldAlert className="h-3 w-3" aria-hidden="true" />
                                             Removal requested
-                                        </span>
+                                        </Badge>
                                     )}
                                 </div>
                                 <div className="relative pointer-events-none p-2.5">
@@ -157,18 +160,17 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                                     <div className="text-xs text-[var(--muted-foreground)] truncate mt-1">{track.artist || track.parentFolderName || '\u00A0'}</div>
                                     <div className="relative z-10 mt-2 flex items-center justify-between pointer-events-auto">
                                         <TrackQuickActions track={playbackToPlayerTrack(track, source)} compact />
-                                        <button
+                                        <IconButton variant="subtle" size="sm"
                                             type="button"
                                             onClick={() => play(track)}
-                                            className="rounded-full bg-[var(--secondary)] p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--primary)]"
                                             title="Play"
                                             aria-label={`Play ${track.title || track.filename}`}
                                         >
                                             <Play className="h-3.5 w-3.5 fill-current" />
-                                        </button>
+                                        </IconButton>
                                     </div>
                                 </div>
-                            </div>
+                            </Card>
                         </div>
                 ))}
             </div>

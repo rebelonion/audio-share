@@ -1,3 +1,4 @@
+import ErrorState from '@/components/ui/ErrorState';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { fetchDirectoryContents, FileSystemItem } from '@/lib/api';
@@ -46,6 +47,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
     const [currentPath, setCurrentPath] = useState(initialDirectory?.currentPath ?? initialPath);
     const [loading, setLoading] = useState(!initialDirectory);
     const [error, setError] = useState<string | null>(null);
+    const [retry, setRetry] = useState(0);
 
     useEffect(() => {
         const previousScrollRestoration = window.history.scrollRestoration;
@@ -119,7 +121,7 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
         return () => {
             mounted = false;
         };
-    }, [initialPath, navigate]);
+    }, [initialPath, navigate, retry]);
 
     if (loading) {
         return (
@@ -137,9 +139,9 @@ export default function BrowseClient({ initialPath = '', showTitle = false }: Br
 
     if (error) {
         return (
-            <div className="bg-[var(--card)] border border-red-900/40 rounded-lg p-8 text-center">
-                <p className="text-red-400 text-sm">{error}</p>
-            </div>
+            <ErrorState title="This directory could not be loaded" onRetry={() => setRetry(value => value + 1)}>
+                {error}
+            </ErrorState>
         );
     }
 

@@ -1,8 +1,19 @@
+import EmptyState from '@/components/ui/EmptyState';
+import Badge from '@/components/ui/Badge';
+import DatePicker from '@/components/ui/DatePicker';
+import {Button, IconButton} from '@/components/ui/Button';
+import Disclosure from '@/components/ui/Disclosure';
+import useDisclosure from '@/components/ui/useDisclosure';
+import SelectionGroup from '@/components/ui/SelectionGroup';
+import Switch from '@/components/ui/Switch';
+import Pagination from '@/components/ui/Pagination';
+import DurationRange from '@/components/DurationRange';
+import Alert from '@/components/ui/Alert';
+import SearchBar from '@/components/SearchBar';
 import { useEffect, useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate, Link } from 'react-router';
 import { Helmet } from 'react-helmet-async';
-import { Search as SearchIcon, Folder, Music, Play, ShieldAlert, Unlink, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
+import { Search as SearchIcon, Folder, Music, Play, ShieldAlert, Unlink, ArrowRight, Calendar, Shuffle, SlidersHorizontal, X, ListPlus } from 'lucide-react';
 import { searchAudio, getRandomAudio, getRandomAudioFromSearch, fetchDirectoryContents, SearchResult, SearchFilters, SearchField, isMatureAge } from '@/lib/api';
 import type { Folder as RootFolder } from '@/types';
 import { formatDate } from '@/lib/utils';
@@ -92,7 +103,8 @@ export default function Search() {
     const [searchError, setSearchError] = useState(false);
     const [retry, setRetry] = useState(0);
     const [isLucky, setIsLucky] = useState(false);
-    const [showFilters, setShowFilters] = useState(false);
+    const filterDisclosure = useDisclosure();
+    const showFilters = filterDisclosure.open;
     const [showRequestDialog, setShowRequestDialog] = useState(false);
     const [filters, setFilters] = useState<SearchFilters>(() => filtersFromParams(searchParams));
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -231,29 +243,12 @@ export default function Search() {
 
                     <div className="flex gap-2">
                         <div className="relative flex-1">
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                value={query}
-                                onChange={(e) => changeQuery(e.target.value)}
-                                placeholder="Search by name, artist, title, or description..."
-                                className="w-full px-4 py-3 pl-12 bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent text-[var(--foreground)] placeholder-[var(--muted-foreground)]"
-                            />
-                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--muted-foreground)]" />
-                            {isLoading && (
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[var(--primary)]" />
-                                </div>
-                            )}
+                            <SearchBar ref={inputRef} value={query} onChange={changeQuery} loading={isLoading} size="lg" label="Search audio library" placeholder="Search by name, artist, title, or description..." />
                         </div>
-                        <button
-                            onClick={() => setShowFilters(v => !v)}
-                            title="Filters"
-                            className={`relative flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
-                                showFilters || activeFilterCount > 0
-                                    ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                                    : 'bg-[var(--card)] border-[var(--border)] hover:bg-[var(--card-hover)] text-[var(--foreground)]'
-                            }`}
+                        <Button
+                            {...filterDisclosure.triggerProps}
+                            variant={showFilters || activeFilterCount > 0 ? 'selected' : 'secondary'}
+                            size="lg" title="Filters" aria-label="Filters" className="relative"
                         >
                             <SlidersHorizontal className="h-5 w-5" />
                             <span className="hidden sm:inline">Filters</span>
@@ -262,12 +257,12 @@ export default function Search() {
                                     {activeFilterCount}
                                 </span>
                             )}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="secondary" size="lg"
                             onClick={handleLucky}
                             disabled={isLucky}
-                            title="I'm feeling lucky"
-                            className="flex items-center gap-2 px-4 py-3 bg-[var(--card)] border border-[var(--border)] rounded-lg hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[var(--foreground)] whitespace-nowrap"
+                            title="I'm feeling lucky" aria-label="I'm feeling lucky"
+                            className="whitespace-nowrap"
                         >
                             {isLucky ? (
                                 <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[var(--primary)]" />
@@ -275,7 +270,7 @@ export default function Search() {
                                 <Shuffle className="h-5 w-5 text-[var(--primary)]" />
                             )}
                             <span className="hidden sm:inline">I'm feeling lucky</span>
-                        </button>
+                        </Button>
                     </div>
 
                     {query.length > 0 && query.length < 2 && !hasActiveFilters(filters) && (
@@ -284,22 +279,16 @@ export default function Search() {
                         </p>
                     )}
 
-                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${showFilters ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                        <div className="overflow-hidden">
-                            <FilterPanel
-                                filters={filters}
-                                onChange={applyFilters}
-                                onClear={clearFilters}
-                            />
-                        </div>
-                    </div>
+                    <Disclosure {...filterDisclosure.panelProps}>
+                        <FilterPanel filters={filters} onChange={applyFilters} onClear={clearFilters} />
+                    </Disclosure>
                 </div>
 
                 {searchError && (
-                    <div role="alert" className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+                    <Alert className="mb-4">
                         <p>Search could not be loaded. Please try again.</p>
-                        <button onClick={() => setRetry(value => value + 1)} className="mt-2 text-[var(--primary)] underline">Retry search</button>
-                    </div>
+                        <Button variant="link" onClick={() => setRetry(value => value + 1)} className="mt-2">Retry search</Button>
+                    </Alert>
                 )}
 
                 {hasSearched && (
@@ -363,14 +352,14 @@ export default function Search() {
                                                         {result.title || result.name}
                                                     </h3>
                                                     {result.type === 'audio' && isMatureAge(result.ageLimit) && (
-                                                        <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
+                                                        <Badge size="sm">
                                                             18+
-                                                        </span>
+                                                        </Badge>
                                                     )}
                                                     {result.removalRequestedAt && (
-                                                        <span className="px-1.5 py-0.5 rounded border border-amber-500/40 text-[10px] font-semibold text-amber-500 flex-shrink-0">
+                                                        <Badge size="sm">
                                                             Removal requested
-                                                        </span>
+                                                        </Badge>
                                                     )}
                                                     <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                                                 </div>
@@ -424,7 +413,7 @@ export default function Search() {
                                             {playerTrack && (
                                                 <div className="ml-auto flex shrink-0 items-center gap-1">
                                                     <TrackQuickActions track={playerTrack} />
-                                                    <button
+                                                    <IconButton variant="primary"
                                                         type="button"
                                                         onClick={() => {
                                                             playTrack(playerTrack);
@@ -434,12 +423,11 @@ export default function Search() {
                                                                 title: result.title || result.name,
                                                             });
                                                         }}
-                                                        className="rounded-full bg-[var(--secondary)] p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--primary)]"
                                                         title="Play"
                                                         aria-label={`Play ${result.title || result.name}`}
                                                     >
                                                         <Play className="h-4 w-4 fill-current" />
-                                                    </button>
+                                                    </IconButton>
                                                 </div>
                                             )}
                                         </div>
@@ -450,88 +438,25 @@ export default function Search() {
                     </div>
                 )}
 
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 mt-8">
-                        <button
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={isLoading || currentPage === 1}
-                            className="flex items-center gap-1 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-md hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                            <span className="hidden sm:inline">Previous</span>
-                        </button>
-
-                        <div className="flex items-center gap-1">
-                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                let pageNum: number;
-                                if (totalPages <= 5) {
-                                    pageNum = i + 1;
-                                } else if (currentPage <= 3) {
-                                    pageNum = i + 1;
-                                } else if (currentPage >= totalPages - 2) {
-                                    pageNum = totalPages - 4 + i;
-                                } else {
-                                    pageNum = currentPage - 2 + i;
-                                }
-                                return (
-                                    <button
-                                        key={pageNum}
-                                        onClick={() => handlePageChange(pageNum)}
-                                        disabled={isLoading}
-                                        className={`px-3 py-2 rounded-md transition-colors ${
-                                            currentPage === pageNum
-                                                ? 'bg-[var(--primary)] text-white'
-                                                : 'bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--card-hover)]'
-                                        }`}
-                                    >
-                                        {pageNum}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <button
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={isLoading || currentPage === totalPages}
-                            className="flex items-center gap-1 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-md hover:bg-[var(--card-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <span className="hidden sm:inline">Next</span>
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
-                    </div>
-                )}
+                {totalPages > 1 && <Pagination page={currentPage} pages={totalPages}
+                    onPage={handlePageChange} disabled={isLoading} numbered className="mt-8" />}
 
                 {hasSearched && results.length === 0 && !isLoading && (
-                    <div className="text-center py-12">
-                        <Music className="h-12 w-12 mx-auto text-[var(--muted-foreground)] mb-4" />
-                        <h2 className="text-lg font-medium mb-2">No results found</h2>
-                        <p className="text-[var(--muted-foreground)] mb-6">
-                            Try searching with different keywords
-                            {hasActiveFilters(filters) && (
-                                <> or <button onClick={clearFilters} className="text-[var(--primary)] hover:underline">clear filters</button></>
-                            )}
-                        </p>
-                        <button
-                            onClick={() => {
-                                setShowRequestDialog(true);
-                                track('artist-request-dialog-open', { from: 'search-no-results', query });
-                            }}
-                            className="flex items-center gap-2 mx-auto px-5 py-2.5 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors text-sm font-medium"
-                        >
-                            <ListPlus className="h-4 w-4" />
-                            Request a source
-                        </button>
-                    </div>
+                    <EmptyState title="No results found" icon={Music} action={
+                        <Button onClick={() => {
+                            setShowRequestDialog(true);
+                            track('artist-request-dialog-open', { from: 'search-no-results', query });
+                        }}><ListPlus className="h-4 w-4" /> Request a source</Button>
+                    }>
+                        Try searching with different keywords
+                        {hasActiveFilters(filters) && <> or <Button variant="link" onClick={clearFilters}>clear filters</Button></>}
+                    </EmptyState>
                 )}
 
                 {!hasSearched && !isLoading && !searchError && (
-                    <div className="text-center py-12">
-                        <SearchIcon className="h-12 w-12 mx-auto text-[var(--muted-foreground)] mb-4" />
-                        <h2 className="text-lg font-medium mb-2">Search the entire library</h2>
-                        <p className="text-[var(--muted-foreground)]">
-                            Find audio files and folders by name, artist, title, or description
-                        </p>
-                    </div>
+                    <EmptyState title="Search the entire library" icon={SearchIcon}>
+                        Find audio files and folders by name, artist, title, or description
+                    </EmptyState>
                 )}
             </div>
             <RequestSourceDialog isOpen={showRequestDialog} onCloseAction={() => setShowRequestDialog(false)} />
@@ -577,21 +502,12 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                     <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
                         Type
                     </label>
-                    <div className="flex gap-1.5">
-                        {(['', 'audio', 'folder'] as const).map((t) => (
-                            <button
-                                key={t || 'all'}
-                                onClick={() => update({ type: t || undefined })}
-                                className={`px-3 py-1.5 text-sm rounded border transition-all duration-150 ${
-                                    (filters.type ?? '') === t
-                                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary-border-hover)] hover:text-[var(--foreground)]'
-                                }`}
-                            >
-                                {t === '' ? 'All' : t === 'audio' ? 'Audio' : 'Folders'}
-                            </button>
-                        ))}
-                    </div>
+                    <SelectionGroup label="Type"
+                        options={(['', 'audio', 'folder'] as const).map(value => ({
+                            value, label: value === '' ? 'All' : value === 'audio' ? 'Audio' : 'Folders',
+                            selected: (filters.type ?? '') === value,
+                        }))}
+                        onSelect={value => update({type: value || undefined})} />
                 </div>
 
                 <div>
@@ -599,6 +515,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                         Sort by
                     </label>
                     <CustomSelect
+                        ariaLabel="Sort by"
                         value={filters.sort ?? ''}
                         onChange={(v) => update({ sort: v as SearchFilters['sort'] || undefined })}
                         options={SORT_OPTIONS as unknown as { value: string; label: string }[]}
@@ -615,6 +532,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                             Root directory
                         </label>
                         <CustomSelect
+                            ariaLabel="Root directory"
                             value={filters.root ?? ''}
                             onChange={(v) => update({ root: v || undefined })}
                             options={[
@@ -628,22 +546,10 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
 
             <div className="border-t border-[var(--border-subtle)]" />
 
-            <label className="flex items-center gap-2.5 cursor-pointer select-none group">
-                <span className="relative inline-flex h-5 w-9 shrink-0">
-                    <input
-                        type="checkbox"
-                        checked={!!filters.includeMature}
-                        onChange={(event) => update({ includeMature: event.target.checked || undefined })}
-                        className="peer sr-only"
-                    />
-                    <span className="absolute inset-0 rounded-full bg-[var(--secondary)] border border-[var(--border)] peer-checked:bg-amber-500/20 peer-checked:border-amber-500/50 transition-all duration-200" />
-                    <span className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-[var(--muted-foreground)] peer-checked:translate-x-4 peer-checked:bg-amber-400 transition-all duration-200 shadow-sm" />
-                </span>
-                <span className="text-sm text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-amber-500">18+</span>
-                    Include mature content
-                </span>
-            </label>
+            <Switch checked={!!filters.includeMature} onChange={checked => update({includeMature: checked || undefined})}>
+                <Badge size="sm">18+</Badge>
+                Include mature content
+            </Switch>
 
             <div className="border-t border-[var(--border-subtle)]" />
 
@@ -651,32 +557,16 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-2 uppercase tracking-widest">
                     Search in
                 </label>
-                <div className="flex flex-wrap gap-1.5">
-                    {VALID_FIELDS.map((f) => {
-                        const active = filters.fields ? filters.fields.includes(f) : false;
-                        const label = f === 'filename' ? 'Filename' : f === 'title' ? 'Title' : f === 'artist' ? 'Artist' : 'Description';
-                        const toggle = () => {
-                            const current = filters.fields && filters.fields.length > 0 ? filters.fields : [];
-                            const next = current.includes(f)
-                                ? current.filter(x => x !== f)
-                                : [...current, f];
-                            update({ fields: next.length === 0 || next.length === VALID_FIELDS.length ? undefined : next });
-                        };
-                        return (
-                            <button
-                                key={f}
-                                onClick={toggle}
-                                className={`px-3 py-1.5 text-sm rounded border transition-all duration-150 ${
-                                    active
-                                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                                        : 'bg-transparent border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary-border-hover)] hover:text-[var(--foreground)]'
-                                }`}
-                            >
-                                {label}
-                            </button>
-                        );
-                    })}
-                </div>
+                <SelectionGroup label="Search in"
+                    options={VALID_FIELDS.map(value => ({value,
+                        label: value === 'filename' ? 'Filename' : value === 'title' ? 'Title' : value === 'artist' ? 'Artist' : 'Description',
+                        selected: filters.fields?.includes(value) ?? false,
+                    }))}
+                    onSelect={value => {
+                        const current = filters.fields ?? [];
+                        const next = current.includes(value) ? current.filter(field => field !== value) : [...current, value];
+                        update({fields: next.length === 0 || next.length === VALID_FIELDS.length ? undefined : next});
+                    }} />
             </div>
 
             <div className="border-t border-[var(--border-subtle)]" />
@@ -685,7 +575,7 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                 <label className="block text-[10px] font-semibold text-[var(--muted-foreground)] mb-3 uppercase tracking-widest">
                     Duration
                 </label>
-                <DualRangeSlider
+                <DurationRange
                     minVal={filters.durationMin ?? 0}
                     maxVal={filters.durationMax ?? 0}
                     onChange={(min, max) => update({ durationMin: min || undefined, durationMax: max || undefined })}
@@ -703,14 +593,12 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
                         value={filters.dateFrom ?? ''}
                         onChange={(v) => update({ dateFrom: v || undefined })}
                         placeholder="From"
-                        alignRight={false}
                     />
                     <span className="text-[var(--border)] text-xs shrink-0">—</span>
                     <DatePicker
                         value={filters.dateTo ?? ''}
                         onChange={(v) => update({ dateTo: v || undefined })}
                         placeholder="To"
-                        alignRight={true}
                     />
                 </div>
             </div>
@@ -718,365 +606,19 @@ function FilterPanel({ filters, onChange, onClear }: FilterPanelProps) {
             <div className="border-t border-[var(--border-subtle)]" />
 
             <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none group">
-                    <span className="relative inline-flex h-5 w-9 shrink-0">
-                        <input
-                            type="checkbox"
-                            checked={filters.unavailableOnly ?? false}
-                            onChange={(e) => update({ unavailableOnly: e.target.checked || undefined })}
-                            className="peer sr-only"
-                        />
-                        <span className="absolute inset-0 rounded-full bg-[var(--secondary)] border border-[var(--border)] peer-checked:bg-amber-500/20 peer-checked:border-amber-500/50 transition-all duration-200" />
-                        <span className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-[var(--muted-foreground)] peer-checked:translate-x-4 peer-checked:bg-amber-400 transition-all duration-200 shadow-sm" />
-                    </span>
-                    <span className="text-sm text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors flex items-center gap-1.5">
-                        <Unlink className="h-3.5 w-3.5 text-amber-500" />
-                        Source unavailable only
-                    </span>
-                </label>
+                <Switch checked={filters.unavailableOnly ?? false} onChange={checked => update({unavailableOnly: checked || undefined})}>
+                    <Unlink className="h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
+                    Source unavailable only
+                </Switch>
 
                 {isActive && (
-                    <button
+                    <Button variant="ghost" size="sm"
                         onClick={onClear}
-                        className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-transparent hover:border-[var(--border)] rounded px-2 py-1 transition-all"
                     >
                         <X className="h-3 w-3" />
                         Clear all
-                    </button>
+                    </Button>
                 )}
-            </div>
-        </div>
-    );
-}
-
-// --- Custom Date Picker ---
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-function formatDateDisplay(iso: string): string {
-    const [y, m, d] = iso.split('-').map(Number);
-    return `${MONTH_NAMES[m - 1].slice(0, 3)} ${d}, ${y}`;
-}
-
-function todayISO(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-interface DatePickerProps {
-    value: string; // ISO date (YYYY-MM-DD) or ''
-    onChange: (value: string) => void;
-    placeholder: string;
-    alignRight: boolean;
-}
-
-function DatePicker({ value, onChange, placeholder, alignRight }: DatePickerProps) {
-    const today = todayISO();
-    const initialYear = value ? parseInt(value.split('-')[0]) : new Date().getFullYear();
-    const initialMonth = value ? parseInt(value.split('-')[1]) - 1 : new Date().getMonth();
-
-    const [open, setOpen] = useState(false);
-    const [view, setView] = useState<'days' | 'months'>('days');
-    const [viewYear, setViewYear] = useState(initialYear);
-    const [viewMonth, setViewMonth] = useState(initialMonth);
-    const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
-    const triggerRef = useRef<HTMLButtonElement>(null);
-    const calendarRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (value) {
-            setViewYear(parseInt(value.split('-')[0]));
-            setViewMonth(parseInt(value.split('-')[1]) - 1);
-        }
-    }, [value]);
-
-    useEffect(() => {
-        if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (
-                !calendarRef.current?.contains(e.target as Node) &&
-                !triggerRef.current?.contains(e.target as Node)
-            ) setOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [open]);
-
-    const openPicker = () => {
-        if (!open && triggerRef.current) {
-            const r = triggerRef.current.getBoundingClientRect();
-            setPopoverStyle({
-                position: 'fixed',
-                top: r.bottom + 4,
-                ...(alignRight ? { right: window.innerWidth - r.right } : { left: r.left }),
-                width: 256,
-                zIndex: 9999,
-            });
-        }
-        setView('days');
-        setOpen(v => !v);
-    };
-
-    const prevPeriod = () => {
-        if (view === 'months') {
-            setViewYear(y => y - 1);
-        } else if (viewMonth === 0) {
-            setViewMonth(11); setViewYear(y => y - 1);
-        } else {
-            setViewMonth(m => m - 1);
-        }
-    };
-
-    const nextPeriod = () => {
-        if (view === 'months') {
-            setViewYear(y => y + 1);
-        } else if (viewMonth === 11) {
-            setViewMonth(0); setViewYear(y => y + 1);
-        } else {
-            setViewMonth(m => m + 1);
-        }
-    };
-
-    const selectMonth = (month: number) => {
-        setViewMonth(month);
-        setView('days');
-    };
-
-    const selectDay = (day: number) => {
-        const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        onChange(iso);
-        setOpen(false);
-    };
-
-    const clearDate = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onChange('');
-    };
-
-    const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const cells: (number | null)[] = [
-        ...Array(firstDayOfWeek).fill(null),
-        ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-    ];
-    while (cells.length % 7 !== 0) cells.push(null);
-
-    const selectedMonth = value && parseInt(value.split('-')[0]) === viewYear
-        ? parseInt(value.split('-')[1]) - 1
-        : -1;
-
-    return (
-        <div className="relative flex-1">
-            <button
-                ref={triggerRef}
-                onClick={openPicker}
-                className={`w-full px-3 py-1.5 text-sm bg-[var(--secondary)] border rounded flex items-center justify-between gap-2 focus:outline-none transition-colors ${
-                    open ? 'border-[var(--primary)]' : 'border-[var(--border)] hover:border-[var(--primary-border-hover)]'
-                }`}
-            >
-                <span className={`flex items-center gap-1.5 min-w-0 ${value ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}`}>
-                    <Calendar className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{value ? formatDateDisplay(value) : placeholder}</span>
-                </span>
-                {value ? (
-                    <span onClick={clearDate} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors shrink-0">
-                        <X className="h-3 w-3" />
-                    </span>
-                ) : (
-                    <ChevronDown className={`h-3.5 w-3.5 text-[var(--muted-foreground)] shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-                )}
-            </button>
-
-            {open && createPortal(
-                <div ref={calendarRef} style={popoverStyle} className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl p-3 animate-fadeIn">
-                    <div className="flex items-center justify-between mb-3">
-                        <button
-                            onClick={prevPeriod}
-                            className="p-1 rounded hover:bg-[var(--card-hover)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => setView(v => v === 'days' ? 'months' : 'days')}
-                            className="text-sm font-medium text-[var(--foreground)] hover:text-[var(--primary)] px-2 py-0.5 rounded hover:bg-[var(--card-hover)] transition-colors"
-                        >
-                            {view === 'days' ? `${MONTH_NAMES[viewMonth]} ${viewYear}` : viewYear}
-                        </button>
-                        <button
-                            onClick={nextPeriod}
-                            className="p-1 rounded hover:bg-[var(--card-hover)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
-                    </div>
-
-                    {view === 'months' ? (
-                        <div className="grid grid-cols-3 gap-1">
-                            {MONTH_NAMES.map((name, i) => (
-                                <button
-                                    key={name}
-                                    onClick={() => selectMonth(i)}
-                                    className={`py-2 text-sm rounded transition-colors ${
-                                        i === selectedMonth
-                                            ? 'bg-[var(--primary)] text-white font-medium'
-                                            : i === viewMonth
-                                            ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium hover:bg-[var(--primary-soft-hover)]'
-                                            : 'text-[var(--foreground)] hover:bg-[var(--card-hover)]'
-                                    }`}
-                                >
-                                    {name.slice(0, 3)}
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <>
-                            <div className="grid grid-cols-7 mb-1">
-                                {DAY_LABELS.map(d => (
-                                    <div key={d} className="text-center text-[10px] font-semibold text-[var(--muted-foreground)] py-1 uppercase tracking-wide">
-                                        {d}
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="grid grid-cols-7 gap-y-0.5">
-                                {cells.map((day, i) => {
-                                    if (day === null) return <div key={`e-${i}`} />;
-
-                                    const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                                    const isSelected = value === iso;
-                                    const isToday = today === iso;
-
-                                    return (
-                                        <button
-                                            key={day}
-                                            onClick={() => selectDay(day)}
-                                            className={`text-xs rounded py-1 transition-colors ${
-                                                isSelected
-                                                    ? 'bg-[var(--primary)] text-white font-medium'
-                                                    : isToday
-                                                    ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium hover:bg-[var(--primary-soft-hover)]'
-                                                    : 'text-[var(--foreground)] hover:bg-[var(--card-hover)]'
-                                            }`}
-                                        >
-                                            {day}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
-                </div>,
-                document.body
-            )}
-        </div>
-    );
-}
-
-// --- Dual range slider ---
-const MAX_MINUTES = 240;
-const INF_POS = MAX_MINUTES + 1;
-
-function posToSeconds(pos: number): number {
-    if (pos <= 0 || pos >= INF_POS) return 0;
-    return pos * 60;
-}
-
-function secondsToPos(s: number): number {
-    if (s <= 0) return 0;
-    return Math.min(Math.round(s / 60), MAX_MINUTES);
-}
-
-function formatDuration(seconds: number): string {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0 && m > 0) return `${h}h ${m}m`;
-    if (h > 0) return `${h}h`;
-    return `${m}m`;
-}
-
-interface DualRangeSliderProps {
-    minVal: number; // seconds; 0 = no min
-    maxVal: number; // seconds; 0 = no max
-    onChange: (min: number, max: number) => void;
-}
-
-function DualRangeSlider({ minVal, maxVal, onChange }: DualRangeSliderProps) {
-    const [localMinPos, setLocalMinPos] = useState(() => secondsToPos(minVal));
-    const [localMaxPos, setLocalMaxPos] = useState(() => maxVal === 0 ? INF_POS : secondsToPos(maxVal));
-
-    useEffect(() => {
-        setLocalMinPos(secondsToPos(minVal));
-        setLocalMaxPos(maxVal === 0 ? INF_POS : secondsToPos(maxVal));
-    }, [minVal, maxVal]);
-
-    const commit = (minPos: number, maxPos: number) => {
-        onChange(posToSeconds(minPos), posToSeconds(maxPos));
-    };
-
-    const displayMin = posToSeconds(localMinPos);
-    const displayMax = posToSeconds(localMaxPos);
-    const fillLeft = (localMinPos / INF_POS) * 100;
-    const fillRight = (localMaxPos / INF_POS) * 100;
-
-    const thumbCls = [
-        'absolute w-full !h-full appearance-none !bg-transparent pointer-events-none',
-        '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:pointer-events-auto',
-        '[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:-mt-2',
-        '[&::-webkit-slider-thumb]:bg-[var(--primary)] [&::-webkit-slider-thumb]:cursor-pointer',
-        '[&::-webkit-slider-thumb]:shadow-[0_0_0_2px_var(--card),0_0_0_3px_var(--primary)]',
-        '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4',
-        '[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary)] [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
-        '[&::-moz-range-thumb]:shadow-[0_0_0_2px_var(--card),0_0_0_3px_var(--primary)]',
-        '[&::-webkit-slider-runnable-track]:!bg-transparent [&::-webkit-slider-runnable-track]:!h-0',
-        '[&::-moz-range-track]:!bg-transparent [&::-moz-range-track]:!h-0 [&::-moz-range-track]:!border-0',
-    ].join(' ');
-
-    return (
-        <div className="px-1">
-            <div className="flex justify-between text-sm text-[var(--muted-foreground)] mb-3">
-                <span className={displayMin > 0 ? 'text-[var(--foreground)] font-medium' : ''}>
-                    {displayMin > 0 ? `≥ ${formatDuration(displayMin)}` : 'Any'}
-                </span>
-                <span className={localMaxPos < INF_POS ? 'text-[var(--foreground)] font-medium' : ''}>
-                    {localMaxPos < INF_POS ? `≤ ${formatDuration(displayMax)}` : '∞'}
-                </span>
-            </div>
-            <div className="relative h-5 flex items-center">
-                <div className="absolute w-full h-1.5 rounded-full bg-[var(--secondary)] pointer-events-none" style={{ zIndex: 1 }}>
-                    <div
-                        className="absolute h-full rounded-full bg-[var(--primary)]"
-                        style={{ left: `${fillLeft}%`, right: `${100 - fillRight}%` }}
-                    />
-                </div>
-                <input
-                    type="range"
-                    min={0}
-                    max={INF_POS}
-                    value={localMinPos}
-                    onChange={(e) => {
-                        const pos = parseInt(e.target.value);
-                        if (pos < localMaxPos) setLocalMinPos(pos);
-                    }}
-                    onMouseUp={() => commit(localMinPos, localMaxPos)}
-                    onTouchEnd={() => commit(localMinPos, localMaxPos)}
-                    className={thumbCls}
-                    style={{ zIndex: localMinPos >= INF_POS - 1 ? 4 : 2 }}
-                />
-                <input
-                    type="range"
-                    min={0}
-                    max={INF_POS}
-                    value={localMaxPos}
-                    onChange={(e) => {
-                        const pos = parseInt(e.target.value);
-                        if (pos > localMinPos) setLocalMaxPos(pos);
-                    }}
-                    onMouseUp={() => commit(localMinPos, localMaxPos)}
-                    onTouchEnd={() => commit(localMinPos, localMaxPos)}
-                    className={thumbCls}
-                    style={{ zIndex: 3 }}
-                />
             </div>
         </div>
     );

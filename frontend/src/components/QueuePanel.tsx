@@ -1,6 +1,8 @@
-import PlaybackSettings from './PlaybackSettings';
+import EmptyState from '@/components/ui/EmptyState';
+import {Button, IconButton} from '@/components/ui/Button';
+import Switch from '@/components/ui/Switch';
 import {ListMusic, Radio, Trash2, X} from 'lucide-react';
-import {useEffect, useRef, useState, type CSSProperties} from 'react';
+import {useEffect, useRef, useState, type CSSProperties, type RefObject} from 'react';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 
 const QUEUE_ROW_HEIGHT = 52;
@@ -8,14 +10,24 @@ const QUEUE_OVERSCAN = 4;
 
 interface QueuePanelProps {
     onClose: () => void;
+    triggerRef: RefObject<HTMLButtonElement | null>;
     id?: string;
     className?: string;
     style?: CSSProperties;
 }
 
-export default function QueuePanel({onClose, id, className, style}: QueuePanelProps) {
+export default function QueuePanel({onClose, triggerRef, id, className, style}: QueuePanelProps) {
     const {currentTrack, upcoming, contextLabel, autoplay, toggleAutoplay, removeFromQueue, clearQueue} = useGlobalAudioPlayer();
     const hasUpcoming = upcoming.length > 0;
+    const closeRef = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        closeRef.current?.focus({preventScroll: true});
+        return () => {
+            // The player may replace its trigger at a responsive breakpoint while the queue is open.
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            triggerRef.current?.focus({preventScroll: true});
+        };
+    }, [triggerRef]);
     const listRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(280);
@@ -59,7 +71,7 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
                     <div className="flex items-center gap-2 font-semibold"><ListMusic className="h-4 w-4 text-[var(--primary)]" /> Queue</div>
                     <div className="mt-0.5 text-xs text-[var(--muted-foreground)]">{contextLabel || 'Listening now'}</div>
                 </div>
-                <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--card-hover)] hover:text-[var(--foreground)]" aria-label="Close queue"><X className="h-4 w-4" /></button>
+                <IconButton ref={closeRef} onClick={onClose} aria-label="Close queue"><X className="h-4 w-4" /></IconButton>
             </div>
 
             {currentTrack && (
@@ -74,10 +86,10 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
 
             <div className="flex items-center justify-between px-3 pt-3 pb-2">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Up next · {upcoming.length}</div>
-                {upcoming.length > 0 && <button onClick={clearQueue} className="rounded px-1.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--error-text)]">Clear</button>}
+                {upcoming.length > 0 && <Button variant="ghost" size="sm" onClick={clearQueue}>Clear</Button>}
             </div>
             {upcoming.length === 0 ? (
-                <div className="flex-1 px-5 py-8 text-center text-xs text-[var(--muted-foreground)]">Add a track to the queue, or let autoplay choose what follows.</div>
+                <EmptyState compact className="flex-1" title="Add a track to the queue, or let autoplay choose what follows." />
             ) : (
                 <div
                     ref={listRef}
@@ -98,7 +110,7 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
                                     <div className="text-sm truncate">{track.name}</div>
                                     <div className="text-[11px] text-[var(--muted-foreground)] truncate">{track.queuePlacement ? 'Added to queue' : track.artist || contextLabel || 'Up next'}</div>
                                 </div>
-                                <button onClick={() => removeFromQueue(track.id)} className="flex h-8 w-8 items-center justify-center rounded-md opacity-70 text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--error-text)] sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-opacity" aria-label={`Remove ${track.name} from queue`}><Trash2 className="h-3.5 w-3.5" /></button>
+                                <IconButton onClick={() => removeFromQueue(track.id)} className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label={`Remove ${track.name} from queue`}><Trash2 className="h-3.5 w-3.5" /></IconButton>
                             </div>
                             );
                         })}
@@ -106,15 +118,10 @@ export default function QueuePanel({onClose, id, className, style}: QueuePanelPr
                 </div>
             )}
 
-            <PlaybackSettings />
-
             <div className="queue-autoplay shrink-0 p-3 border-t border-[var(--border)]">
-                <button onClick={toggleAutoplay} className="w-full flex items-center justify-between gap-3 rounded-md bg-[var(--secondary)] px-3 py-2.5 text-left hover:bg-[var(--muted)]" role="switch" aria-checked={autoplay}>
-                    <span className="flex items-center gap-2 text-sm"><Radio className="h-4 w-4 text-[var(--primary)]" /> Autoplay recommendations</span>
-                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${autoplay ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}>
-                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${autoplay ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                    </span>
-                </button>
+                <Switch checked={autoplay} onChange={toggleAutoplay} className="w-full bg-[var(--secondary)] px-3 py-2.5 hover:bg-[var(--muted)]">
+                    <Radio className="h-4 w-4 shrink-0 text-[var(--primary)]" /> Autoplay recommendations
+                </Switch>
                 <p className="mt-2 px-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">After this queue ends, continue with related tracks.</p>
             </div>
         </div>

@@ -5,7 +5,7 @@ const editableTags = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
 function isEditableTarget(target: EventTarget | null) {
     if (!(target instanceof HTMLElement)) return false;
-    return editableTags.has(target.tagName) || target.isContentEditable;
+    return editableTags.has(target.tagName) || target.isContentEditable || !!target.closest('[aria-haspopup="listbox"], [role="listbox"]');
 }
 
 interface UseAudioPlayerKeybindsOptions {

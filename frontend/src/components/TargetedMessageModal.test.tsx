@@ -94,7 +94,7 @@ describe('TargetedMessageModal', () => {
 
         render(<TargetedMessageModal />);
         await screen.findByRole('dialog');
-        if (dismissal === 'Escape') fireEvent.keyDown(window, {key: 'Escape'});
+        if (dismissal === 'Escape') fireEvent.keyDown(document.activeElement!, {key: 'Escape'});
         else fireEvent.click(screen.getByRole('button', {name: dismissal}));
 
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

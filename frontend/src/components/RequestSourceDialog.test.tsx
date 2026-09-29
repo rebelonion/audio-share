@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 
+import {useState} from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -113,4 +114,32 @@ describe('RequestSourceDialog', () => {
             }),
         ));
     });
+});
+
+it('focuses the URL field, traps Tab, and restores the opener after Escape', () => {
+    function Harness() {
+        const [open, setOpen] = useState(false);
+        return <>
+            <button onClick={() => setOpen(true)}>Request source</button>
+            <RequestSourceDialog isOpen={open} onCloseAction={() => setOpen(false)} />
+        </>;
+    }
+    render(<Harness />);
+    const opener = screen.getByRole('button', {name: 'Request source'});
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.getByRole('dialog', {name: 'Request a source'})).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText('Artist or channel URL'));
+    expect(document.body.style.overflow).toBe('hidden');
+    const first = screen.getByRole('button', {name: 'Close'});
+    const last = screen.getByRole('button', {name: 'Cancel'});
+    last.focus();
+    fireEvent.keyDown(last, {key: 'Tab'});
+    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(first, {key: 'Tab', shiftKey: true});
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(last, {key: 'Escape'});
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(document.body.style.overflow).toBe('');
 });

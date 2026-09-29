@@ -1,3 +1,6 @@
+import EmptyState from '@/components/ui/EmptyState';
+import Card from '@/components/ui/Card';
+import Alert from '@/components/ui/Alert';
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router';
@@ -38,7 +41,7 @@ function getDomain(url: string): string {
 
 function RequestCard({ request, accentColor }: { request: SourceRequest; accentColor: string }) {
     return (
-        <div className="bg-[var(--card)] rounded-lg shadow-sm overflow-hidden flex flex-row hover:shadow-md transition-shadow border border-[var(--border)] flex-shrink-0">
+        <Card padding="none" className="shadow-sm overflow-hidden flex flex-row hover:shadow-md transition-shadow flex-shrink-0">
             <div
                 className="w-1 flex-shrink-0 rounded-l-lg"
                 style={{ backgroundColor: accentColor }}
@@ -88,7 +91,7 @@ function RequestCard({ request, accentColor }: { request: SourceRequest; accentC
                     )}
                 </div>
             </div>
-        </div>
+        </Card>
     );
 }
 
@@ -107,9 +110,7 @@ function Column({ status, requests }: { status: RequestStatus; requests: SourceR
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 193px)' }}>
                 {requests.length === 0 ? (
-                    <div className="text-sm text-[var(--muted-foreground)] text-center py-8 bg-[var(--card)] rounded-lg border border-dashed border-[var(--border)]">
-                        No requests
-                    </div>
+                    <EmptyState title="No requests" compact variant="dashed" />
                 ) : (
                     requests.map((request) => (
                         <RequestCard key={request.id} request={request} accentColor={config.color} />
@@ -168,9 +169,7 @@ export default function Requests() {
                 <h1 className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-8 text-[var(--foreground)] text-center" style={{ fontFamily: 'var(--font-display)' }}>
                     Source Requests
                 </h1>
-                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400">
-                    {error}
-                </div>
+                <Alert>{error}</Alert>
             </>
         );
     }

@@ -1,6 +1,12 @@
+import EmptyState from '@/components/ui/EmptyState';
+import Card from '@/components/ui/Card';
+import Pagination from '@/components/ui/Pagination';
+import {Button} from '@/components/ui/Button';
+import {Input} from '@/components/ui/Field';
+import CustomSelect from '@/components/CustomSelect';
 import {useRef, useState} from 'react';
 import {listAudioSources, setAudioRemovalRequested, setAudioUnavailable, type AudioSource} from '@/lib/adminManagement';
-import {buttonClass, inputClass, panelClass, Feedback, Pagination, SourceLink} from './shared';
+import {Feedback, SourceLink} from './shared';
 import {useAdminList, type AuthFailure} from './useAdminTask';
 
 export default function AdminAudio({onAuthFailure}: {onAuthFailure: AuthFailure}) {
@@ -24,15 +30,15 @@ export default function AdminAudio({onAuthFailure}: {onAuthFailure: AuthFailure}
         }
     });
     return <section aria-labelledby="audio-heading">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 ref={heading} tabIndex={-1} id="audio-heading" className="text-3xl">Audio sources</h2><p className="mt-1 text-sm text-[var(--muted-foreground)]">Tracks with source URLs. Mark unavailable sources or handle removal requests.</p></div><button className={buttonClass} disabled={list.busy} onClick={() => { setRemoval(null); void list.reload(); }}>Refresh audio</button></div>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 ref={heading} tabIndex={-1} id="audio-heading" className="text-3xl">Audio sources</h2><p className="mt-1 text-sm text-[var(--muted-foreground)]">Tracks with source URLs. Mark unavailable sources or handle removal requests.</p></div><Button variant="secondary" disabled={list.busy} onClick={() => { setRemoval(null); void list.reload(); }}>Refresh audio</Button></div>
         <Feedback error={list.error} notice={list.notice} />
         <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_12rem]">
-            <label className="text-sm">Search audio<input type="search" className={inputClass} value={search} onChange={event => { setRemoval(null); setSearch(event.target.value); setPage(1); }} /></label>
-            <label className="text-sm">Filter flags<select className={inputClass} value={filter} onChange={event => { setRemoval(null); setFilter(event.target.value); setPage(1); }}><option value="all">All tracks</option><option value="unavailable">Source unavailable</option><option value="removal">Removal requested</option></select></label>
+            <label className="text-sm">Search audio<Input type="search" value={search} onChange={event => { setRemoval(null); setSearch(event.target.value); setPage(1); }} /></label>
+            <label className="text-sm">Filter flags<CustomSelect ariaLabel="Filter flags" fieldSize="md" value={filter} onChange={value => { setRemoval(null); setFilter(value); setPage(1); }} options={[{value: 'all', label: 'All tracks'}, {value: 'unavailable', label: 'Source unavailable'}, {value: 'removal', label: 'Removal requested'}]} /></label>
         </div>
         {list.busy && <p role="status" className="mb-3 text-sm">Updating audio…</p>}
-        {list.loaded && !matches.length && <p className={panelClass}>No audio matches these filters.</p>}
-        <ul className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--card)]">
+        {list.loaded && !matches.length && <EmptyState title="No audio matches these filters." compact variant="card" />}
+        <Card as="ul" padding="none" className="divide-y divide-[var(--border)]">
             {matches.slice((currentPage - 1) * 25, currentPage * 25).map(item => <li key={item.shareKey} className="p-4">
                 <p className="break-words font-medium">{item.title || item.filename}</p>
                 <p className="mb-1 break-all text-xs text-[var(--muted-foreground)]">{item.filename} · {item.shareKey}</p>
@@ -42,15 +48,15 @@ export default function AdminAudio({onAuthFailure}: {onAuthFailure: AuthFailure}
                     <span className={item.removalRequestedAt ? 'text-[var(--error-text)]' : 'text-[var(--muted-foreground)]'}>· {item.removalRequestedAt ? 'Removal requested' : 'No removal request'}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                    <button className={buttonClass} disabled={list.busy || !!removal} onClick={() => updateFlag(item, 'unavailableAt')}>{item.unavailableAt ? 'Clear unavailable flag' : 'Mark source unavailable'}</button>
-                    <button className={buttonClass} disabled={list.busy || (!!removal && removal.shareKey !== item.shareKey)} onClick={event => { if (item.removalRequestedAt) updateFlag(item, 'removalRequestedAt'); else { removalTrigger.current = event.currentTarget; setRemoval(item); } }}>{item.removalRequestedAt ? 'Clear removal request' : 'Mark removal requested'}</button>
+                    <Button variant="secondary" disabled={list.busy || !!removal} onClick={() => updateFlag(item, 'unavailableAt')}>{item.unavailableAt ? 'Clear unavailable flag' : 'Mark source unavailable'}</Button>
+                    <Button variant="secondary" disabled={list.busy || (!!removal && removal.shareKey !== item.shareKey)} onClick={event => { if (item.removalRequestedAt) updateFlag(item, 'removalRequestedAt'); else { removalTrigger.current = event.currentTarget; setRemoval(item); } }}>{item.removalRequestedAt ? 'Clear removal request' : 'Mark removal requested'}</Button>
                 </div>
-        {removal?.shareKey === item.shareKey && <div className={`${panelClass} mt-4 space-y-3`}>
+        {removal?.shareKey === item.shareKey && <Card className="mt-4 space-y-3">
             <p className="break-words text-sm">Mark “{removal.title || removal.filename}” for removal? Public playback and downloads will be blocked.</p>
-            <div className="flex flex-wrap gap-2"><button className={buttonClass} disabled={list.busy} onClick={() => updateFlag(removal, 'removalRequestedAt')}>Confirm removal request</button><button autoFocus className={buttonClass} disabled={list.busy} onClick={() => { setRemoval(null); removalTrigger.current?.focus(); }}>Cancel</button></div>
-        </div>}
+            <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={list.busy} onClick={() => updateFlag(removal, 'removalRequestedAt')}>Confirm removal request</Button><Button variant="secondary" autoFocus disabled={list.busy} onClick={() => { setRemoval(null); removalTrigger.current?.focus(); }}>Cancel</Button></div>
+        </Card>}
             </li>)}
-        </ul>
-        {list.loaded && <Pagination page={currentPage} total={matches.length} onPage={value => { setRemoval(null); setPage(value); heading.current?.focus(); heading.current?.scrollIntoView({block: 'start'}); }} />}
+        </Card>
+        {list.loaded && <Pagination className="mt-4" page={currentPage} pages={Math.max(1, Math.ceil(matches.length / 25))} total={matches.length} onPage={value => { setRemoval(null); setPage(value); heading.current?.focus(); heading.current?.scrollIntoView({block: 'start'}); }} />}
     </section>;
 }

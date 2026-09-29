@@ -1,3 +1,4 @@
+import {IconButton} from '@/components/ui/Button';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { Unlink, Music, ChevronLeft, ChevronRight, ShieldAlert } from 'lucide-react';
@@ -113,6 +114,8 @@ export default function UnavailableBanner({ tracks }: Props) {
                         {tracks.map((_, i) => (
                             <button
                                 key={i}
+                                aria-label={`Show unavailable source ${i + 1}`}
+                                aria-current={i === index ? 'true' : undefined}
                                 onClick={() => goTo(i)}
                                 className={`h-1.5 rounded-full transition-all duration-300 ${
                                     i === index
@@ -123,18 +126,18 @@ export default function UnavailableBanner({ tracks }: Props) {
                         ))}
                     </div>
                     <div className="flex gap-1">
-                        <button
+                        <IconButton aria-label="Previous unavailable source"
                             onClick={() => goTo(index - 1)}
-                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200"
+                            variant="secondary" size="sm"
                         >
                             <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <button
+                        </IconButton>
+                        <IconButton aria-label="Next unavailable source"
                             onClick={() => goTo(index + 1)}
-                            className="p-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--card-hover)] transition-all duration-200"
+                            variant="secondary" size="sm"
                         >
                             <ChevronRight className="h-4 w-4" />
-                        </button>
+                        </IconButton>
                     </div>
                 </div>
             )}

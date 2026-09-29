@@ -13,6 +13,7 @@ const playerCommands = vi.hoisted(() => ({
 
 const likes = vi.hoisted(() => ({
     toggleLike: vi.fn(async () => true),
+    isLikePending: vi.fn(() => false),
 }));
 
 vi.mock('@/contexts/AudioPlayerContext', () => ({
@@ -22,7 +23,7 @@ vi.mock('@/contexts/AudioPlayerContext', () => ({
 vi.mock('@/contexts/LikesContext', () => ({
     useLikes: () => ({
         isLiked: () => false,
-        isLikePending: () => false,
+        isLikePending: likes.isLikePending,
         isLoading: false,
         isReady: true,
         toggleLike: likes.toggleLike,
@@ -49,9 +50,24 @@ function Harness() {
 afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    likes.isLikePending.mockReturnValue(false);
 });
 
 describe('TrackQuickActions', () => {
+    it('does not activate the track row when a pending like or its icon is clicked', () => {
+        likes.isLikePending.mockReturnValue(true);
+        const playTrack = vi.fn();
+        render(<ToastProvider><div onClick={playTrack}><TrackQuickActions track={track} /></div></ToastProvider>);
+
+        const button = screen.getByRole('button', {name: 'Like track'}) as HTMLButtonElement;
+        expect(button.disabled).toBe(true);
+        fireEvent.click(button);
+        fireEvent.click(button.querySelector('svg')!);
+
+        expect(playTrack).not.toHaveBeenCalled();
+        expect(likes.toggleLike).not.toHaveBeenCalled();
+    });
+
     it('publishes action feedback through the global toast provider', () => {
         render(
             <ToastProvider>
