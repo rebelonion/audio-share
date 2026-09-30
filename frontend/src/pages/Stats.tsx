@@ -3,7 +3,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import SectionCard from '@/components/ui/SectionCard';
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { AudioChart, UnavailableChart, SourcesChart, DurationChart, PublicationYearChart, SourceAvailabilityChart } from '@/components/StatsCharts';
+import { AudioChart, UnavailableChart, SourcesChart, DurationChart, PublicationYearChart, SourceAvailabilityChart, type UnavailableByDayData } from '@/components/StatsCharts';
 import { API_BASE } from '@/lib/api';
 import { DEFAULT_TITLE, DEFAULT_DESCRIPTION } from '@/lib/config';
 import { appFetch } from '@/lib/cloudflareChallenge';
@@ -88,7 +88,7 @@ function formatStorage(bytes: number): string {
 
 export default function Stats() {
     const [audioData, setAudioData] = useState<AudioByDayData | null>(null);
-    const [unavailableData, setUnavailableData] = useState<AudioByDayData | null>(null);
+    const [unavailableData, setUnavailableData] = useState<UnavailableByDayData | null>(null);
     const [sourcesData, setSourcesData] = useState<SourcesByDayData | null>(null);
     const [summary, setSummary] = useState<SummaryStats | null>(null);
     const [durationData, setDurationData] = useState<DurationStatsData | null>(null);

@@ -51,8 +51,20 @@ type AudioStats struct {
 }
 
 type UnavailableStats struct {
-	Total int            `json:"total"`
-	Days  []AudioDayStat `json:"days"`
+	Total int                  `json:"total"`
+	Days  []UnavailableDayStat `json:"days"`
+}
+
+type UnavailableDayStat struct {
+	Date    string                   `json:"date"`
+	Count   int                      `json:"count"`
+	Sources []UnavailableSourceCount `json:"sources"`
+}
+
+type UnavailableSourceCount struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	Count int    `json:"count"`
 }
 
 type SourceEntry struct {
@@ -134,25 +146,34 @@ func (s *SearchService) GetAudioStats() (*AudioStats, error) {
 
 func (s *SearchService) GetUnavailableStats() (*UnavailableStats, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT (unavailable_at AT TIME ZONE 'UTC')::date::text as day, COUNT(*) as count
-		FROM audio_files
-		WHERE unavailable_at IS NOT NULL AND deleted = 0
-		GROUP BY 1
-		ORDER BY 1
+		SELECT (af.unavailable_at AT TIME ZONE 'UTC')::date::text as day,
+		       COALESCE(NULLIF(f.name, ''), NULLIF(af.source_path, ''), 'Unknown channel') as name,
+		       COALESCE(af.source_path, '') as path, COUNT(*) as count
+		FROM audio_files af
+		LEFT JOIN folders f ON f.path = af.source_path
+		WHERE af.unavailable_at IS NOT NULL AND af.deleted = 0
+		GROUP BY 1, 2, 3
+		ORDER BY 1, count DESC, name, path
 	`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	stats := UnavailableStats{Days: []AudioDayStat{}}
+	stats := UnavailableStats{Days: []UnavailableDayStat{}}
 	for rows.Next() {
-		var day AudioDayStat
-		if err := rows.Scan(&day.Date, &day.Count); err != nil {
+		var date string
+		var source UnavailableSourceCount
+		if err := rows.Scan(&date, &source.Name, &source.Path, &source.Count); err != nil {
 			return nil, err
 		}
-		stats.Total += day.Count
-		stats.Days = append(stats.Days, day)
+		if len(stats.Days) == 0 || stats.Days[len(stats.Days)-1].Date != date {
+			stats.Days = append(stats.Days, UnavailableDayStat{Date: date})
+		}
+		day := &stats.Days[len(stats.Days)-1]
+		day.Count += source.Count
+		day.Sources = append(day.Sources, source)
+		stats.Total += source.Count
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

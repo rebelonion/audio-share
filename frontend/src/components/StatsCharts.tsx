@@ -65,7 +65,13 @@ const CustomTooltip = ({active, payload, label}: CustomTooltipProps) => {
 };
 
 interface UnavailableDayData extends DayData {
+    sources: {name: string; path: string; count: number}[];
     initialBacklog?: boolean;
+}
+
+export interface UnavailableByDayData {
+    total: number;
+    days: UnavailableDayData[];
 }
 
 interface UnavailableTooltipProps {
@@ -83,10 +89,28 @@ const UnavailableTooltip = ({active, payload, label}: UnavailableTooltipProps) =
     if (!active || !payload?.length) return null;
 
     const day = payload[0].payload;
+    const sources = day.sources ?? [];
+    const displayedSources = sources.slice(0, 10);
+    const remainingCount = sources.slice(10).reduce((total, source) => total + source.count, 0);
     return (
         <div className="bg-[var(--card)] border border-[var(--border)] p-3 rounded-lg shadow-lg max-w-xs">
             <p className="text-[var(--foreground)] font-semibold mb-1">{label}</p>
             <p className="text-sm text-amber-500">Marked unavailable: {payload[0].value.toLocaleString()}</p>
+            {sources.length > 0 && (
+                <div className="mt-2 border-t border-[var(--border)] pt-2 space-y-1">
+                    {displayedSources.map(source => (
+                        <div key={source.path} className="flex items-start justify-between gap-4 text-xs text-[var(--muted-foreground)]">
+                            <span className="min-w-0 break-words">{source.name}</span>
+                            <span className="shrink-0 tabular-nums">{source.count.toLocaleString()}</span>
+                        </div>
+                    ))}
+                    {sources.length > displayedSources.length && (
+                        <p className="text-xs text-[var(--muted-foreground)] pt-1">
+                            + {sources.length - displayedSources.length} more channels: {remainingCount.toLocaleString()}
+                        </p>
+                    )}
+                </div>
+            )}
             {day.initialBacklog && (
                 <p className="text-xs text-[var(--muted-foreground)] mt-2">
                     This first record may include audio that became unavailable before tracking began.
@@ -147,7 +171,7 @@ const SourcesTooltip = ({active, payload, label}: SourcesTooltipProps) => {
     return null;
 };
 
-function backfillDays(days: DayData[]): DayData[] {
+function backfillDays<T extends DayData>(days: T[], emptyDay: (date: string) => T): T[] {
     if (days.length === 0) return [];
 
     const sortedDays = [...days].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -158,12 +182,12 @@ function backfillDays(days: DayData[]): DayData[] {
     if (!isFinite(dayDiff) || dayDiff > 36500) return sortedDays;
 
     const dayMap = new Map(sortedDays.map(day => [day.date, day]));
-    const result: DayData[] = [];
+    const result: T[] = [];
 
     const currentDate = new Date(firstDate);
     while (currentDate <= lastDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
-        result.push(dayMap.get(dateStr) || { date: dateStr, count: 0 });
+        result.push(dayMap.get(dateStr) || emptyDay(dateStr));
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
@@ -209,7 +233,7 @@ export function AudioChart({data}: AudioChartProps) {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    const backfilledDays = backfillDays(data.days);
+    const backfilledDays = backfillDays(data.days, date => ({date, count: 0}));
     const filteredDays = hideZeroDays ? backfilledDays.filter(day => day.count > 0) : backfilledDays;
 
     const cumulativeDays = filteredDays.reduce((acc, day, index) => {
@@ -352,7 +376,7 @@ export function AudioChart({data}: AudioChartProps) {
     );
 }
 
-export function UnavailableChart({data}: AudioChartProps) {
+export function UnavailableChart({data}: {data: UnavailableByDayData}) {
     const [showInitialBacklog, setShowInitialBacklog] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
@@ -363,7 +387,7 @@ export function UnavailableChart({data}: AudioChartProps) {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    const days = backfillDays(data.days);
+    const days = backfillDays(data.days, date => ({date, count: 0, sources: []}));
     const initialDay = days[0];
     const hasLaterDays = days.length > 1;
     const visibleDays: UnavailableDayData[] = (showInitialBacklog || !hasLaterDays ? days : days.slice(1)).map(day => ({
