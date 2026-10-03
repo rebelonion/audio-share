@@ -12,12 +12,18 @@ import (
 
 const MediaPreparationTimeout = 5 * time.Second
 
+// mediaIOSlotWait bounds how long a caller waits for a free worker, so brief
+// saturation queues on the caller's goroutine instead of failing immediately.
+const mediaIOSlotWait = time.Second
+
 var ErrMediaIOBusy = errors.New("media filesystem workers are busy")
 
 // Slots are retained until the underlying syscall and resource cleanup finish,
-// even if the requesting context has already expired. There is no background queue.
+// even if the requesting context has already expired. There is no background queue:
+// callers wait at most slotWait on their own goroutine for a free slot.
 type mediaFileIO struct {
 	slots       chan struct{}
+	slotWait    time.Duration
 	stat        func(string) (os.FileInfo, error)
 	readSidecar func(string) ([]byte, error)
 	readDir     func(string, int) ([]os.DirEntry, error)
@@ -33,7 +39,7 @@ var sharedMediaIO = newMediaFileIO(8)
 
 func newMediaFileIO(workers int) *mediaFileIO {
 	return &mediaFileIO{
-		slots: make(chan struct{}, workers), stat: os.Stat, open: openRegularMedia,
+		slots: make(chan struct{}, workers), slotWait: mediaIOSlotWait, stat: os.Stat, open: openRegularMedia,
 		readSidecar: func(path string) ([]byte, error) {
 			media, err := openRegularMedia(path)
 			if err != nil {
@@ -86,10 +92,8 @@ func runMediaIO[T any](ctx context.Context, pool *mediaFileIO, path string, work
 	if err := ctx.Err(); err != nil {
 		return zero, err
 	}
-	select {
-	case pool.slots <- struct{}{}:
-	default:
-		return zero, fmt.Errorf("%w: %s", ErrMediaIOBusy, path)
+	if err := acquireMediaSlot(ctx, pool); err != nil {
+		return zero, fmt.Errorf("%w: %s", err, path)
 	}
 	type result struct {
 		value T
@@ -115,6 +119,24 @@ func runMediaIO[T any](ctx context.Context, pool *mediaFileIO, path string, work
 		return result.value, result.err
 	case <-ctx.Done():
 		return zero, fmt.Errorf("media filesystem operation %s: %w", path, ctx.Err())
+	}
+}
+
+func acquireMediaSlot(ctx context.Context, pool *mediaFileIO) error {
+	select {
+	case pool.slots <- struct{}{}:
+		return nil
+	default:
+	}
+	wait := time.NewTimer(pool.slotWait)
+	defer wait.Stop()
+	select {
+	case pool.slots <- struct{}{}:
+		return nil
+	case <-wait.C:
+		return ErrMediaIOBusy
+	case <-ctx.Done():
+		return ErrMediaIOBusy
 	}
 }
 

@@ -72,6 +72,40 @@ func TestMediaIOCancellationKeepsBlockedWorkBounded(t *testing.T) {
 	}
 }
 
+func TestMediaIOWaitsBrieflyForFreeWorker(t *testing.T) {
+	pool := newMediaFileIO(1)
+	started, release := make(chan struct{}), make(chan struct{})
+	go runMediaIO(context.Background(), pool, "slow", func() (int, error) { close(started); <-release; return 0, nil }, nil)
+	<-started
+	time.AfterFunc(20*time.Millisecond, func() { close(release) })
+	value, err := runMediaIO(context.Background(), pool, "queued", func() (int, error) { return 7, nil }, nil)
+	if err != nil || value != 7 {
+		t.Fatalf("queued request: %d %v", value, err)
+	}
+}
+
+func TestMediaIOSlotWaitIsBounded(t *testing.T) {
+	pool := newMediaFileIO(1)
+	pool.slotWait = 20 * time.Millisecond
+	started, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	go runMediaIO(context.Background(), pool, "slow", func() (int, error) { close(started); <-release; return 0, nil }, nil)
+	<-started
+	begin := time.Now()
+	if _, err := runMediaIO(context.Background(), pool, "queued", func() (int, error) { return 7, nil }, nil); !errors.Is(err, ErrMediaIOBusy) {
+		t.Fatalf("error=%v", err)
+	}
+	if waited := time.Since(begin); waited < pool.slotWait || waited > time.Second {
+		t.Fatalf("waited %v", waited)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	pool.slotWait = time.Minute
+	if _, err := runMediaIO(ctx, pool, "canceled", func() (int, error) { return 7, nil }, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled error=%v", err)
+	}
+}
+
 func TestMediaIODeadlineCoversStatAndOpenCleanup(t *testing.T) {
 	for _, operation := range []string{"stat", "open"} {
 		t.Run(operation, func(t *testing.T) {
