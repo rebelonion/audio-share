@@ -106,6 +106,11 @@ The default trusts loopback, private, and link-local addresses, which covers a r
 | Proxy on a public address | Add its IP or CIDR, e.g. `TRUSTED_PROXIES=private,203.0.113.10` |
 
 With `X-Forwarded-For`, the server walks the header from right to left and uses the first address that is not a trusted proxy, so entries a visitor adds themselves are ignored. `CF-Connecting-IP` and `X-Real-IP` are used as-is, so only select them when every trusted proxy overwrites that header.
+
+If a trusted proxy omits the configured header or supplies an invalid address in the trusted part of the forwarding chain, the visitor's IP is unknown. Rate limits use the proxy's address, but the request cannot access removal-requested tracks as a local visitor. When upgrading from automatic header detection, set `CLIENT_IP_HEADER` to the header your proxy actually supplies.
+
+The default `TRUSTED_PROXIES=private` also treats direct LAN and localhost connections as proxies. For direct access without a proxy, use `TRUSTED_PROXIES=none`. For a mix of direct and proxied access, trust only the actual proxy addresses; direct requests from those same addresses still need the configured forwarding header to qualify for local access.
+
 ## Stream and download limits
 
 Key limits use rolling windows. Every configured window must permit a new key:
