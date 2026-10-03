@@ -2,6 +2,8 @@ package config
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -136,13 +138,29 @@ type Config struct {
 
 	CORSOrigins []string
 
+	TrustedProxies string
+	ClientIPHeader string
+
 	WaveformCron        string
 	WaveformMaxDuration string
 	WaveformWorkers     int
 }
 
-func Load() *Config {
-	return &Config{
+// Load reads configuration from the environment. Malformed numeric settings
+// are reported rather than silently replaced with their defaults.
+func Load() (*Config, error) {
+	var errs []error
+	getEnvInt := func(key string, defaultValue int) int {
+		value, err := parseEnvInt(key, defaultValue, strconv.Atoi)
+		errs = append(errs, err)
+		return value
+	}
+	getEnvInt64 := func(key string, defaultValue int64) int64 {
+		value, err := parseEnvInt(key, defaultValue, func(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) })
+		errs = append(errs, err)
+		return value
+	}
+	cfg := &Config{
 		Port:                      getEnv("PORT", "8080"),
 		ManagementAddr:            getEnv("MANAGEMENT_ADDR", "127.0.0.1:9090"),
 		AudioDir:                  getEnv("AUDIO_DIR", ""),
@@ -218,10 +236,14 @@ func Load() *Config {
 
 		CORSOrigins: getEnvList("CORS_ORIGINS", []string{"http://localhost:5173"}),
 
+		TrustedProxies: getEnv("TRUSTED_PROXIES", "private"),
+		ClientIPHeader: getEnv("CLIENT_IP_HEADER", "X-Forwarded-For"),
+
 		WaveformCron:        getEnv("WAVEFORM_CRON", ""),
 		WaveformMaxDuration: getEnv("WAVEFORM_MAX_DURATION", "2h"),
 		WaveformWorkers:     getEnvInt("WAVEFORM_WORKERS", 1),
 	}
+	return cfg, errors.Join(errs...)
 }
 
 func getEnv(key, defaultValue string) string {
@@ -244,20 +266,14 @@ func getEnvList(key string, defaultValue []string) []string {
 	return defaultValue
 }
 
-func getEnvInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
+func parseEnvInt[T int | int64](key string, defaultValue T, parse func(string) (T, error)) (T, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue, nil
 	}
-	return defaultValue
-}
-
-func getEnvInt64(key string, defaultValue int64) int64 {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return intValue
-		}
+	parsed, err := parse(value)
+	if err != nil {
+		return defaultValue, fmt.Errorf("invalid %s %q: must be an integer", key, value)
 	}
-	return defaultValue
+	return parsed, nil
 }

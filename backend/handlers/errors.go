@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/onion/audio-share-backend/clientip"
 	"github.com/onion/audio-share-backend/services"
 )
 
@@ -76,7 +77,7 @@ func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
-	ip := clientIP(r)
+	ip := clientip.FromRequest(r)
 	source := "ip:" + ip
 	if session, ok := currentSessionID(r, h.secret); ok {
 		source = "session:" + session

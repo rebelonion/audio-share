@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/onion/audio-share-backend/clientip"
 	"github.com/onion/audio-share-backend/services"
 )
 
@@ -29,18 +30,45 @@ func (s *capturingSearchExecutor) Search(_ string, _, _ int, opts services.Searc
 func TestIsLocalRequest(t *testing.T) {
 	tests := []struct {
 		name       string
+		trusted    string
 		remoteAddr string
 		headers    map[string]string
 		want       bool
 	}{
-		{name: "loopback", remoteAddr: "127.0.0.1:8080", want: true},
-		{name: "private ipv4", remoteAddr: "192.168.1.4:8080", want: true},
-		{name: "private ipv6", remoteAddr: "[fd00::4]:8080", want: true},
+		{name: "loopback", trusted: "none", remoteAddr: "127.0.0.1:8080", want: true},
+		{name: "private ipv4", trusted: "none", remoteAddr: "192.168.1.4:8080", want: true},
+		{name: "private ipv6", trusted: "none", remoteAddr: "[fd00::4]:8080", want: true},
+		{name: "direct LAN with specific proxy trust", trusted: "172.18.0.2", remoteAddr: "192.168.1.4:8080", want: true},
+		{name: "missing proxy header", remoteAddr: "127.0.0.1:8080", want: false},
+		{
+			name: "only legacy header supplied", remoteAddr: "172.18.0.2:8080",
+			headers: map[string]string{"X-Real-IP": "203.0.113.8"}, want: false,
+		},
+		{
+			name: "malformed proxy header", remoteAddr: "172.18.0.2:8080",
+			headers: map[string]string{"X-Forwarded-For": "not-an-ip"}, want: false,
+		},
+		{
+			name: "malformed hop behind private proxy", remoteAddr: "172.18.0.2:8080",
+			headers: map[string]string{"X-Forwarded-For": "not-an-ip, 10.0.0.1"}, want: false,
+		},
 		{name: "public", remoteAddr: "203.0.113.8:8080", want: false},
 		{
 			name:       "proxy client overrides local peer",
 			remoteAddr: "127.0.0.1:8080",
-			headers:    map[string]string{"CF-Connecting-IP": "203.0.113.8"},
+			headers:    map[string]string{"X-Forwarded-For": "203.0.113.8"},
+			want:       false,
+		},
+		{
+			name:       "spoofed loopback through local proxy",
+			remoteAddr: "172.18.0.2:8080",
+			headers:    map[string]string{"X-Forwarded-For": "127.0.0.1, 203.0.113.8"},
+			want:       false,
+		},
+		{
+			name:       "unconfigured header is ignored",
+			remoteAddr: "172.18.0.2:8080",
+			headers:    map[string]string{"CF-Connecting-IP": "127.0.0.1", "X-Forwarded-For": "203.0.113.8"},
 			want:       false,
 		},
 		{
@@ -59,12 +87,20 @@ func TestIsLocalRequest(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			trusted := test.trusted
+			if trusted == "" {
+				trusted = "private"
+			}
+			resolver, err := clientip.New(trusted, "")
+			if err != nil {
+				t.Fatal(err)
+			}
 			request := httptest.NewRequest(http.MethodGet, "https://example.test/", nil)
 			request.RemoteAddr = test.remoteAddr
 			for key, value := range test.headers {
 				request.Header.Set(key, value)
 			}
-			if got := isLocalRequest(request); got != test.want {
+			if got := isLocalRequest(resolver.Attach(request)); got != test.want {
 				t.Fatalf("isLocalRequest() = %v, want %v", got, test.want)
 			}
 		})

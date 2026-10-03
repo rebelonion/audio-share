@@ -133,7 +133,10 @@ func (l *lifecycle) management() http.Handler {
 // Request contexts are deliberately not derived from the termination context.
 func serveUntilStopped(ctx context.Context, public net.Listener, handler http.Handler, management net.Listener, l *lifecycle, finishJobs func()) error {
 	admin := &http.Server{Handler: l.management(), ReadHeaderTimeout: 5 * time.Second}
-	web := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	// ReadTimeout bounds slow request uploads, such as contact attachments. It
+	// does not cut off streams: net/http clears the read deadline once the
+	// request body is consumed. Responses deliberately have no WriteTimeout.
+	web := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 2 * time.Minute, IdleTimeout: 60 * time.Second}
 	errorsCh := make(chan error, 2)
 	go func() { errorsCh <- admin.Serve(management) }()
 	if public != nil {

@@ -1,15 +1,21 @@
 package middleware
 
 import (
+	"container/list"
 	"encoding/json"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/onion/audio-share-backend/clientip"
 	"github.com/onion/audio-share-backend/config"
+)
+
+const (
+	maxRateLimitClients      = 50000
+	rateLimitCleanupInterval = int64(60_000) // milliseconds
 )
 
 type rateLimitData struct {
@@ -22,12 +28,27 @@ type rateLimitData struct {
 	contactTimestamp   int64
 	timestamp          int64
 	imageTimestamp     int64
+	position           *list.Element
+}
+
+// idle reports whether every window holding a count has expired, so dropping
+// the entry cannot reset a limit that is still in effect.
+func (d *rateLimitData) idle(now int64, cfg *config.Config) bool {
+	expired := func(count int, start int64, window int) bool {
+		return count == 0 || now-start > int64(window)
+	}
+	return expired(d.apiCount+d.accessFailureCount, d.timestamp, cfg.RateLimitWindow) &&
+		expired(d.imageCount, d.imageTimestamp, cfg.ImageRateLimitWindow) &&
+		expired(d.shareCount, d.shareTimestamp, cfg.ShareLimitWindow) &&
+		expired(d.contactCount, d.contactTimestamp, cfg.ContactLimitWindow)
 }
 
 type RateLimiter struct {
-	mu     sync.RWMutex
-	limits map[string]*rateLimitData
-	cfg    *config.Config
+	mu          sync.Mutex
+	limits      map[string]*rateLimitData
+	recent      list.List
+	nextCleanup int64
+	cfg         *config.Config
 }
 
 func NewRateLimiter(cfg *config.Config) *RateLimiter {
@@ -64,16 +85,34 @@ func (rl *RateLimiter) RecordAccessFailure(clientIP string) {
 }
 
 func (rl *RateLimiter) dataLocked(ip string, now int64) *rateLimitData {
-	data, exists := rl.limits[ip]
-	if !exists {
-		data = &rateLimitData{
-			shareTimestamp:   now,
-			contactTimestamp: now,
-			timestamp:        now,
-			imageTimestamp:   now,
+	if now >= rl.nextCleanup {
+		for key, data := range rl.limits {
+			if data.idle(now, rl.cfg) {
+				delete(rl.limits, key)
+				rl.recent.Remove(data.position)
+			}
 		}
-		rl.limits[ip] = data
+		rl.nextCleanup = now + rateLimitCleanupInterval
 	}
+	if data, exists := rl.limits[ip]; exists {
+		rl.recent.MoveToFront(data.position)
+		return data
+	}
+	// Evict the least recently used client rather than refusing new ones.
+	// Under sustained churn, an evicted client can receive a fresh allowance.
+	if len(rl.limits) >= maxRateLimitClients {
+		oldest := rl.recent.Back()
+		delete(rl.limits, oldest.Value.(string))
+		rl.recent.Remove(oldest)
+	}
+	data := &rateLimitData{
+		shareTimestamp:   now,
+		contactTimestamp: now,
+		timestamp:        now,
+		imageTimestamp:   now,
+	}
+	data.position = rl.recent.PushFront(ip)
+	rl.limits[ip] = data
 	return data
 }
 
@@ -104,7 +143,7 @@ func (rl *RateLimiter) isImageRequest(path string) bool {
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getClientIP(r)
+		ip := clientip.FromRequest(r)
 		now := time.Now().UnixMilli()
 		path := r.URL.Path
 
@@ -145,17 +184,6 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			data.imageCount++
 		} else {
 			data.apiCount++
-		}
-
-		if rand.Float64() < 0.01 {
-			for key, val := range rl.limits {
-				if now-val.timestamp > int64(rl.cfg.RateLimitWindow) &&
-					now-val.imageTimestamp > int64(rl.cfg.ImageRateLimitWindow) &&
-					now-val.shareTimestamp > int64(rl.cfg.ShareLimitWindow) &&
-					now-val.contactTimestamp > int64(rl.cfg.ContactLimitWindow) {
-					delete(rl.limits, key)
-				}
-			}
 		}
 
 		var limit, current int

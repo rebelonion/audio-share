@@ -42,6 +42,8 @@ The table below lists server environment variables and their application default
 | `SHARE_LIMIT_WINDOW` | Source-submission rate-limit window in milliseconds | `86400000` |
 | `CONTACT_REQUEST_LIMIT` | Contact submissions allowed per client IP per window | `5` |
 | `CONTACT_LIMIT_WINDOW` | Contact rate-limit window in milliseconds | `86400000` |
+| `TRUSTED_PROXIES` | Comma-separated proxy IPs or CIDRs whose forwarding headers are trusted; `private` adds loopback, private, and link-local ranges; `none` trusts no proxy. See [client IP addresses](management.md#client-ip-addresses) | `private` |
+| `CLIENT_IP_HEADER` | Header trusted proxies use to report the visitor IP: `X-Forwarded-For`, `X-Real-IP`, or `CF-Connecting-IP` | `X-Forwarded-For` |
 | `CORS_ORIGINS` | Comma-separated allowed origins for cross-origin API requests | `http://localhost:5173` |
 | `CONTENT_DIR` | Directory for `about.md` | `./content` |
 | `STATIC_DIR` | Directory for built frontend files | `./static` |

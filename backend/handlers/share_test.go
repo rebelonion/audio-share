@@ -232,3 +232,30 @@ func TestShareSendsUnnormalizedNotificationWhenNormalizerIsUnavailable(t *testin
 		t.Fatal("duplicate lookup was called without a normalized identity")
 	}
 }
+
+func TestShareRejectsOversizedBody(t *testing.T) {
+	lookup := &stubSourceRequestLookup{}
+	handler := NewShareHandler(
+		services.NewNtfyService("http://127.0.0.1:1", "requests", "", 3, ""),
+		lookup,
+		&stubSourceNormalizer{result: youtubeNormalizerResult()},
+	)
+	body := `{"requestUrl":"https://example.com/","padding":"` + strings.Repeat("x", 32*1024) + `"}`
+	request := httptest.NewRequest(http.MethodPost, "/api/share", strings.NewReader(body))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || lookup.called {
+		t.Fatalf("status=%d lookupCalled=%v", response.Code, lookup.called)
+	}
+}
+
+func TestMaturePreferenceRejectsOversizedBody(t *testing.T) {
+	handler := NewPreferencesHandler("test-session-secret").MatureContentHandler()
+	body := `{"enabled":true,"padding":"` + strings.Repeat("x", 4096) + `"}`
+	request := httptest.NewRequest(http.MethodPost, "/api/preferences/mature-content", strings.NewReader(body))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || response.Header().Get("Set-Cookie") != "" {
+		t.Fatalf("status=%d cookies=%q", response.Code, response.Header().Values("Set-Cookie"))
+	}
+}

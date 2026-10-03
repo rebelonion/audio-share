@@ -91,6 +91,21 @@ go run . migrate
 
 The server and worker check the database schema at startup. If either reports a schema mismatch, check migration logs and confirm all processes use the intended database.
 
+## Client IP addresses
+
+Rate limits, admin login throttling, bandwidth limits, and local takedown access all use the visitor's IP address. The server only reads forwarding headers when the connection comes from an address in `TRUSTED_PROXIES`; requests from any other peer use the connection address, so visitors cannot claim a different IP.
+
+The default trusts loopback, private, and link-local addresses, which covers a reverse proxy on the same host or Docker network, and reads `X-Forwarded-For`. Choose the header your proxy sets:
+
+| Deployment | Settings |
+|------------|----------|
+| Reverse proxy (nginx, Caddy, Traefik) or Cloudflare Tunnel | Defaults |
+| Cloudflare in front of a reverse proxy | `CLIENT_IP_HEADER=CF-Connecting-IP`, and make sure only Cloudflare can reach the proxy |
+| nginx that sets `X-Real-IP $remote_addr` | `CLIENT_IP_HEADER=X-Real-IP` |
+| Published port with no proxy | `TRUSTED_PROXIES=none` |
+| Proxy on a public address | Add its IP or CIDR, e.g. `TRUSTED_PROXIES=private,203.0.113.10` |
+
+With `X-Forwarded-For`, the server walks the header from right to left and uses the first address that is not a trusted proxy, so entries a visitor adds themselves are ignored. `CF-Connecting-IP` and `X-Real-IP` are used as-is, so only select them when every trusted proxy overwrites that header.
 ## Stream and download limits
 
 Key limits use rolling windows. Every configured window must permit a new key:
@@ -143,7 +158,7 @@ curl -i -X PATCH http://localhost:8080/api/admin/audio/track-share-key/removal-r
 
 A successful update returns HTTP 200 with `{"success":true}`. The track is hidden from external browse and search results, and new external stream/download requests return HTTP 410 with `{"error":"removal_requested"}`. An already-running response is not terminated by this update.
 
-Local access remains available: the server treats a request as local when both its immediate peer and resolved client IP are loopback, private, or link-local addresses. Verify public blocking from an external client, rather than localhost or your LAN. Behind a reverse proxy, ensure it supplies the actual visitor IP in the forwarded client-IP headers so external visitors are classified correctly.
+Local access remains available: the server treats a request as local when both its immediate peer and resolved client IP are loopback, private, or link-local addresses. Verify public blocking from an external client, rather than localhost or your LAN. Behind a reverse proxy, configure [client IP addresses](#client-ip-addresses) so external visitors are classified correctly.
 
 ### Clear a takedown
 

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,7 +11,6 @@ import (
 )
 
 type fakeLibraryService struct {
-	ensureProfile         func(string) error
 	rotateRecoveryKey     func(string) (string, error)
 	recoverProfile        func(string) (string, error)
 	likedTrackKeys        func(string, bool) ([]string, error)
@@ -20,13 +18,6 @@ type fakeLibraryService struct {
 	profileHasRecoveryKey func(string) (bool, error)
 	like                  func(string, string, bool) error
 	unlike                func(string, string) error
-}
-
-func (f fakeLibraryService) EnsureProfile(sessionID string) error {
-	if f.ensureProfile == nil {
-		return nil
-	}
-	return f.ensureProfile(sessionID)
 }
 
 func (f fakeLibraryService) RotateRecoveryKey(sessionID string) (string, error) {
@@ -246,10 +237,16 @@ func TestLikedTracksHandlerReturnsDetailedTracks(t *testing.T) {
 	}
 }
 
-func TestLikesHandlerStopsWhenProfileInitializationFails(t *testing.T) {
+func TestLikesHandlerIssuesSessionForNewVisitors(t *testing.T) {
+	var readSessionIDs []string
 	handler := NewLibraryHandler(fakeLibraryService{
-		ensureProfile: func(string) error {
-			return errors.New("database unavailable")
+		likedTrackKeys: func(sessionID string, _ bool) ([]string, error) {
+			readSessionIDs = append(readSessionIDs, sessionID)
+			return []string{}, nil
+		},
+		profileHasRecoveryKey: func(sessionID string) (bool, error) {
+			readSessionIDs = append(readSessionIDs, sessionID)
+			return false, nil
 		},
 	}, "test-secret")
 	request := httptest.NewRequest(http.MethodGet, "/api/likes", nil)
@@ -257,7 +254,22 @@ func TestLikesHandlerStopsWhenProfileInitializationFails(t *testing.T) {
 
 	handler.LikesHandler().ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response likesResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	next := httptest.NewRequest(http.MethodGet, "/api/likes", nil)
+	for _, cookie := range recorder.Result().Cookies() {
+		next.AddCookie(cookie)
+	}
+	sessionID, ok := currentSessionID(next, []byte("test-secret"))
+	if !ok || sessionID != response.ProfileID {
+		t.Fatalf("session cookie %q (valid=%v) does not match profile %q", sessionID, ok, response.ProfileID)
+	}
+	if len(readSessionIDs) != 2 || readSessionIDs[0] != sessionID || readSessionIDs[1] != sessionID {
+		t.Fatalf("reads used sessions %v, want %q", readSessionIDs, sessionID)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/onion/audio-share-backend/clientip"
 	"github.com/onion/audio-share-backend/config"
 	"github.com/onion/audio-share-backend/handlers"
 	"github.com/onion/audio-share-backend/middleware"
@@ -35,7 +36,10 @@ func main() {
 }
 
 func run() error {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
 	command := "serve"
 	if len(os.Args) > 1 {
 		command = os.Args[1]
@@ -125,6 +129,10 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 
 	if cfg.SessionSecret == "" {
 		return nil, fmt.Errorf("SESSION_SECRET is required but not set")
+	}
+	clientIPs, err := clientip.New(cfg.TrustedProxies, cfg.ClientIPHeader)
+	if err != nil {
+		return nil, err
 	}
 	adminSessionTTL, err := time.ParseDuration(cfg.AdminSessionTTL)
 	if err != nil || adminSessionTTL < time.Second || adminSessionTTL%time.Second != 0 {
@@ -274,7 +282,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
 	adminAuth := middleware.NewAdminAuth(cfg.RequestsAPIKey, cfg.SessionSecret, adminSessionTTL, cfg.CORSOrigins, adminFailures)
 	if cfg.RequestsAPIKey == "" {
-		log.Println("WARNING: REQUESTS_API_KEY is not set — write operations on /api/requests are disabled")
+		log.Println("WARNING: REQUESTS_API_KEY is not set — /api/admin and the admin dashboard are disabled")
 	}
 
 	mux := http.NewServeMux()
@@ -322,7 +330,8 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	if db.Errors != nil {
 		handler = handlers.ReportHTTPErrors(db.Errors, handler)
 	}
-	return securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, handler))), nil
+	handler = securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, handler)))
+	return clientIPs.Middleware(handler), nil
 }
 
 func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {

@@ -29,6 +29,7 @@ func (h *PreferencesHandler) MatureContentHandler() http.HandlerFunc {
 				Enabled: maturePreferenceEnabled(r, h.sessionSecret),
 			})
 		case http.MethodPost:
+			r.Body = http.MaxBytesReader(w, r.Body, 1024)
 			var req maturePreferenceRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})

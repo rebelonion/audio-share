@@ -10,7 +10,6 @@ import (
 )
 
 type libraryService interface {
-	EnsureProfile(string) error
 	RotateRecoveryKey(string) (string, error)
 	RecoverProfile(string) (string, error)
 	LikedTrackKeys(string, bool) ([]string, error)
@@ -51,18 +50,16 @@ func preventProfileCaching(w http.ResponseWriter) {
 	w.Header().Set("Pragma", "no-cache")
 }
 
-func (h *LibraryHandler) resolveProfile(w http.ResponseWriter, r *http.Request) (string, bool) {
+// resolveSession issues or refreshes the signed session cookie without storing
+// anything. Profile rows are created only when there is data to keep: a like
+// or a recovery key.
+func (h *LibraryHandler) resolveSession(w http.ResponseWriter, r *http.Request) string {
 	sessionID, ok := resolveSessionID(r, h.sessionSecret)
 	if !ok {
 		sessionID = generateSessionID()
 	}
-	if err := h.library.EnsureProfile(sessionID); err != nil {
-		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to initialize browser profile"})
-		return "", false
-	}
 	setSessionCookie(w, r, h.sessionSecret, sessionID)
-	return sessionID, true
+	return sessionID
 }
 
 func (h *LibraryHandler) RecoveryKeyHandler() http.HandlerFunc {
@@ -72,10 +69,7 @@ func (h *LibraryHandler) RecoveryKeyHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		sessionID, ok := h.resolveProfile(w, r)
-		if !ok {
-			return
-		}
+		sessionID := h.resolveSession(w, r)
 		key, err := h.library.RotateRecoveryKey(sessionID)
 		if err != nil {
 			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
@@ -127,10 +121,7 @@ func (h *LibraryHandler) LikesHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		sessionID, ok := h.resolveProfile(w, r)
-		if !ok {
-			return
-		}
+		sessionID := h.resolveSession(w, r)
 		shareKeys, err := h.library.LikedTrackKeys(sessionID, isLocalRequest(r))
 		if err != nil {
 			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
@@ -158,10 +149,7 @@ func (h *LibraryHandler) LikedTracksHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		sessionID, ok := h.resolveProfile(w, r)
-		if !ok {
-			return
-		}
+		sessionID := h.resolveSession(w, r)
 		tracks, err := h.library.LikedTracks(sessionID, isLocalRequest(r))
 		if err != nil {
 			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
@@ -184,10 +172,7 @@ func (h *LibraryHandler) LikeItemHandler() http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid track key"})
 			return
 		}
-		sessionID, ok := h.resolveProfile(w, r)
-		if !ok {
-			return
-		}
+		sessionID := h.resolveSession(w, r)
 		var err error
 		switch r.Method {
 		case http.MethodPut:

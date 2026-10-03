@@ -43,9 +43,10 @@ func (s *LibraryService) EnsureProfile(sessionID string) error {
 func (s *LibraryService) ProfileHasRecoveryKey(sessionID string) (bool, error) {
 	var hasKey bool
 	err := s.db.DB().QueryRow(`
-		SELECT recovery_key_hash IS NOT NULL
-		FROM anonymous_profiles
-		WHERE session_id = $1
+		SELECT EXISTS (
+			SELECT 1 FROM anonymous_profiles
+			WHERE session_id = $1 AND recovery_key_hash IS NOT NULL
+		)
 	`, sessionID).Scan(&hasKey)
 	return hasKey, err
 }

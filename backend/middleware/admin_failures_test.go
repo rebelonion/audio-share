@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/onion/audio-share-backend/clientip"
 )
 
 func TestAdminFailuresSharedAcrossRoutesAndCredentials(t *testing.T) {
@@ -120,21 +122,45 @@ func TestAdminFailureSuccessesDoNotConsumeOrResetAllowance(t *testing.T) {
 func TestAdminFailuresUseForwardedClientIP(t *testing.T) {
 	for _, header := range []string{"CF-Connecting-IP", "X-Real-IP", "X-Forwarded-For"} {
 		t.Run(header, func(t *testing.T) {
+			resolver, err := clientip.New("private", header)
+			if err != nil {
+				t.Fatal(err)
+			}
 			limiter, _ := NewAdminFailureLimiter(1, "1m")
 			now := time.Now()
 			r := adminRequest("POST", "/api/admin/session", nil)
 			r.RemoteAddr = "10.0.0.1:1234"
 			r.Header.Set(header, "192.0.2.5")
-			limiter.Check(r, now, func() bool { return false })
+			limiter.Check(resolver.Attach(r), now, func() bool { return false })
 			r.RemoteAddr = "10.0.0.2:5678"
-			if _, retry := limiter.Check(r, now, func() bool { t.Error("same client escaped cooldown through a different proxy"); return true }); retry != 60 {
+			if _, retry := limiter.Check(resolver.Attach(r), now, func() bool { t.Error("same client escaped cooldown through a different proxy"); return true }); retry != 60 {
 				t.Fatalf("retry=%d", retry)
 			}
 			r.Header.Set(header, "192.0.2.6")
-			if valid, _ := limiter.Check(r, now, func() bool { return true }); !valid {
+			if valid, _ := limiter.Check(resolver.Attach(r), now, func() bool { return true }); !valid {
 				t.Fatal("different client behind same proxy blocked")
 			}
 		})
+	}
+}
+
+func TestAdminFailuresIgnoreHeadersFromUntrustedPeers(t *testing.T) {
+	resolver, err := clientip.New("private", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	limiter, _ := NewAdminFailureLimiter(1, "1m")
+	now := time.Now()
+	r := adminRequest("POST", "/api/admin/session", nil)
+	r.RemoteAddr = "203.0.113.8:1234"
+	r.Header.Set("X-Forwarded-For", "192.0.2.5")
+	limiter.Check(resolver.Attach(r), now, func() bool { return false })
+	for _, spoofed := range []string{"192.0.2.6", "127.0.0.1"} {
+		r.Header.Set("X-Forwarded-For", spoofed)
+		r.Header.Set("CF-Connecting-IP", spoofed)
+		if _, retry := limiter.Check(resolver.Attach(r), now, func() bool { t.Error("spoofed header escaped cooldown"); return true }); retry != 60 {
+			t.Fatalf("retry=%d", retry)
+		}
 	}
 }
 

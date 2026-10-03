@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/onion/audio-share-backend/clientip"
 )
 
 const maxAdminFailureClients = 10000
@@ -39,7 +41,7 @@ func NewAdminFailureLimiter(limit int, window string) (*AdminFailureLimiter, err
 // Check serializes the limit check and credential verification so concurrent
 // guesses cannot exceed the allowance. A blocked key is never verified.
 func (l *AdminFailureLimiter) Check(r *http.Request, now time.Time, verify func() bool) (valid bool, retryAfter int) {
-	client := getClientIP(r)
+	client := clientip.FromRequest(r)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !now.Before(l.nextCleanup) {

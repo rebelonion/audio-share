@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onion/audio-share-backend/clientip"
 	"github.com/onion/audio-share-backend/services"
 )
 
@@ -234,7 +235,7 @@ func (h *AudioHandler) handleAccessKey(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 
-	clientAddress := clientIP(r)
+	clientAddress := clientip.FromRequest(r)
 	if err := h.accessKeys.CheckLimit(sessionID, clientAddress, request.Purpose); err != nil {
 		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if !h.writeKeyLimitError(w, request.Purpose, err) {
@@ -440,7 +441,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "bot_download_forbidden"})
 		return
 	}
-	clientAddress := clientIP(r)
+	clientAddress := clientip.FromRequest(r)
 	if h.accessFailureLimiter != nil {
 		allowed, retryAfter := h.accessFailureLimiter.AllowAccessAttempt(clientAddress)
 		if !allowed {
@@ -689,7 +690,7 @@ func (h *AudioHandler) recordMediaEvent(
 		)
 		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT DO NOTHING
-	`, audioFileID, eventType, shareKey, sessionID, clientIP(r), r.UserAgent(),
+	`, audioFileID, eventType, shareKey, sessionID, clientip.FromRequest(r), r.UserAgent(),
 		r.Referer(), r.Header.Get("Range"), r.Method, fileSize, requestedBytes, accessKeyNonce)
 	if err != nil {
 		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
@@ -698,35 +699,12 @@ func (h *AudioHandler) recordMediaEvent(
 	}
 }
 
-func clientIP(r *http.Request) string {
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
-	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
-	}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
-		}
-	}
-	addr := strings.TrimSpace(r.RemoteAddr)
-	if host, _, err := net.SplitHostPort(addr); err == nil {
-		return host
-	}
-	return strings.Trim(addr, "[]")
-}
-
 func isLocalRequest(r *http.Request) bool {
-	client := net.ParseIP(strings.TrimSpace(clientIP(r)))
-	peerAddress := strings.TrimSpace(r.RemoteAddr)
-	if host, _, err := net.SplitHostPort(peerAddress); err == nil {
-		peerAddress = host
-	} else {
-		peerAddress = strings.Trim(peerAddress, "[]")
+	if !clientip.ClientKnown(r) {
+		return false
 	}
-	peer := net.ParseIP(peerAddress)
+	client := net.ParseIP(clientip.FromRequest(r))
+	peer := net.ParseIP(clientip.Peer(r))
 	return isLocalIP(peer) && isLocalIP(client)
 }
 

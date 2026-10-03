@@ -51,6 +51,7 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("share: request_id=%q received", requestID)
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req shareRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
