@@ -4,7 +4,7 @@ import {MATURE_PREFERENCE_EVENT} from '@/lib/matureContentPreference';
 import type {PlayerTrack} from '@/lib/playerQueue';
 import {appFetch} from '@/lib/cloudflareChallenge';
 import {reportError} from '@/lib/errorReporting';
-import {loadPlayerWaveform} from '@/lib/playerWaveform';
+import {loadPlayerWaveform, type PlayerChapter} from '@/lib/playerWaveform';
 
 export interface PlayerMetadata {
     title: string;
@@ -26,7 +26,10 @@ interface MetadataState {
     thumbnail: string | null;
     waveformPeaks: Uint8Array | null;
     waveformDuration: number;
+    chapters: PlayerChapter[];
 }
+
+const NO_CHAPTERS: PlayerChapter[] = [];
 
 const EMPTY_METADATA: MetadataState = {
     trackID: null,
@@ -35,7 +38,19 @@ const EMPTY_METADATA: MetadataState = {
     thumbnail: null,
     waveformPeaks: null,
     waveformDuration: 0,
+    chapters: NO_CHAPTERS,
 };
+
+function sanitizeChapters(value: unknown): PlayerChapter[] {
+    if (!Array.isArray(value)) return NO_CHAPTERS;
+    const chapters = value.filter((chapter): chapter is PlayerChapter =>
+        !!chapter && typeof chapter === 'object'
+        && typeof chapter.title === 'string'
+        && Number.isFinite(chapter.start) && chapter.start >= 0
+        && Number.isFinite(chapter.end) && chapter.end > chapter.start)
+        .sort((a, b) => a.start - b.start);
+    return chapters.length ? chapters : NO_CHAPTERS;
+}
 
 export function usePlayerMetadata(track: PlayerTrack | null) {
     const [state, setState] = useState<MetadataState>(EMPTY_METADATA);
@@ -69,7 +84,12 @@ export function usePlayerMetadata(track: PlayerTrack | null) {
             const waveformPeaks = waveform?.peaks
                 ? Uint8Array.from(atob(waveform.peaks), value => value.charCodeAt(0))
                 : null;
-            setState(previous => ({...previous, waveformPeaks, waveformDuration: waveform?.duration || 0}));
+            setState(previous => ({
+                ...previous,
+                waveformPeaks,
+                waveformDuration: waveform?.duration || 0,
+                chapters: sanitizeChapters(waveform?.chapters),
+            }));
         }).catch(error => {
             if (signal.aborted) return;
             reportError({operation: 'metadata', stage: 'parse', cause: 'invalid-response', outcome: 'degraded', context: {resource: track.shareKey}}, error);

@@ -1,9 +1,16 @@
 import {API_BASE} from './api';
 import {appFetch} from './cloudflareChallenge';
 
+export interface PlayerChapter {
+    title: string;
+    start: number;
+    end: number;
+}
+
 interface PlayerWaveform {
     peaks?: string;
     duration?: number;
+    chapters?: PlayerChapter[];
 }
 
 const waveforms = new Map<string, Promise<PlayerWaveform | null>>();

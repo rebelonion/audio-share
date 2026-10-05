@@ -9,6 +9,7 @@ import CustomSelect from '@/components/CustomSelect';
 import QueuePanel from '@/components/QueuePanel';
 import PlaybackSettings from '@/components/PlaybackSettings';
 import PlaybackSeek from '@/components/PlaybackSeek';
+import {chapterTickOffsets, currentChapterIndex} from '@/lib/chapters';
 import {loadPlayerWaveform} from '@/lib/playerWaveform';
 import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
 import {defaultScene, scenes} from './scenes/registry';
@@ -31,7 +32,7 @@ function formatTime(time: number): string {
 export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     const player = useGlobalAudioPlayer();
     const {track: trackEvent} = useRybbit();
-    const {currentTrack, metadata, artist, track, thumbnail, waveformPeaks, currentTime, duration, isPlaying, isLoading, audioLoaded, error, notice} = player;
+    const {currentTrack, metadata, artist, track, thumbnail, waveformPeaks, chapters, currentTime, duration, isPlaying, isLoading, audioLoaded, error, notice} = player;
     useImmersiveWakeLock(!!currentTrack && isPlaying && !error);
     const [queueOpen, setQueueOpen] = useState(false);
     const queueButtonRef = useRef<HTMLButtonElement>(null);
@@ -76,6 +77,8 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     const total = duration || metadata?.duration || 0;
     const position = previewTime ?? currentTime;
     const canSeek = audioLoaded && total > 0;
+    const currentChapter = chapters[currentChapterIndex(chapters, position)];
+    const chapterTicks = chapterTickOffsets(chapters, total);
     const nextTrackKey = player.upcoming[0]?.shareKey;
     const prepareNext = isPlaying && total > 0 && total - currentTime <= 20;
 
@@ -169,14 +172,22 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
             <div className="immersive-title immersive-chrome">
                 <p>{metadata?.artist || artist || 'Now playing'}</p>
                 <h2>{metadata?.title || track}</h2>
+                {currentChapter && <p className="immersive-chapter"><span className="sr-only">Current chapter: </span>{currentChapter.title}</p>}
             </div>
             <div className="immersive-controls immersive-chrome">
                 {(error || notice) && <p className="immersive-notice" role={error ? 'alert' : 'status'}>{error || notice}</p>}
                 {fullscreenError && <p className="immersive-notice" role="alert">{fullscreenError}</p>}
                 <div className="immersive-timeline">
                     <span>{formatTime(position)}</span>
-                    <PlaybackSeek key={sceneKey} position={position} duration={total} disabled={!canSeek}
-                        onPreview={setPreviewTime} onSeek={player.seekTo} />
+                    <div className="immersive-timeline-track">
+                        <PlaybackSeek key={sceneKey} position={position} duration={total} disabled={!canSeek}
+                            onPreview={setPreviewTime} onSeek={player.seekTo} />
+                        {chapterTicks.length > 0 && (
+                            <div className="immersive-chapter-marks" aria-hidden="true">
+                                {chapterTicks.map((left, index) => <span key={index} style={{left: `${left}%`}} />)}
+                            </div>
+                        )}
+                    </div>
                     <span>{formatTime(total)}</span>
                 </div>
                 <div className="immersive-toolbar">

@@ -29,7 +29,10 @@ var jobHistorySchema string
 //go:embed migrations/007_share_submissions.sql
 var shareSubmissionsSchema string
 
-const SchemaVersion = 7
+//go:embed migrations/008_chapters.sql
+var chaptersSchema string
+
+const SchemaVersion = 8
 
 type schemaMigration struct {
 	version       int
@@ -45,6 +48,7 @@ var schemaMigrations = []schemaMigration{
 	{5, 5, mediaIdentitySchema},
 	{6, 5, jobHistorySchema},
 	{7, 5, shareSubmissionsSchema},
+	{8, 5, chaptersSchema},
 }
 
 // Migrate adopts the current legacy schema or creates a fresh one. All changes,

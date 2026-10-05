@@ -1116,9 +1116,10 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 
 	var peaks string
 	var duration sql.NullFloat64
+	var chapters []byte
 	err = h.db.QueryRow(`
-		SELECT peaks, duration_seconds FROM waveform_cache WHERE audio_file_id = $1
-	`, fileID).Scan(&peaks, &duration)
+		SELECT peaks, duration_seconds, chapters FROM waveform_cache WHERE audio_file_id = $1
+	`, fileID).Scan(&peaks, &duration, &chapters)
 	if err == sql.ErrNoRows {
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusNoContent)
@@ -1134,9 +1135,18 @@ func (h *AudioHandler) handleWaveform(w http.ResponseWriter, r *http.Request, ke
 	if duration.Valid {
 		resp["duration"] = duration.Float64
 	}
+	chaptersKnown := json.Valid(chapters)
+	if chaptersKnown {
+		resp["chapters"] = json.RawMessage(chapters)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if !removalRequestedAt.Valid {
-		w.Header().Set("Cache-Control", "private, max-age=86400")
+		if chaptersKnown {
+			w.Header().Set("Cache-Control", "private, max-age=86400")
+		} else {
+			// Chapters have not been probed yet; keep the response fresh so the backfill shows up soon.
+			w.Header().Set("Cache-Control", "private, max-age=300")
+		}
 	}
 	json.NewEncoder(w).Encode(resp)
 }

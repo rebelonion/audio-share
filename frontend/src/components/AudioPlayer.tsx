@@ -29,6 +29,9 @@ import {
 } from 'lucide-react';
 import PlaybackSeek from '@/components/PlaybackSeek';
 import WaveformDisplay from '@/components/WaveformDisplay';
+import ChapterList from '@/components/ChapterList';
+import {chapterTickOffsets, currentChapterIndex} from '@/lib/chapters';
+import MarqueeText from '@/components/MarqueeText';
 import {useGlobalAudioPlayer} from '@/contexts/AudioPlayerContext';
 import {useAudioPlayerKeybinds} from '@/hooks/useAudioPlayerKeybinds';
 import QueuePanel from '@/components/QueuePanel';
@@ -76,6 +79,7 @@ export default function AudioPlayer() {
         artist,
         track,
         waveformPeaks,
+        chapters,
         upcoming,
         skipNext,
         skipPrevious,
@@ -140,6 +144,12 @@ export default function AudioPlayer() {
     const total = duration || metadata?.duration || 0;
     const position = previewTime ?? currentTime;
     const canSeek = audioLoaded && total > 0;
+    const currentChapter = chapters[currentChapterIndex(chapters, position)];
+    const chapterTicks = chapterTickOffsets(chapters, total);
+    const artistLabel = metadata?.artist || artist;
+    const minimizedSubtitle = currentChapter
+        ? [artistLabel, currentChapter.title].filter(Boolean).join(' • ')
+        : artistLabel;
 
     useEffect(() => {
         setPreviewTime(null);
@@ -220,12 +230,11 @@ export default function AudioPlayer() {
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm text-[var(--foreground)]">{metadata?.title || track}</span>
-                            <span
-                                className="block truncate text-xs text-[var(--muted-foreground)]"
-                                role={notice ? 'status' : undefined}
-                            >
-                                {notice || metadata?.artist || artist}
-                            </span>
+                            {notice ? (
+                                <span className="block truncate text-xs text-[var(--muted-foreground)]" role="status">{notice}</span>
+                            ) : (
+                                <MarqueeText text={minimizedSubtitle} className="text-xs text-[var(--muted-foreground)]" />
+                            )}
                         </span>
                     </button>
                     <Button variant="subtle" size="sm"
@@ -324,6 +333,13 @@ export default function AudioPlayer() {
                     <div className="mb-3">
                         <div className="relative mb-2 flex h-8 items-center">
                             {waveformPeaks && <WaveformDisplay peaks={waveformPeaks} progress={position / (total || 1)} height={32} className="absolute inset-x-2" />}
+                            {chapterTicks.length > 0 && (
+                                <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 inset-y-0">
+                                    {chapterTicks.map((left, index) => (
+                                        <span key={index} className="absolute top-1 bottom-1 w-px bg-[var(--foreground)] opacity-40" style={{left: `${left}%`}} />
+                                    ))}
+                                </div>
+                            )}
                             <PlaybackSeek key={currentTrack.id} position={position} duration={total} disabled={!canSeek}
                                 onPreview={setPreviewTime} onSeek={seekTo}
                                 className={`relative w-full ${waveformPeaks ? 'slider-waveform' : ''}`} />
@@ -396,6 +412,7 @@ export default function AudioPlayer() {
                     </div>
 
                     <div>
+                        <ChapterList chapters={chapters} position={position} duration={total} canSeek={canSeek} onSeek={seekTo} />
                         {(metadata?.uploadDate || metadata?.webpageUrl) && (
                             <div className="mt-2 flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
                                 {metadata?.uploadDate && (

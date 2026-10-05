@@ -349,7 +349,7 @@ func TestIntegrationMediaStaleWaveformCannotPublishAfterReplacement(t *testing.T
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { _, err := storeWaveform(ctx, conn, id, revision, "stale", 123); done <- err }()
+	go func() { _, err := storeWaveform(ctx, conn, id, revision, "stale", 123, nil); done <- err }()
 	// Ensure publication is waiting on the replacement's row lock before committing it.
 	for {
 		var waiting bool
@@ -380,7 +380,7 @@ func TestIntegrationMediaStaleWaveformCannotPublishAfterReplacement(t *testing.T
 	if count != 0 {
 		t.Fatal("stale waveform published after replacement")
 	}
-	result, err := storeWaveform(ctx, conn, id, revision+1, "fresh", 99)
+	result, err := storeWaveform(ctx, conn, id, revision+1, "fresh", 99, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

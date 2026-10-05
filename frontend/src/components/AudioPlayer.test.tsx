@@ -34,6 +34,7 @@ const player = vi.hoisted(() => ({
         artist: 'Artist',
         track: 'First track',
         waveformPeaks: null as Uint8Array | null,
+        chapters: [] as {title: string; start: number; end: number}[],
         upcoming: [],
         skipNext: vi.fn(),
         skipPrevious: vi.fn(),
@@ -338,5 +339,53 @@ describe('normal player seeking', () => {
         } finally {
             player.value.audioLoaded = true;
         }
+    });
+});
+
+describe('chapters', () => {
+    const chapters = [
+        {title: 'Intro', start: 0, end: 30},
+        {title: 'Tapping', start: 30, end: 60},
+        {title: 'Whispers', start: 60, end: 120},
+    ];
+    const withChapters = () => {
+        player.value.chapters = chapters;
+        player.value.currentTime = 45;
+    };
+    afterEach(() => {
+        player.value.chapters = [];
+        player.value.currentTime = 0;
+        delete (player.value as {notice?: string}).notice;
+    });
+
+    it('shows artist and current chapter in the minimized bar', async () => {
+        withChapters();
+        render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        const open = await screen.findByRole('button', {name: 'Open full player'});
+        expect(open.querySelector('.marquee')?.textContent).toBe('Artist • Tapping');
+    });
+
+    it('lets a playback notice take priority over the chapter subtitle', async () => {
+        withChapters();
+        (player.value as {notice?: string}).notice = 'Resuming where you left off';
+        render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        const open = await screen.findByRole('button', {name: 'Open full player'});
+        expect(within(open).getByRole('status').textContent).toBe('Resuming where you left off');
+        expect(open.querySelector('.marquee')).toBeNull();
+    });
+
+    it('renders the chapter list and seek-bar ticks in the expanded player', () => {
+        setMobile(false);
+        withChapters();
+        render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        const toggle = screen.getByRole('button', {name: /Chapters/});
+        expect(toggle.textContent).toContain('Tapping');
+        fireEvent.click(toggle);
+        fireEvent.click(screen.getByRole('button', {name: /Whispers/}));
+        expect(player.value.seekTo).toHaveBeenCalledExactlyOnceWith(60);
+        const ticks = document.querySelectorAll('div[aria-hidden="true"] > span.w-px');
+        expect(ticks).toHaveLength(2);
+        expect((ticks[0] as HTMLElement).style.left).toBe('25%');
+        expect((ticks[1] as HTMLElement).style.left).toBe('50%');
     });
 });

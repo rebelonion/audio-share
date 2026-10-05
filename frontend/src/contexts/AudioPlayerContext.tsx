@@ -11,6 +11,7 @@ import {
 import MatureContentDialog from '@/components/MatureContentDialog';
 import {getRecommendations, type TrackSummary} from '@/lib/api';
 import {registerMediaSessionActions} from '@/lib/mediaSession';
+import type {PlayerChapter} from '@/lib/playerWaveform';
 import {
     needsMaturePlaybackConfirmation,
     shouldWaitForMaturePlaybackMetadata,
@@ -94,6 +95,7 @@ interface AudioPlayerContextValue {
     artist: string;
     track: string;
     waveformPeaks: Uint8Array | null;
+    chapters: PlayerChapter[];
     upcoming: PlayerTrack[];
     contextLabel: string | null;
     autoplay: boolean;
@@ -167,6 +169,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         thumbnail,
         waveformPeaks,
         waveformDuration,
+        chapters,
     } = usePlayerMetadata(currentTrack);
     const metadataRef = useRef(metadata);
     metadataRef.current = metadata;
@@ -523,6 +526,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         artist: currentTrack?.artist || '',
         track: currentTrack?.name || '',
         waveformPeaks,
+        chapters,
         upcoming,
         contextLabel: queue.contextLabel,
         autoplay: queue.autoplay,
@@ -578,6 +582,7 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
         upcoming,
         volume,
         waveformPeaks,
+        chapters,
         enableAudioLevels,
         readAudioLevel,
     ]);

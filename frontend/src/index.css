@@ -103,6 +103,7 @@
 
     .animate-fadeIn,
     .animate-slideUp,
+    .marquee-track,
     .animate-spin,
     .animate-pulse,
     .animate-ping,
@@ -152,6 +153,27 @@
 @keyframes shimmer {
     from { background-position: 200% 0; }
     to   { background-position: -200% 0; }
+}
+
+@keyframes marquee {
+    0%, 12% { transform: translateX(0); }
+    100%    { transform: translateX(calc(-1 * var(--marquee-distance))); }
+}
+
+/* Overflowing single-line text that scrolls; see MarqueeText.tsx. */
+.marquee--scrolling {
+    overflow: hidden;
+    white-space: nowrap;
+    mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.marquee-track {
+    display: inline-flex;
+    gap: var(--marquee-gap, 32px);
+    animation: marquee var(--marquee-duration, 10s) linear infinite;
+    will-change: transform;
+}
+.marquee--scrolling:hover .marquee-track {
+    animation-play-state: paused;
 }
 
 

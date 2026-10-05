@@ -10,7 +10,7 @@ const togglePlay = vi.hoisted(() => vi.fn());
 vi.mock('@/contexts/AudioPlayerContext', () => ({
     useGlobalAudioPlayer: () => ({
         currentTrack: {id: 'track', shareKey: 'key', name: 'Recording'},
-        upcoming: [], currentTime: 15, duration: 120, volume: 1,
+        upcoming: [], chapters: [], currentTime: 15, duration: 120, volume: 1,
         isPlaying: true, audioLoaded: true, togglePlay,
     }),
 }));

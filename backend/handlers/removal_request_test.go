@@ -261,9 +261,9 @@ func TestRemovalRequestedWaveformIsNotPubliclyCacheableForLocalClients(t *testin
 	mock.ExpectQuery("SELECT id, removal_requested_at FROM audio_files").
 		WithArgs("track-key").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "removal_requested_at"}).AddRow(1, requestedAt))
-	mock.ExpectQuery("SELECT peaks, duration_seconds FROM waveform_cache").
+	mock.ExpectQuery("SELECT peaks, duration_seconds, chapters FROM waveform_cache").
 		WithArgs(int64(1)).
-		WillReturnRows(sqlmock.NewRows([]string{"peaks", "duration_seconds"}).AddRow("AQID", 30.0))
+		WillReturnRows(sqlmock.NewRows([]string{"peaks", "duration_seconds", "chapters"}).AddRow("AQID", 30.0, []byte(`[{"title":"Intro","start":0,"end":12.5}]`)))
 
 	request := httptest.NewRequest(http.MethodGet, "https://example.test/api/audio/key/track-key/waveform", nil)
 	request.RemoteAddr = "10.0.0.5:8080"
@@ -275,6 +275,9 @@ func TestRemovalRequestedWaveformIsNotPubliclyCacheableForLocalClients(t *testin
 	}
 	if got := recorder.Header().Get("Cache-Control"); got != "private, no-store" {
 		t.Fatalf("Cache-Control = %q, want private, no-store", got)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, `"chapters":[{"title":"Intro","start":0,"end":12.5}]`) {
+		t.Fatalf("body = %q, want embedded chapters", body)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

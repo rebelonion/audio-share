@@ -16,6 +16,7 @@ const player = vi.hoisted(() => ({
     track: 'Track',
     thumbnail: '/artwork.jpg',
     waveformPeaks: Uint8Array.of(10, 100, 20),
+    chapters: [] as {title: string; start: number; end: number}[],
     currentTime: 42,
     seekVersion: 0,
     duration: 120,
@@ -615,5 +616,23 @@ it('keeps the screen awake in Still scene and during buffering, then releases on
         player.isPlaying = originalPlaying;
         player.isLoading = originalLoading;
         Reflect.deleteProperty(navigator, 'wakeLock');
+    }
+});
+
+it('shows the current chapter and marks chapter boundaries on the timeline', () => {
+    player.chapters = [
+        {title: 'Intro', start: 0, end: 30},
+        {title: 'Tapping', start: 30, end: 60},
+        {title: 'Whispers', start: 60, end: 120},
+    ];
+    try {
+        const {container} = render(<ImmersivePlayer onClose={vi.fn()} />);
+        expect(container.ownerDocument.querySelector('.immersive-chapter')?.textContent).toBe('Current chapter: Tapping');
+        const marks = container.ownerDocument.querySelectorAll('.immersive-chapter-marks span');
+        expect(marks).toHaveLength(2);
+        expect((marks[0] as HTMLElement).style.left).toBe('25%');
+        expect((marks[1] as HTMLElement).style.left).toBe('50%');
+    } finally {
+        player.chapters = [];
     }
 });

@@ -50,3 +50,23 @@ it('preserves an available waveform if metadata fails independently', async () =
     expect(result.current.waveformPeaks).toEqual(Uint8Array.of(0, 255));
     expect(result.current.waveformDuration).toBe(120);
 });
+
+it('exposes well-formed chapters from the waveform response', async () => {
+    vi.mocked(loadPlayerWaveform).mockResolvedValue({peaks: 'AP8=', duration: 120, chapters: [
+        {title: 'Intro', start: 0, end: 30},
+        {title: 'Broken', start: 50, end: 40},
+        {title: 'Outro', start: 90, end: 120},
+    ]});
+    vi.mocked(appFetch).mockResolvedValue(new Response(JSON.stringify({title: 'Ready'})));
+    const {result} = renderHook(() => usePlayerMetadata(first));
+    await waitFor(() => expect(result.current.chapters).toHaveLength(2));
+    expect(result.current.chapters.map(chapter => chapter.title)).toEqual(['Intro', 'Outro']);
+});
+
+it('reports no chapters when the waveform omits them', async () => {
+    vi.mocked(loadPlayerWaveform).mockResolvedValue({peaks: 'AP8='});
+    vi.mocked(appFetch).mockResolvedValue(new Response(JSON.stringify({title: 'Ready'})));
+    const {result} = renderHook(() => usePlayerMetadata(first));
+    await waitFor(() => expect(result.current.waveformPeaks).not.toBeNull());
+    expect(result.current.chapters).toEqual([]);
+});
