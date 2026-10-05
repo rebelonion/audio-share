@@ -242,7 +242,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	})
 	folderHandler := handlers.NewFolderHandler(fsService, db.DB())
 	browseHandler := handlers.NewBrowseHandler(searchService)
-	shareHandler := handlers.NewShareHandler(ntfyService, requestsService, sourceNormalizer)
+	shareHandler := handlers.NewShareHandler(ntfyService, requestsService, sourceNormalizer, services.NewShareSubmissionsService(db), cfg.SessionSecret)
 	contactHandler := handlers.NewContactHandler(ntfyService, cfg.SessionSecret)
 	contentHandler := handlers.NewContentHandler(cfg.ContentDir, cfg.DefaultTitle, searchService)
 	searchHandler := handlers.NewSearchHandler(searchService)

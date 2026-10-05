@@ -52,6 +52,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<{
         success?: boolean;
+        warning?: boolean;
         message?: string;
         folderPath?: string;
     }>({});
@@ -118,12 +119,18 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                 return;
             }
 
+            const warning = typeof data.warning === 'string' ? data.warning : undefined;
             setStatus({
                 success: true,
-                message: 'Request sent.'
+                warning: Boolean(warning),
+                message: warning ? `Request sent. ${warning}` : 'Request sent.'
             });
 
-            track('artist-request');
+            if (warning) {
+                track('artist-request', { reason: data.code });
+            } else {
+                track('artist-request');
+            }
             setRequestUrl('');
             setHasAcknowledged(false);
             setHasHigherRemovalRisk(false);
@@ -131,7 +138,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
             setTimeout(() => {
                 onCloseAction();
                 setStatus({});
-            }, 2000);
+            }, warning ? 5000 : 2000);
 
         } catch (error) {
             console.error('Error submitting request:', error);
@@ -234,7 +241,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                 </div>
 
                 {status.message && (
-                    <Alert variant={status.success ? 'success' : 'error'} className="mb-4">
+                    <Alert variant={status.warning ? 'warning' : status.success ? 'success' : 'error'} className="mb-4">
                         <div>{status.message}</div>
                         {status.folderPath && (
                             <Link

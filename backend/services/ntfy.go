@@ -55,20 +55,32 @@ func (n *NtfyService) IsConfigured() bool {
 	return n.topic != ""
 }
 
-func (n *NtfyService) SendShareNotification(
-	requestURL string,
-	hasHigherRemovalRisk bool,
-	normalizationFailed bool,
-) error {
+type ShareNotification struct {
+	RequestURL string
+	SessionID  string
+	// SessionSubmissions includes this request; 0 means the count is unknown.
+	SessionSubmissions  int
+	HigherRemovalRisk   bool
+	NormalizationFailed bool
+	UnsupportedPlatform bool
+}
+
+func (n *NtfyService) SendShareNotification(notification ShareNotification) error {
 	if !n.IsConfigured() {
 		return fmt.Errorf("ntfy not configured")
 	}
 
-	body := fmt.Sprintf("New source request: %s", requestURL)
-	if hasHigherRemovalRisk {
+	body := fmt.Sprintf("New source request: %s\nSession ID: %s", notification.RequestURL, notification.SessionID)
+	if notification.SessionSubmissions > 0 {
+		body += fmt.Sprintf("\nSession requests: %d (including this one)", notification.SessionSubmissions)
+	}
+	if notification.HigherRemovalRisk {
 		body += "\nContent removal risk: Higher"
 	}
-	if normalizationFailed {
+	if notification.UnsupportedPlatform {
+		body += "\nUnsupported platform: the normalizer doesn't recognize this source."
+	}
+	if notification.NormalizationFailed {
 		body += "\nNormalization failed: review the submitted URL and check for duplicates manually."
 	}
 
@@ -76,13 +88,17 @@ func (n *NtfyService) SendShareNotification(
 	if n.reviewURL != "" {
 		if u, err := url.Parse(n.reviewURL); err == nil {
 			q := u.Query()
-			q.Set("Channel", requestURL)
+			q.Set("Channel", notification.RequestURL)
 			u.RawQuery = q.Encode()
 			actions = fmt.Sprintf("view, Review, %s", u.String())
 		}
 	}
 
-	return n.send(body, "New Audio Source Request", "audio,request,source", actions)
+	tags := "audio,request,source"
+	if notification.UnsupportedPlatform {
+		tags += ",unsupported"
+	}
+	return n.send(body, "New Audio Source Request", tags, actions)
 }
 
 func (n *NtfyService) SendContactNotification(
