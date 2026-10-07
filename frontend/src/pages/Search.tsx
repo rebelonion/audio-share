@@ -390,7 +390,7 @@ export default function Search() {
                                             )}
                                             {result.parentPath && (
                                                 <Link
-                                                    to={getParentLink(result) || '/browse'}
+                                                    to={getParentLink(result) || '/'}
                                                     className="hidden min-w-0 max-w-32 truncate text-[var(--primary)] hover:underline sm:inline-block"
                                                     title={`Browse ${getParentName(result)}`}
                                                 >
@@ -403,7 +403,7 @@ export default function Search() {
                                         <div className="flex w-full min-w-0 items-center justify-between gap-3 sm:contents">
                                             {result.parentPath && (
                                                 <Link
-                                                    to={getParentLink(result) || '/browse'}
+                                                    to={getParentLink(result) || '/'}
                                                     className="min-w-0 flex-1 truncate text-xs text-[var(--primary)] hover:underline sm:hidden"
                                                     title={`Browse ${getParentName(result)}`}
                                                 >

@@ -142,6 +142,22 @@ func TestBrowseRouteRequiresPathBoundary(t *testing.T) {
 	}
 }
 
+func TestBrowseRootRedirectsHome(t *testing.T) {
+	handler := newSnapshotTestHandler(t)
+	tests := map[string]string{
+		"/browse":      "/",
+		"/browse/":     "/",
+		"/browse/?a=1": "/?a=1",
+	}
+	for path, want := range tests {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "https://example.test"+path, nil))
+		if recorder.Code != http.StatusMovedPermanently || recorder.Header().Get("Location") != want {
+			t.Errorf("%s: status=%d location=%q, want 301 %q", path, recorder.Code, recorder.Header().Get("Location"), want)
+		}
+	}
+}
+
 func TestSPAHandlerInjectsBuildIDAndDoesNotCacheHTML(t *testing.T) {
 	staticDir := t.TempDir()
 	indexHTML := `<!doctype html><html><head><title>Audio Share</title></head><body><div id="root"></div></body></html>`

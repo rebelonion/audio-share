@@ -112,7 +112,7 @@ export default function Likes() {
                 <ErrorState title="Likes aren’t available right now" onRetry={() => void retry()} className="mb-10">{error}</ErrorState>
             ) : likedTracks.length === 0 ? (
                 <EmptyState title="Nothing liked yet" icon={Heart} variant="dashed" className="mb-10"
-                    action={<Link to="/browse" className={buttonClass({})}><ListMusic className="h-4 w-4" /> Browse audio</Link>}>
+                    action={<Link to="/" className={buttonClass({})}><ListMusic className="h-4 w-4" /> Browse audio</Link>}>
                     Tap the heart beside a track to save it here.
                 </EmptyState>
             ) : (

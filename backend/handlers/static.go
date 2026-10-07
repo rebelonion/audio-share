@@ -87,6 +87,16 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Robots-Tag", "noindex")
 	}
 
+	// The browse root is the home page; keep a single canonical URL for it.
+	if isBrowseRoute(r.URL.Path) && strings.Trim(strings.TrimPrefix(r.URL.Path, "/browse"), "/") == "" {
+		target := "/"
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
+	}
+
 	path := filepath.Clean(r.URL.Path)
 	if path == "/" {
 		path = "/index.html"

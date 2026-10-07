@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router';
+import { Navigate, useLocation } from 'react-router';
 import { Helmet } from 'react-helmet-async';
 import BrowseClient from '@/components/BrowseClient';
 import { DEFAULT_DESCRIPTION } from '@/lib/config';
@@ -14,9 +14,11 @@ export default function Browse() {
         : '';
 
     const pathSegments = pathStr.split('/').filter(Boolean);
-    const folderName = pathSegments.length > 0
-        ? pathSegments[pathSegments.length - 1]
-        : 'Root';
+    // The browse root is the home page.
+    if (pathSegments.length === 0) {
+        return <Navigate to={{ pathname: '/', search: location.search }} replace />;
+    }
+    const folderName = pathSegments[pathSegments.length - 1];
 
     return (
         <>
