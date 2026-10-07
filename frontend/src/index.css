@@ -107,6 +107,7 @@
     .animate-spin,
     .animate-pulse,
     .animate-ping,
+    .poster-snow__flake,
     .skeleton {
         animation: none !important;
     }
@@ -158,6 +159,46 @@
 @keyframes marquee {
     0%, 12% { transform: translateX(0); }
     100%    { transform: translateX(calc(-1 * var(--marquee-distance))); }
+}
+
+@keyframes posterSnow {
+    from { transform: translate(0, 0); opacity: 0; }
+    15%  { opacity: 1; }
+    to   { transform: translate(3px, 36px); opacity: 0.15; }
+}
+
+/* Winter snow on folder posters; see PosterImage.tsx and lib/seasons.ts. */
+.poster-snow::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 24%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.6) 55%, transparent);
+    border-radius: 4px 4px 50% 50% / 4px 4px 80% 80%;
+    pointer-events: none;
+}
+.poster-snow__flake {
+    position: absolute;
+    top: -3px;
+    left: 20%;
+    width: 2px;
+    height: 2px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.9);
+    pointer-events: none;
+    animation: posterSnow 3.2s linear infinite;
+}
+.poster-snow__flake:nth-of-type(2) {
+    left: 55%;
+    animation-delay: -1.1s;
+    animation-duration: 3.8s;
+}
+.poster-snow__flake:nth-of-type(3) {
+    left: 80%;
+    width: 1.5px;
+    height: 1.5px;
+    animation-delay: -2.3s;
+    animation-duration: 2.9s;
 }
 
 /* Overflowing single-line text that scrolls; see MarqueeText.tsx. */

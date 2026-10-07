@@ -2,9 +2,11 @@ import {afterEach, expect, it, vi} from 'vitest';
 import {drawNightTrain} from './drawNightTrain';
 import {drawBuilding} from './drawBuilding';
 import {createNightTrain, trainSpan} from './nightTrain';
+import {drawFestivalLanterns, drawPaperLantern} from './drawFestivalLanterns';
 
 vi.mock('./drawBuilding', () => ({drawBuilding: vi.fn()}));
 vi.mock('./drawInterior', () => ({drawCarriageSeat: vi.fn()}));
+vi.mock('./drawFestivalLanterns', () => ({drawFestivalLanterns: vi.fn(), drawPaperLantern: vi.fn()}));
 
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
@@ -35,4 +37,23 @@ it('keeps building speed and waveform heights consistent across viewport widths'
             expect(after.get(id)!.height).toBeCloseTo(before.get(id)!.height);
         }
     }
+});
+
+it.each([
+    ['hangs lanterns only', 'lanterns', true],
+    ['leaves the carriage bare', null, false],
+] as const)('%s when the scene decor is %s', (_, decor, expected) => {
+    vi.stubGlobal('Path2D', class {roundRect() {}});
+    const gradient = {addColorStop() {}};
+    const ctx = new Proxy({}, {
+        get: (_, name) => String(name).startsWith('create') ? () => gradient : () => {},
+    }) as CanvasRenderingContext2D;
+    const scene = createNightTrain('track', null, undefined, decor);
+    drawNightTrain(ctx, scene, {
+        width: 1200, height: 800, time: 10, duration: 120, travel: 10 / trainSpan(120),
+        travelSpan: trainSpan(120), ambientTime: 10, pointerX: 0, pointerY: 0, moving: true,
+        layers: [{data: scene, time: 10, duration: 120, weight: 1}],
+    });
+    expect(vi.mocked(drawFestivalLanterns).mock.calls.length > 0).toBe(expected);
+    expect(vi.mocked(drawPaperLantern).mock.calls.length > 0).toBe(expected);
 });

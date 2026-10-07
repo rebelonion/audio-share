@@ -9,3 +9,5 @@ import type {SceneDefinition} from './types';
 
 export const scenes: readonly SceneDefinition[] = [travelerScene, nightTrainScene, shrinePathScene, desertDuskScene, underwaterDriftScene, riverLanternsScene, moonlitPondScene];
 export const defaultScene = travelerScene;
+// First-time visitors in the small hours start here; see lib/seasons.ts.
+export const lateNightScene = moonlitPondScene;

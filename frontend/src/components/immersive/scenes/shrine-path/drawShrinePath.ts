@@ -7,6 +7,8 @@ import type {ShrinePath} from './shrinePath';
 import {drawShrine, drawStoneLantern, drawTorii, lanternGlow} from './drawArchitecture';
 import {drawGardenRocks, drawPine} from './drawGarden';
 import {drawCherryTree} from './drawCherryTree';
+import {foliageFor} from './foliage';
+import {drawSeasonalAir} from './drawSeasonalAir';
 import {drawVillage} from './drawVillage';
 import {drawGardenLandmark} from './drawGardenLandmark';
 import {landmarkAt} from './landmarks';
@@ -19,6 +21,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
     const p = mixPalette(layers.map(layer => ({palette: layer.data.palette, weight: layer.weight})));
     const s = clamp(h / 850, 0.55, 1.4);
     const random = (index: number) => sceneRandom(scene.seed, index);
+    const foliage = foliageFor(scene.season);
     const sky = ctx.createLinearGradient(0, 0, 0, h * 0.68);
     sky.addColorStop(0, p.sky);
     sky.addColorStop(0.55, p.haze);
@@ -53,7 +56,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
         ctx.closePath(); ctx.fillStyle = p[SHRINE_RIDGES[depth].color]; ctx.fill();
     });
 
-    drawVillage(ctx, scene.seed, frame, ridgeProfiles[2], s, p);
+    drawVillage(ctx, scene.seed, frame, ridgeProfiles[2], s, p, foliage);
 
     const ground = ctx.createLinearGradient(0, h * 0.66, 0, h);
     ground.addColorStop(0, p.ground);
@@ -83,7 +86,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
         const detail = (index: number) => sceneRandom(landmarkSeed, index + 3000);
         if (landmark !== 'shrine') {
             const gardenY = shrineBase + (gateBase - shrineBase) * 0.52;
-            drawGardenLandmark(ctx, landmark, centerX, start.x, shrineBase, gardenY, s, landmarkSeed, time, p, audioLevel);
+            drawGardenLandmark(ctx, landmark, centerX, start.x, shrineBase, gardenY, s, landmarkSeed, time, p, audioLevel, foliage);
             continue;
         }
         const end = section((approachEnd - shrineBase) / (gateBase - shrineBase));
@@ -101,9 +104,9 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
             const treeX = start.x + side * (155 + detail(side + 10) * 35) * s;
             const height = (140 + detail(side + 20) * 85) * s;
             if (detail(side + 30) > 0.52) {
-                drawCherryTree(ctx, treeX, shrineBase, height, landmarkSeed + side * 23, time);
+                drawCherryTree(ctx, treeX, shrineBase, height, landmarkSeed + side * 23, time, false, foliage);
             } else {
-                drawPine(ctx, treeX, shrineBase + 5 * s, height, landmarkSeed + side * 23, p.pine, time);
+                drawPine(ctx, treeX, shrineBase + 5 * s, height, landmarkSeed + side * 23, p.pine, time, foliage);
             }
         }
         drawShrine(ctx, start.x, shrineBase, (0.8 + detail(1) * 0.24) * s, p, detail(2) > 0.5 ? 0 : 1, audioLevel);
@@ -127,10 +130,10 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
     const pathTop = h * 0.81 + pointerY * 10;
     const pathBottom = h * 0.91 + pointerY * 12;
     const path = ctx.createLinearGradient(0, pathTop, 0, pathBottom);
-    path.addColorStop(0, '#72786b'); path.addColorStop(1, '#495c50');
+    path.addColorStop(0, p.road); path.addColorStop(1, p.roadDeep);
     ctx.fillStyle = path; ctx.fillRect(0, pathTop, w, pathBottom - pathTop);
-    ctx.fillStyle = '#a8ab8a40'; ctx.fillRect(0, pathTop, w, 2 * s);
-    ctx.strokeStyle = '#253e3545'; ctx.lineWidth = s;
+    ctx.fillStyle = 'rgba(236, 238, 222, 0.25)'; ctx.fillRect(0, pathTop, w, 2 * s);
+    ctx.strokeStyle = 'rgba(10, 22, 18, 0.27)'; ctx.lineWidth = s;
     for (let row = 0; row < 3; row++) {
         const y = pathTop + (pathBottom - pathTop) * row / 3;
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
@@ -148,7 +151,7 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
     for (let i = nearStart; i <= nearEnd; i++) {
         const x = i * nearCell - nearCamera - 72 * s + pointerX * 28;
         if (x < -210 * s || x > w + 210 * s) continue;
-        drawPine(ctx, x, h * 1.01 + pointerY * 15, (290 + random(i + 850) * 50) * s, scene.seed + i * 41, '#182f2b', time);
+        drawPine(ctx, x, h * 1.01 + pointerY * 15, (290 + random(i + 850) * 50) * s, scene.seed + i * 41, '#182f2b', time, foliage);
         drawGardenRocks(ctx, x + 105 * s, h * 0.955, s * 1.7, scene.seed + i * 31, p);
     }
 
@@ -160,6 +163,8 @@ export function drawShrinePath(ctx: CanvasRenderingContext2D, scene: ShrinePath,
         ctx.lineTo(x, h * 0.945 + Math.sin(world * 0.009) * 7 * s + Math.sin(world * 0.031) * 3 * s);
     }
     ctx.lineTo(w + 6, h); ctx.fill();
+
+    drawSeasonalAir(ctx, scene.season, scene.seed, time, w, h, s, audioLevel, pointerX);
 
     const shade = ctx.createLinearGradient(0, 0, 0, h);
     shade.addColorStop(0, '#16243535');

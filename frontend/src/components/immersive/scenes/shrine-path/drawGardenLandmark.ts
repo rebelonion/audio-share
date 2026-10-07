@@ -2,10 +2,11 @@ import {sceneRandom} from '../shared/scenery';
 import {drawStoneLantern} from './drawArchitecture';
 import {drawGardenRocks, drawPine} from './drawGarden';
 import {drawCherryTree} from './drawCherryTree';
+import type {Foliage} from './foliage';
 import {drawPond} from './drawPond';
 import type {ShrinePalette} from './palette';
 
-export function drawGardenLandmark(ctx: CanvasRenderingContext2D, kind: 'pond' | 'grove', x: number, rearX: number, rearY: number, groundY: number, scale: number, seed: number, time: number, p: ShrinePalette, audioLevel = 0) {
+export function drawGardenLandmark(ctx: CanvasRenderingContext2D, kind: 'pond' | 'grove', x: number, rearX: number, rearY: number, groundY: number, scale: number, seed: number, time: number, p: ShrinePalette, audioLevel = 0, foliage: Foliage = 'blossom') {
     const random = (index: number) => sceneRandom(seed, index + 1000);
     const count = 2 + Math.floor(random(1) * (kind === 'pond' ? 2 : 4));
     const spread = 280 + random(2) * 85;
@@ -15,9 +16,9 @@ export function drawGardenLandmark(ctx: CanvasRenderingContext2D, kind: 'pond' |
         const ty = rearY + (i * 4 + random(i + 20) * 5) * scale;
         const height = (115 + random(i + 30) * 90) * scale;
         if (random(i + 40) < blossomChance) {
-            drawCherryTree(ctx, tx, ty, height, seed + i * 23, time);
+            drawCherryTree(ctx, tx, ty, height, seed + i * 23, time, false, foliage);
         } else {
-            drawPine(ctx, tx, ty, height, seed + i * 23, i % 2 ? p.pine : p.forest, time);
+            drawPine(ctx, tx, ty, height, seed + i * 23, i % 2 ? p.pine : p.forest, time, foliage);
         }
     }
     if (kind === 'pond') {

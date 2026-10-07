@@ -12,7 +12,8 @@ import PlaybackSeek from '@/components/PlaybackSeek';
 import {chapterTickOffsets, currentChapterIndex} from '@/lib/chapters';
 import {loadPlayerWaveform} from '@/lib/playerWaveform';
 import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
-import {defaultScene, scenes} from './scenes/registry';
+import {defaultScene, lateNightScene, scenes} from './scenes/registry';
+import {isLateNight} from '@/lib/seasons';
 import type {ScenePalette} from './scenes/types';
 import {useImmersiveControls} from './useImmersiveControls';
 import {useImmersiveFullscreen} from './useImmersiveFullscreen';
@@ -48,7 +49,8 @@ export default function ImmersivePlayer({onClose}: {onClose: () => void}) {
     });
     const [sceneId, setSceneId] = useState(() => {
         const saved = readLocalStorage(SCENE_STORAGE_KEY);
-        return scenes.find(candidate => candidate.id === saved)?.id ?? defaultScene.id;
+        const savedScene = scenes.find(candidate => candidate.id === saved);
+        return (savedScene ?? (isLateNight() ? lateNightScene : defaultScene)).id;
     });
     const [scenePickerOpen, setScenePickerOpen] = useState(false);
     const [sceneFailed, setSceneFailed] = useState(false);

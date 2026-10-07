@@ -2,6 +2,7 @@ import {clamp} from '@/lib/utils';
 import {drawBuilding} from './drawBuilding';
 import {drawRain} from './drawRain';
 import {drawCarriageSeat} from './drawInterior';
+import {drawFestivalLanterns, drawPaperLantern} from './drawFestivalLanterns';
 import type {SceneFrame} from '../types';
 import {SCENE_TRAVEL_DISTANCE, sampleSceneWaveform, sceneRandom} from '../shared/scenery';
 import {trainSpan, type NightTrain} from './nightTrain';
@@ -185,6 +186,10 @@ export function drawNightTrain(ctx: CanvasRenderingContext2D, scene: NightTrain,
             ctx.fillStyle = colors.amber;
             ctx.fillRect(x + 4 * scale, lightY, 3 * scale, 4 * scale);
         }
+        if (scene.decor === 'lanterns') {
+            // Festival lanterns hang from the pole arms and trail in the slipstream.
+            drawPaperLantern(ctx, x + 30 * scale, y + 2 * scale, 7 * scale, -0.12 + Math.sin(ambientTime * 2.1 + i) * 0.08, 1);
+        }
     }
 
     // Reflections sit on the glass, moving opposite to the view as the viewer leans.
@@ -234,4 +239,5 @@ export function drawNightTrain(ctx: CanvasRenderingContext2D, scene: NightTrain,
     ctx.stroke(windowPath);
 
     drawCarriageSeat(ctx, w, h, scale, colors);
+    if (scene.decor === 'lanterns') drawFestivalLanterns(ctx, scene.seed, ambientTime, w, top, scale, audioLevel, pointerX);
 }

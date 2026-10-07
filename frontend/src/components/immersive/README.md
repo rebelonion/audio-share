@@ -31,6 +31,11 @@ its component, rendering code, styles, and tests in its own folder.
    [`scenes/traveler/index.ts`](scenes/traveler/index.ts) for an example.
 3. Register it in [`scenes/registry.ts`](scenes/registry.ts).
 
+Scenes may dress themselves for the calendar through `lib/seasons.ts`. Shrine
+path follows the four seasons (blossom, summer fireflies, autumn leaves, snow),
+Night train hangs lanterns for Lunar New Year, and first-time visitors in the
+small hours start on the `lateNightScene` from the registry.
+
 Scenes receive playback state, artwork, waveform peaks, and callbacks for seeking
 and control colors. Artwork and peaks can be missing, so provide visual fallbacks.
 Use `onPaletteChange` when scene colors change. If the scene supports dragging,

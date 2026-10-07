@@ -1,13 +1,24 @@
 import {sceneRandom} from '../shared/scenery';
+import type {Foliage} from './foliage';
+import {ArtworkCache} from '../shared/artworkCache';
 
 const styles = ['airy', 'layered', 'weeping'] as const;
 type CherryStyle = typeof styles[number];
-const artworkCache = new Map<string, HTMLCanvasElement>();
+const artworkCache = new ArtworkCache();
 
-export function drawCherryTree(ctx: CanvasRenderingContext2D, x: number, base: number, height: number, seed: number, time: number, distant = false) {
+// Dark to light, with a muted set for trees on the far ridge.
+const FOLIAGE_COLORS: Record<Foliage, {near: string[]; distant: string[]}> = {
+    blossom: {near: ['#896779', '#af8097', '#d09bb0', '#efc3cc'], distant: ['#8c7f91', '#a18b9e', '#b299aa', '#c0a8b3']},
+    leaf: {near: ['#2d5438', '#3f7448', '#5c9458', '#8fbd74'], distant: ['#5a7a66', '#6a8c74', '#7f9f84', '#93b094']},
+    autumn: {near: ['#7a2e1a', '#b5461f', '#d9772a', '#f0b14a'], distant: ['#8c6a60', '#a67763', '#bf8e68', '#d0a677']},
+    snow: {near: ['#7d8791', '#a9b2ba', '#d5dce1', '#f6f8fa'], distant: ['#9ca6ae', '#b3bcc3', '#c9d0d6', '#dde3e7']},
+};
+const FOLIAGE_DENSITY: Record<Foliage, number> = {blossom: 1, leaf: 1, autumn: 1, snow: 0.4};
+
+export function drawCherryTree(ctx: CanvasRenderingContext2D, x: number, base: number, height: number, seed: number, time: number, distant = false, foliage: Foliage = 'blossom') {
     const transform = ctx.getTransform();
     const resolution = Math.max(0.5, Math.min(3, Math.ceil(Math.hypot(transform.a, transform.b) * height / 200 * 2) / 2));
-    const key = `${seed}:${distant}:${resolution}`;
+    const key = `${seed}:${distant}:${resolution}:${foliage}`;
     let artwork = artworkCache.get(key);
     if (!artwork) {
         const style = styles[Math.floor(sceneRandom(seed, 6900) * styles.length)];
@@ -17,12 +28,9 @@ export function drawCherryTree(ctx: CanvasRenderingContext2D, x: number, base: n
         const brush = artwork.getContext('2d')!;
         brush.scale(resolution, resolution);
         brush.translate(160, 270);
-        drawTreeArtwork(brush, seed, style, distant);
+        drawTreeArtwork(brush, seed, style, distant, foliage);
+        artworkCache.set(key, artwork);
     }
-    // Keep recently visible trees without retaining the entire scrolling world.
-    artworkCache.delete(key);
-    artworkCache.set(key, artwork);
-    if (artworkCache.size > 24) artworkCache.delete(artworkCache.keys().next().value!);
 
     ctx.save(); ctx.translate(x, base); ctx.scale(height / 200, height / 200);
     ctx.save();
@@ -30,25 +38,28 @@ export function drawCherryTree(ctx: CanvasRenderingContext2D, x: number, base: n
     ctx.transform(1, 0, Math.sin(time * 0.5 + sceneRandom(seed, 7001) * 6) * 0.006, 1, 0, 0);
     ctx.drawImage(artwork, -160, -270, 320, 280);
     ctx.restore();
-    if (!distant) {
+    // Blossom sheds petals and autumn trees shed leaves; summer leaves and snow stay put.
+    if (!distant && (foliage === 'blossom' || foliage === 'autumn')) {
         const r = (n: number) => sceneRandom(seed, n + 7000);
         ctx.scale(r(1) > 0.5 ? 1 : -1, 1);
-        ctx.fillStyle = '#efc3cc';
+        const leaf = foliage === 'autumn';
+        ctx.fillStyle = leaf ? '#e0862f' : '#efc3cc';
         const opacity = ctx.globalAlpha;
         for (let i = 0; i < 8; i++) {
-            const phase = (time * 0.04 + r(30000 + i)) % 1;
+            const phase = (time * (leaf ? 0.03 : 0.04) + r(30000 + i)) % 1;
             ctx.globalAlpha = opacity * Math.sin(phase * Math.PI) * 0.7;
             ctx.beginPath();
-            ctx.ellipse((r(30100 + i) - 0.5) * 180 + phase * 22 + Math.sin(phase * 9 + i) * 5, -130 + phase * 126, 1.8, 0.8, phase * 7, 0, Math.PI * 2); ctx.fill();
+            ctx.ellipse((r(30100 + i) - 0.5) * 180 + phase * 22 + Math.sin(phase * 9 + i) * (leaf ? 9 : 5), -130 + phase * 126, leaf ? 3 : 1.8, leaf ? 1.4 : 0.8, phase * 7, 0, Math.PI * 2); ctx.fill();
         }
     }
     ctx.restore();
 }
 
-function drawTreeArtwork(ctx: CanvasRenderingContext2D, seed: number, style: CherryStyle, distant: boolean) {
+function drawTreeArtwork(ctx: CanvasRenderingContext2D, seed: number, style: CherryStyle, distant: boolean, foliage: Foliage) {
     const branchPhase = 6;
     const r = (n: number) => sceneRandom(seed, n + 7000);
-    const colors = distant ? ['#8c7f91', '#a18b9e', '#b299aa', '#c0a8b3'] : ['#896779', '#af8097', '#d09bb0', '#efc3cc'];
+    const colors = FOLIAGE_COLORS[foliage][distant ? 'distant' : 'near'];
+    const density = FOLIAGE_DENSITY[foliage];
     ctx.save();
     ctx.lineCap = 'round';
     const mirror = r(1) > 0.5 ? 1 : -1;
@@ -63,8 +74,8 @@ function drawTreeArtwork(ctx: CanvasRenderingContext2D, seed: number, style: Che
         return [0, 1].map(axis => u ** 3 * points[axis] + 3 * u * u * t * points[axis + 2]
             + 3 * u * t * t * points[axis + 4] + t ** 3 * points[axis + 6]);
     };
-    const spray = (cx: number, cy: number, radius: number, id: number, density: number) => {
-        for (let i = 0; i < density; i++) {
+    const spray = (cx: number, cy: number, radius: number, id: number, count: number) => {
+        for (let i = 0; i < Math.round(count * density); i++) {
             const a = r(id + i * 6) * Math.PI * 2;
             const d = Math.sqrt(r(id + i * 6 + 1));
             const px = cx + Math.cos(a) * radius * d;

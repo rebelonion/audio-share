@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { MoonStar } from 'lucide-react';
+import { useLateNight } from '@/hooks/useSeasons';
 import BrowseClient from '@/components/BrowseClient';
 import TrackListSection from '@/components/TrackListSection';
 import UnavailableBanner from '@/components/UnavailableBanner';
@@ -20,6 +22,7 @@ export default function Home() {
     const [newTracks, setNewTracks] = useState<TrackSummary[]>([]);
     const [unavailableTracks, setUnavailableTracks] = useState<UnavailableTrack[]>([]);
     const [loading, setLoading] = useState(true);
+    const lateNight = useLateNight();
 
     useEffect(() => {
         Promise.all([
@@ -45,6 +48,15 @@ export default function Home() {
             </Helmet>
             <div className="max-w-7xl mx-auto animate-slideUp">
                 <h1 className="sr-only">{DEFAULT_TITLE}</h1>
+                {lateNight && (
+                    <p className="mb-6 flex items-center gap-2 text-sm text-[var(--muted-foreground)] animate-fadeIn">
+                        <MoonStar size={16} aria-hidden="true" className="shrink-0 text-[var(--primary)]" />
+                        <span>
+                            <span className="text-lg text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>Still up?</span>
+                            {' '}The archive keeps late hours too.
+                        </span>
+                    </p>
+                )}
                 <BrowseClient showTitle={true} />
                 {!loading && unavailableTracks.length > 0 && (
                     <div className="mt-8">

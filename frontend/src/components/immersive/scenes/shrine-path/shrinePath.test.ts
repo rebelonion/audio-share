@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {createShrinePath, shrineSeek, shrineSpan} from './shrinePath';
-import {SHRINE_PALETTE, shrinePaletteFromPixels} from './palette';
+import {SHRINE_PALETTE, SHRINE_SEASON_PALETTES, shrinePaletteFromPixels} from './palette';
 
 describe('shrine path', () => {
     it('uses flat ridges until a waveform arrives without changing the scenery seed', () => {
@@ -48,6 +48,15 @@ describe('shrine path', () => {
             expect(palette.lantern).toBe(SHRINE_PALETTE.lantern);
             expect(palette.sky).toBe(SHRINE_PALETTE.sky);
         }
+    });
+
+    it('keeps artwork tints pale in winter and warm in autumn', () => {
+        const lightness = (color: string) => Number(color.match(/(\d+)%\)$/)![1]);
+        const winter = shrinePaletteFromPixels(Uint8ClampedArray.of(210, 50, 100, 255), 'winter');
+        const autumn = shrinePaletteFromPixels(Uint8ClampedArray.of(210, 50, 100, 255), 'autumn');
+        expect(lightness(winter.mountain)).toBeGreaterThan(lightness(autumn.mountain) + 15);
+        expect(winter.ground).toBe(SHRINE_SEASON_PALETTES.winter.ground);
+        expect(autumn.ground).toBe(SHRINE_SEASON_PALETTES.autumn.ground);
     });
 
     it('keeps the default palette for transparent or grayscale artwork', () => {

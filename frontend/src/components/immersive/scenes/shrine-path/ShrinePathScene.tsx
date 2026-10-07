@@ -1,15 +1,19 @@
-import {useEffect, useMemo, useRef} from 'react';
+import {useCallback, useEffect, useMemo, useRef} from 'react';
 import type {SceneProps} from '../types';
 import SceneCanvas from '../shared/SceneCanvas';
 import {useArtworkPalette} from '../shared/artworkPalette';
+import {useTimeOfYear} from '@/hooks/useSeasons';
 import {createShrinePath, shrineSeek, shrineSpan} from './shrinePath';
-import {SHRINE_PALETTE, shrinePaletteFromPixels} from './palette';
+import {SHRINE_SEASON_PALETTES, shrinePaletteFromPixels} from './palette';
 import {drawShrinePath} from './drawShrinePath';
 
 export default function ShrinePathScene({thumbnail, peaks, onPaletteChange, ...playback}: SceneProps) {
-    const palette = useArtworkPalette(thumbnail, SHRINE_PALETTE, shrinePaletteFromPixels);
+    const season = useTimeOfYear();
+    const basePalette = SHRINE_SEASON_PALETTES[season];
+    const fromPixels = useCallback((pixels: Uint8ClampedArray) => shrinePaletteFromPixels(pixels, season), [season]);
+    const palette = useArtworkPalette(thumbnail, basePalette, fromPixels);
     const sceneryKey = useRef(playback.trackKey).current;
-    const scene = useMemo(() => createShrinePath(sceneryKey, peaks, palette), [sceneryKey, peaks, palette]);
+    const scene = useMemo(() => createShrinePath(sceneryKey, peaks, palette, season), [sceneryKey, peaks, palette, season]);
     useEffect(() => {
         onPaletteChange?.({
             background: palette.pine,

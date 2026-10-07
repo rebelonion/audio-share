@@ -1,4 +1,5 @@
 import {clamp} from '@/lib/utils';
+import type {TimeOfYear} from '@/lib/seasons';
 import {sceneSeed, smoothWaveform} from '../shared/scenery';
 import {SHRINE_PALETTE, type ShrinePalette} from './palette';
 
@@ -7,11 +8,12 @@ export interface ShrinePath {
     ridges: number[];
     hills: number[];
     palette: ShrinePalette;
+    season: TimeOfYear;
 }
 
-export function createShrinePath(sceneryKey: string, waveform: Uint8Array | null, palette = SHRINE_PALETTE): ShrinePath {
+export function createShrinePath(sceneryKey: string, waveform: Uint8Array | null, palette = SHRINE_PALETTE, season: TimeOfYear = 'spring'): ShrinePath {
     const peaks = waveform?.length ? waveform : new Uint8Array(2);
-    return {seed: sceneSeed(sceneryKey), ridges: smoothWaveform(peaks, 12), hills: smoothWaveform(peaks, 5), palette};
+    return {seed: sceneSeed(sceneryKey), ridges: smoothWaveform(peaks, 12), hills: smoothWaveform(peaks, 5), palette, season};
 }
 
 export function shrineSpan(duration: number): number {

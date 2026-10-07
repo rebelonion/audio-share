@@ -38,10 +38,12 @@ const player = vi.hoisted(() => ({
 }));
 const sceneUnmounted = vi.hoisted(() => vi.fn());
 const loadPendingScene = vi.hoisted(() => vi.fn());
+const lateNight = vi.hoisted(() => vi.fn(() => false));
 
 vi.mock('@/contexts/AudioPlayerContext', () => ({useGlobalAudioPlayer: () => player}));
 vi.mock('@/lib/playerWaveform', () => ({loadPlayerWaveform: vi.fn()}));
 vi.mock('@/lib/errorReporting', () => ({reportError: vi.fn()}));
+vi.mock('@/lib/seasons', () => ({isLateNight: lateNight}));
 vi.mock('./scenes/registry', () => {
     function FirstScene({onPreview, onPaletteChange}: SceneProps) {
         useEffect(() => sceneUnmounted, []);
@@ -75,7 +77,7 @@ vi.mock('./scenes/registry', () => {
         Component: lazy(() => Promise.reject(new TypeError('Failed to fetch dynamically imported module'))),
     };
     const pending = {...second, id: 'pending', label: 'Pending', Component: lazy(loadPendingScene)};
-    return {defaultScene: first, scenes: [first, second, unavailable, pending]};
+    return {defaultScene: first, lateNightScene: second, scenes: [first, second, unavailable, pending]};
 });
 
 let fullscreenElement: Element | null = null;
@@ -634,5 +636,19 @@ it('shows the current chapter and marks chapter boundaries on the timeline', () 
         expect((marks[1] as HTMLElement).style.left).toBe('50%');
     } finally {
         player.chapters = [];
+    }
+});
+
+it.each([
+    ['no saved scene', null, 'Second'],
+    ['a saved scene', 'first', 'First'],
+])('starts on the late-night scene in the small hours with %s', async (_, saved, label) => {
+    lateNight.mockReturnValue(true);
+    if (saved) localStorage.setItem('audio-share:immersive-scene', saved);
+    try {
+        render(<ImmersivePlayer onClose={() => {}} />);
+        expect(screen.getByRole('button', {name: 'Scene'}).textContent).toContain(label);
+    } finally {
+        lateNight.mockReturnValue(false);
     }
 });

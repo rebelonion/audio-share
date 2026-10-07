@@ -2,13 +2,14 @@ import {SCENE_TRAVEL_DISTANCE, sceneRandom} from '../shared/scenery';
 import type {SceneFrame} from '../types';
 import type {ShrinePath} from './shrinePath';
 import {drawCherryTree} from './drawCherryTree';
+import type {Foliage} from './foliage';
 import {drawPine} from './drawGarden';
 import {ridgeBaseAt, SHRINE_RIDGES, type RidgeProfile} from './terrain';
 import type {ShrinePalette} from './palette';
 
 const HOUSE_FOOTING = {halfWidth: 81, height: 7};
 
-export function drawVillage(ctx: CanvasRenderingContext2D, seed: number, frame: SceneFrame<ShrinePath>, terrain: RidgeProfile, s: number, p: ShrinePalette) {
+export function drawVillage(ctx: CanvasRenderingContext2D, seed: number, frame: SceneFrame<ShrinePath>, terrain: RidgeProfile, s: number, p: ShrinePalette, foliage: Foliage = 'blossom') {
     const {width: w, travel, pointerX, ambientTime: time} = frame;
     const random = (index: number) => sceneRandom(seed, index);
     const ridge = SHRINE_RIDGES[2];
@@ -23,9 +24,9 @@ export function drawVillage(ctx: CanvasRenderingContext2D, seed: number, frame: 
         const treeX = x - 45 * s;
         const treeY = ridgeBaseAt(terrain, treeX, 5 * s) + 4 * s;
         if (random(i + 410) < 0.18) {
-            drawCherryTree(ctx, treeX, treeY, 86 * s, seed + i, time, true);
+            drawCherryTree(ctx, treeX, treeY, 86 * s, seed + i, time, true, foliage);
         } else {
-            drawPine(ctx, treeX, treeY, (75 + random(i + 400) * 35) * s, seed + i, p.forest, time);
+            drawPine(ctx, treeX, treeY, (75 + random(i + 400) * 35) * s, seed + i, p.forest, time, foliage);
         }
         if (settlement > 0.3 && random(i + 500) > 0.2) {
             const houseScale = (0.38 + random(i + 510) * 0.18) * s;

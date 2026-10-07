@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, 'DEV_API_TARGET')
   return {
     plugins: [react()],
-    test: {include: ['src/**/*.test.{ts,tsx}']},
+    test: {include: ['src/**/*.test.{ts,tsx}'], setupFiles: ['./src/test/setup.ts']},
     envDir,
     resolve: {
       alias: {
