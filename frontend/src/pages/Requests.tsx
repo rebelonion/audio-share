@@ -108,7 +108,7 @@ function Column({ status, requests }: { status: RequestStatus; requests: SourceR
                 <h2 className="font-semibold text-[var(--foreground)]">{config.label}</h2>
                 <span className="text-sm text-[var(--muted-foreground)]">({requests.length})</span>
             </div>
-            <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 193px)' }}>
+            <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain custom-scrollbar" style={{ maxHeight: 'calc(100vh - 193px)' }}>
                 {requests.length === 0 ? (
                     <EmptyState title="No requests" compact variant="dashed" />
                 ) : (

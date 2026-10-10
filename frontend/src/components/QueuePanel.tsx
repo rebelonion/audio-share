@@ -61,7 +61,7 @@ export default function QueuePanel({onClose, triggerRef, id, className, style}: 
     return (
         <div
             id={id}
-            className={`${className ?? 'fixed z-[60] sm:bottom-4 sm:right-[21rem] sm:w-80 sm:h-[min(34rem,calc(100vh-2rem))] max-sm:inset-4'} rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col overflow-y-auto animate-slideUp`}
+            className={`${className ?? 'fixed z-[60] sm:bottom-4 sm:right-[21rem] sm:w-80 sm:h-[min(34rem,calc(100vh-2rem))] max-sm:inset-4'} rounded-lg border border-[var(--border)] bg-[var(--card)] flex flex-col overflow-y-auto overscroll-contain animate-slideUp`}
             style={{contain: 'layout paint style', isolation: 'isolate', ...style}}
             role="dialog"
             aria-label="Playback queue"
@@ -93,7 +93,7 @@ export default function QueuePanel({onClose, triggerRef, id, className, style}: 
             ) : (
                 <div
                     ref={listRef}
-                    className="custom-scrollbar flex-1 min-h-[104px] overflow-y-auto"
+                    className="custom-scrollbar flex-1 min-h-[104px] overflow-y-auto overscroll-contain"
                     onScroll={event => setScrollTop(event.currentTarget.scrollTop)}
                 >
                     <div className="relative" style={{height: upcoming.length * QUEUE_ROW_HEIGHT}}>

@@ -450,7 +450,7 @@ export default function AudioPlayer() {
                                     </span>
                                 </button>
                                 {isDescriptionExpanded && (
-                                    <div className="mt-1 max-h-40 overflow-y-auto whitespace-pre-line rounded bg-[var(--card-hover-subtle)] p-2 custom-scrollbar animate-fadeIn">
+                                    <div className="mt-1 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line rounded bg-[var(--card-hover-subtle)] p-2 custom-scrollbar animate-fadeIn">
                                         {metadata.description}
                                     </div>
                                 )}

@@ -578,7 +578,7 @@ export function SourcesChart({data}: SourcesChartProps) {
             {/* Sources List */}
             <div className="mt-6 sm:mt-8">
                 <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-[var(--foreground)]">Sources by Date</h3>
-                <div className="space-y-3 sm:space-y-4 max-h-96 overflow-y-auto scrollbar-hide">
+                <div className="space-y-3 sm:space-y-4 max-h-96 overflow-y-auto overscroll-contain scrollbar-hide">
                     {data.days.map((day) => (
                         <div key={day.date} className="border border-[var(--border)] rounded-lg p-3 sm:p-4 bg-[var(--background)]">
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 gap-1">

@@ -117,7 +117,7 @@ export default function UnavailableBanner({ tracks }: Props) {
                                 aria-label={`Show unavailable source ${i + 1}`}
                                 aria-current={i === index ? 'true' : undefined}
                                 onClick={() => goTo(i)}
-                                className={`h-1.5 rounded-full transition-all duration-300 ${
+                                className={`h-1.5 rounded-full transition-[width,background-color] duration-300 ${
                                     i === index
                                         ? 'w-4 bg-amber-500'
                                         : 'w-1.5 bg-amber-500/30 hover:bg-amber-500/60'

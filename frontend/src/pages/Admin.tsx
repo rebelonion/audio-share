@@ -32,7 +32,7 @@ function Status({state}: {state: JobRun['state']}) {
 function Details({details}: {details: JobDetails}) {
     return <div className="space-y-3 text-sm">
         {details.message && <p className="whitespace-pre-wrap break-words">{details.message}</p>}
-        {details.resource && <code className="block break-all text-xs text-[var(--muted-foreground)]">{details.resource}</code>}
+        {details.resource && <code className="block [overflow-wrap:anywhere] text-xs text-[var(--muted-foreground)]">{details.resource}</code>}
         {details.failureCounts && Object.keys(details.failureCounts).length > 0 && <dl className="flex flex-wrap gap-x-5 gap-y-1">
             {Object.entries(details.failureCounts).map(([stage, count]) => <div key={stage} className="flex gap-2"><dt>{stage}</dt><dd className="font-mono text-[var(--primary)]">{number(count)}</dd></div>)}
         </dl>}
@@ -40,7 +40,7 @@ function Details({details}: {details: JobDetails}) {
             <p className="text-xs text-[var(--muted-foreground)]">Sampled failures (up to 5)</p>
             {details.failures.map((failure, index) => <div key={index}>
                 <div className="text-xs font-medium text-[var(--primary)]">{failure.step}</div>
-                <code className="block break-all text-xs">{failure.resource}</code>
+                <code className="block [overflow-wrap:anywhere] text-xs">{failure.resource}</code>
                 <p className="mt-1 whitespace-pre-wrap break-words text-xs text-[var(--muted-foreground)]">{failure.message}</p>
             </div>)}
         </div>}
@@ -51,8 +51,8 @@ function TrackSample({tracks, empty}: {tracks: HealthTrack[]; empty: string}) {
     return tracks.length ? <ul className="divide-y divide-[var(--border)]">
         {tracks.map(track => <li key={track.id} className="py-3">
             <p className="text-sm font-medium">{track.title}</p>
-            <code className="block break-all text-xs text-[var(--muted-foreground)]">{track.path}</code>
-            {track.mediaId && <p className="mt-1 break-all font-mono text-xs text-[var(--primary)]">Media ID: {track.mediaId}</p>}
+            <code className="block [overflow-wrap:anywhere] text-xs text-[var(--muted-foreground)]">{track.path}</code>
+            {track.mediaId && <p className="mt-1 [overflow-wrap:anywhere] font-mono text-xs text-[var(--primary)]">Media ID: {track.mediaId}</p>}
         </li>)}
     </ul> : <p className="py-4 text-sm text-[var(--muted-foreground)]">{empty}</p>;
 }
@@ -153,12 +153,12 @@ function HealthView({health}: {health: LibraryHealth}) {
             <summary className="cursor-pointer text-sm font-medium">Run maintenance from your server</summary>
             <p className="my-3 text-sm text-[var(--muted-foreground)]">Correct the affected files, then run the appropriate command. A job already in progress keeps its lock; another invocation skips it.</p>
             {['reindex', 'waveform'].map(job => <div key={job} className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <code className="break-all text-xs">docker compose run --rm worker ./audio-share-backend {job}</code>
+                <code className="[overflow-wrap:anywhere] text-xs">docker compose run --rm worker ./audio-share-backend {job}</code>
                 <Button variant="secondary" onClick={() => void copyCommand(job)}><Copy className="h-3.5 w-3.5" /> Copy {job} command</Button>
             </div>)}
             <p role="status" className="mt-3 text-xs text-[var(--muted-foreground)]">{copyMessage}</p>
         </details>
-        <p className="break-all font-mono text-xs text-[var(--muted-foreground)]">Build {health.config.buildId || 'development'} · schema {health.schemaVersion} · up to 1,000 completed runs retained</p>
+        <p className="[overflow-wrap:anywhere] font-mono text-xs text-[var(--muted-foreground)]">Build {health.config.buildId || 'development'} · schema {health.schemaVersion} · up to 1,000 completed runs retained</p>
     </div>;
 }
 

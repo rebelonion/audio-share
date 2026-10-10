@@ -127,7 +127,7 @@ export default function CustomSelect({
             style={portal ? popoverStyle : {position: 'absolute', top: 'calc(100% + 4px)', left: 0, width: '100%', zIndex: 1}}
             role="listbox"
             aria-labelledby={triggerId}
-            className="bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-64 overflow-y-auto animate-fadeIn"
+            className="bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-64 overflow-y-auto overscroll-contain animate-fadeIn"
         >
             {options.map((opt, index) => (
                 <button

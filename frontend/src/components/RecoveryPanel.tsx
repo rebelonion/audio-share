@@ -205,7 +205,7 @@ export default function RecoveryPanel() {
                             <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                                 Save this key now; it won’t be shown again. Treat it like a password: anyone with it can access and change your likes.
                             </p>
-                            <div className="mt-4 rounded-md bg-[var(--background)] border border-[var(--border)] p-3 font-mono text-xs break-all select-all">{recoveryKey}</div>
+                            <div className="mt-4 rounded-md bg-[var(--background)] border border-[var(--border)] p-3 font-mono text-xs [overflow-wrap:anywhere] select-all">{recoveryKey}</div>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <Button
                                     type="button"

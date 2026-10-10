@@ -376,7 +376,7 @@ export default function Share() {
                                     {meta?.description && (!meta.isMature || meta.showMature) && (
                                         <div className="mt-5">
                                             <h2 className="mb-2 text-lg font-semibold">Description</h2>
-                                            <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-[var(--card-hover-subtle)] p-4 text-sm leading-relaxed text-[var(--muted-foreground)] custom-scrollbar">
+                                            <p className="max-h-48 overflow-y-auto overscroll-contain whitespace-pre-line rounded-lg bg-[var(--card-hover-subtle)] p-4 text-sm leading-relaxed text-[var(--muted-foreground)] custom-scrollbar">
                                                 {meta.description}
                                             </p>
                                         </div>

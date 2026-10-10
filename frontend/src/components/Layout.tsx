@@ -43,9 +43,9 @@ function LayoutContent() {
         <link rel="icon" href="/favicon.svg" />
       </Helmet>
 
-      <div className="bg-[var(--background)] text-[var(--foreground)] min-h-screen flex flex-col">
+      <div className="bg-[var(--background)] text-[var(--foreground)] min-h-svh flex flex-col">
         <CloudflareChallengeRecovery />
-        <header className="bg-[var(--card)] border-b border-[var(--border)]">
+        <header className="bg-[var(--card)] border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
           <div className="h-[2px]" style={{ background: 'linear-gradient(to right, transparent 0%, var(--primary) 30%, var(--primary-hover) 70%, transparent 100%)', opacity: 0.9 }} />
           <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
@@ -88,8 +88,8 @@ function LayoutContent() {
                   aria-label="Toggle menu"
                 >
                   <span className="relative h-6 w-6">
-                    <Menu className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} />
-                    <X className={`absolute inset-0 h-6 w-6 transition-all duration-300 ${menuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} />
+                    <Menu className={`absolute inset-0 h-6 w-6 transition-[opacity,transform] duration-300 ${menuOpen ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} />
+                    <X className={`absolute inset-0 h-6 w-6 transition-[opacity,transform] duration-300 ${menuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} />
                   </span>
                 </IconButton>
               </div>
@@ -188,7 +188,7 @@ function LayoutContent() {
                     aria-hidden="true"
                   />
                   <span
-                    className="absolute left-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[var(--muted-foreground)] shadow-sm transition-all duration-200 peer-checked:translate-x-3 peer-checked:bg-white peer-disabled:opacity-50"
+                    className="absolute left-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[var(--muted-foreground)] shadow-sm transition-[transform,background-color] duration-200 peer-checked:translate-x-3 peer-checked:bg-white peer-disabled:opacity-50"
                     aria-hidden="true"
                   />
                 </span>

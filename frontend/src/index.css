@@ -3,7 +3,25 @@
 @tailwind utilities;
 
 @layer base {
+    *,
+    *::before,
+    *::after {
+        min-width: 0;
+    }
+
     :root {
+        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+        --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+        scrollbar-gutter: stable;
+        text-wrap: pretty;
+        overflow-wrap: break-word;
+        font-synthesis: none;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+
         --background: #0d0b09;
         --foreground: #ece7de;
         --card: #131109;
@@ -48,21 +66,47 @@
 
     html {
         background-color: var(--background);
+        /* No rubber-band bounce dragging the fixed player bar on desktop; touch keeps pull to refresh. */
+        overscroll-behavior-y: none;
     }
 
-    h1 {
-        font-family: var(--font-display);
-        letter-spacing: -0.01em;
+    @media (any-pointer: coarse) {
+        html {
+            overscroll-behavior-y: auto;
+        }
     }
 
-    h2 {
-        font-family: var(--font-display);
-        letter-spacing: -0.01em;
-    }
-
+    h1,
+    h2,
     h3 {
         font-family: var(--font-display);
         letter-spacing: -0.01em;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        text-wrap: balance;
+    }
+
+    button,
+    a,
+    [role='button'] {
+        touch-action: manipulation;
+    }
+
+    button,
+    [role='button'] {
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    /* 16px stops iOS Safari zooming the page when a field gets focus. Beats Tailwind's text-sm on specificity. */
+    @media (hover: none) and (pointer: coarse) {
+        :root :is(input, textarea, select) {
+            font-size: max(16px, 1rem);
+        }
     }
 
     body {
@@ -76,6 +120,7 @@
         background-attachment: fixed;
         position: relative;
         isolation: isolate;
+        min-height: 100svh;
     }
 
     :where(a, button, input, textarea, select):focus-visible {

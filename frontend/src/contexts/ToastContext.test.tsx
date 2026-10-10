@@ -98,7 +98,7 @@ describe('ToastProvider', () => {
         const icon = toast.querySelector('svg');
         const message = toast.querySelector('span');
 
-        expect(viewport?.className).toContain('top-4');
+        expect(viewport?.className).toContain('top-[calc(1rem+env(safe-area-inset-top))]');
         expect(viewport?.className).not.toContain('bottom-24');
         expect(viewport?.className).toContain('left-1/2');
         expect(viewport?.className).toContain('-translate-x-1/2');

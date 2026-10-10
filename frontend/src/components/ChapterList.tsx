@@ -53,7 +53,7 @@ export default function ChapterList({chapters, position, duration, canSeek, onSe
                 </span>
             </button>
             {expanded && (
-                <ol ref={listRef} className="mt-1 max-h-40 overflow-y-auto rounded bg-[var(--card-hover-subtle)] p-1 custom-scrollbar animate-fadeIn" aria-label="Chapters">
+                <ol ref={listRef} className="mt-1 max-h-40 overflow-y-auto overscroll-contain rounded bg-[var(--card-hover-subtle)] p-1 custom-scrollbar animate-fadeIn" aria-label="Chapters">
                     {chapters.map((chapter, index) => {
                         const active = index === current;
                         const reachable = !(duration > 0) || chapter.start < duration;

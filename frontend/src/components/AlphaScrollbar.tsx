@@ -47,7 +47,7 @@ export default function AlphaScrollbar({ letters, onScrollToLetterAction }: Alph
 
             <div
                 ref={scrollbarRef}
-                className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 md:p-1 max-h-[60vh] overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100 transition-opacity"
+                className="flex flex-col gap-1 bg-[var(--card)] rounded-lg shadow-lg p-0.5 md:p-1 max-h-[60vh] overflow-y-auto overscroll-contain scrollbar-hide opacity-80 hover:opacity-100 transition-opacity"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {letters.map(letter => (

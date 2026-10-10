@@ -14,7 +14,7 @@ export interface ButtonStyleProps {
     className?: string;
 }
 
-const focusClass = 'transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50 [&:disabled_*]:pointer-events-none';
+const focusClass = 'transition-[color,background-color,border-color,text-decoration-color,fill,stroke,transform] active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50 [&:disabled_*]:pointer-events-none';
 
 export function buttonClass({variant = 'primary', size = 'md', className = ''}: ButtonStyleProps) {
     return `inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium ${focusClass} ${variants[variant]} ${variant === 'link' ? 'p-0' : size === 'sm' ? 'px-3 py-1.5' : size === 'lg' ? 'px-4 py-3' : 'px-4 py-2'} ${className}`;

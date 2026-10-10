@@ -41,7 +41,7 @@ export default function AdminAudio({onAuthFailure}: {onAuthFailure: AuthFailure}
         <Card as="ul" padding="none" className="divide-y divide-[var(--border)]">
             {matches.slice((currentPage - 1) * 25, currentPage * 25).map(item => <li key={item.shareKey} className="p-4">
                 <p className="break-words font-medium">{item.title || item.filename}</p>
-                <p className="mb-1 break-all text-xs text-[var(--muted-foreground)]">{item.filename} · {item.shareKey}</p>
+                <p className="mb-1 [overflow-wrap:anywhere] text-xs text-[var(--muted-foreground)]">{item.filename} · {item.shareKey}</p>
                 <SourceLink url={item.webpageUrl} />
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className={item.unavailableAt ? 'text-amber-400' : 'text-[var(--muted-foreground)]'}>{item.unavailableAt ? 'Source unavailable' : 'Source not flagged'}</span>
