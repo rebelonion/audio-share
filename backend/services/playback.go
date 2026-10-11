@@ -67,6 +67,7 @@ func removalDiscoveryFilter(includeRemovalRequested bool) string {
 type PlaybackService struct {
 	db                 *Database
 	legacyAccessKeyTTL time.Duration
+	popularBanPatterns []string
 }
 
 func NewPlaybackService(db *Database, legacyAccessKeyTTL time.Duration) *PlaybackService {
@@ -74,6 +75,19 @@ func NewPlaybackService(db *Database, legacyAccessKeyTTL time.Duration) *Playbac
 		db:                 db,
 		legacyAccessKeyTTL: legacyAccessKeyTTL,
 	}
+}
+
+// SetPopularBanlist hides tracks whose title contains any of the given words
+// (case-insensitive) from the popular list.
+func (s *PlaybackService) SetPopularBanlist(words []string) {
+	escaper := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	patterns := make([]string, 0, len(words))
+	for _, word := range words {
+		if word = strings.TrimSpace(word); word != "" {
+			patterns = append(patterns, "%"+escaper.Replace(word)+"%")
+		}
+	}
+	s.popularBanPatterns = patterns
 }
 
 func (s *PlaybackService) CleanupAccessKeyClaims() error {
@@ -368,12 +382,13 @@ func (s *PlaybackService) GetPopularTracks(limit int, includeRemovalRequested bo
 			MAX(pe.played_at) AS last_played
 		FROM play_windows pw
 		JOIN audio_files af ON af.id = pw.audio_file_id AND af.deleted = 0 AND COALESCE(af.age_limit, 0) < 18`+removalDiscoveryFilter(includeRemovalRequested)+`
+			AND NOT (COALESCE(NULLIF(af.title, ''), af.filename) ILIKE ANY(COALESCE($2::text[], '{}')))
 		JOIN play_events pe ON pe.audio_file_id = af.id
 		LEFT JOIN folders f ON f.path = af.parent_path
 		GROUP BY af.id, f.id, pw.recent_7d, pw.older_84d
 		ORDER BY (pw.recent_7d + 1.0) / (pw.older_84d::float / 12.0 + 1.0) DESC
 		LIMIT $1
-	`, limit)
+	`, limit, s.popularBanPatterns)
 	if err != nil {
 		return nil, err
 	}

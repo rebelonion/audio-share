@@ -215,6 +215,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 
 	ntfyService := services.NewNtfyService(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyToken, cfg.NtfyPriority, cfg.NtfyReviewURL)
 	playbackService := services.NewPlaybackService(db, streamKeyTTL)
+	playbackService.SetPopularBanlist(cfg.PopularBanlist)
 	libraryService := services.NewLibraryService(db)
 	requestsService := services.NewRequestsService(db)
 	sourceNormalizer, err := sourceNormalizerFromConfig(cfg)

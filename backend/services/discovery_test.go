@@ -1,6 +1,7 @@
 package services
 
 import (
+	"database/sql/driver"
 	"regexp"
 	"testing"
 	"time"
@@ -147,7 +148,7 @@ func TestPlaybackDiscoveryQueriesExcludeRemovalRequests(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
+			db, mock, err := sqlmock.New(sqlmock.ValueConverterOption(passThroughSlices{}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -155,9 +156,12 @@ func TestPlaybackDiscoveryQueriesExcludeRemovalRequests(t *testing.T) {
 
 			for i := 0; i < test.calls; i++ {
 				expectation := mock.ExpectQuery("af.removal_requested_at IS NULL")
-				if test.name == "recommendations and random fill" {
+				switch test.name {
+				case "recommendations and random fill":
 					expectation.WithArgs("track-key", 1)
-				} else {
+				case "popular":
+					expectation.WithArgs(1, []string(nil))
+				default:
 					expectation.WithArgs(1)
 				}
 				expectation.WillReturnRows(sqlmock.NewRows([]string{"unused"}))
@@ -200,6 +204,38 @@ func TestLocalPlaybackDiscoveryIncludesRemovalState(t *testing.T) {
 	}
 	if len(tracks) != 1 || tracks[0].RemovalRequestedAt == nil || !tracks[0].RemovalRequestedAt.Equal(requestedAt) {
 		t.Fatalf("unexpected tracks: %#v", tracks)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// passThroughSlices lets sqlmock accept []string arguments, which pgx encodes
+// as Postgres arrays.
+type passThroughSlices struct{}
+
+func (passThroughSlices) ConvertValue(v any) (driver.Value, error) {
+	if values, ok := v.([]string); ok {
+		return values, nil
+	}
+	return driver.DefaultParameterConverter.ConvertValue(v)
+}
+
+func TestPopularTracksExcludesBannedTitles(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.ValueConverterOption(passThroughSlices{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta("NOT (COALESCE(NULLIF(af.title, ''), af.filename) ILIKE ANY(COALESCE($2::text[], '{}')))")).
+		WithArgs(30, []string{"%asmr%", "%sleep aid%"}).
+		WillReturnRows(sqlmock.NewRows([]string{"unused"}))
+
+	service := &PlaybackService{db: &Database{db: db}}
+	service.SetPopularBanlist([]string{"asmr", "sleep aid"})
+	if _, err := service.GetPopularTracks(30, false); err != nil {
+		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

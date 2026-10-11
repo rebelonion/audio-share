@@ -127,6 +127,8 @@ type Config struct {
 	BannerLinkText     string
 	BannerLinkURL      string
 
+	PopularBanlist []string
+
 	SessionSecret string
 
 	RequestsAPIKey         string
@@ -224,6 +226,8 @@ func Load() (*Config, error) {
 		BannerVariant:      getEnv("BANNER_VARIANT", "info"),
 		BannerLinkText:     getEnv("BANNER_LINK_TEXT", ""),
 		BannerLinkURL:      getEnv("BANNER_LINK_URL", ""),
+
+		PopularBanlist: getEnvList("POPULAR_BANLIST", nil),
 
 		SessionSecret: getEnv("SESSION_SECRET", ""),
 

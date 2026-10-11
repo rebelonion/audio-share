@@ -59,6 +59,7 @@ The table below lists server environment variables and their application default
 | `BANNER_VARIANT` | Banner style: `info`, `warning`, or `success` | `info` |
 | `BANNER_LINK_TEXT` | Optional banner link text | - |
 | `BANNER_LINK_URL` | Optional banner link URL, internal path or absolute URL | - |
+| `POPULAR_BANLIST` | Comma-separated words; tracks whose title contains any of them (case-insensitive) are hidden from the popular carousel | - |
 | `RYBBIT_URL` | Rybbit base URL without a trailing slash; the server appends `/api/script.js` | - |
 | `RYBBIT_SITE_ID` | Rybbit site ID; both Rybbit settings are required to enable analytics | - |
 | `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |

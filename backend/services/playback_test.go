@@ -167,3 +167,18 @@ func TestCleanupExpiredAccessKeyClaimsBackfillsAndDeletesABatch(t *testing.T) {
 		t.Fatalf("unmet database expectations: %v", err)
 	}
 }
+
+func TestSetPopularBanlistBuildsEscapedPatterns(t *testing.T) {
+	service := &PlaybackService{}
+	service.SetPopularBanlist([]string{" ASMR ", "", "100%", "snake_case", `back\slash`})
+
+	want := []string{"%ASMR%", `%100\%%`, `%snake\_case%`, `%back\\slash%`}
+	if len(service.popularBanPatterns) != len(want) {
+		t.Fatalf("patterns = %q, want %q", service.popularBanPatterns, want)
+	}
+	for i := range want {
+		if service.popularBanPatterns[i] != want[i] {
+			t.Fatalf("patterns = %q, want %q", service.popularBanPatterns, want)
+		}
+	}
+}
