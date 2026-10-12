@@ -36,27 +36,6 @@ type RequestsByStatus struct {
 	Rejected    []SourceRequest `json:"rejected"`
 }
 
-// NullableString distinguishes between a field being omitted (Set=false)
-// and explicitly set to null (Set=true, Value=nil) in JSON.
-type NullableString struct {
-	Value *string
-	Set   bool
-}
-
-func (n *NullableString) UnmarshalJSON(data []byte) error {
-	n.Set = true
-	if string(data) == "null" {
-		n.Value = nil
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	n.Value = &s
-	return nil
-}
-
 type RequestsService struct {
 	db *Database
 }
@@ -75,9 +54,10 @@ func NewRequestsService(db *Database) *RequestsService {
 
 func (s *RequestsService) GetAllGroupedByStatus() (*RequestsByStatus, error) {
 	rows, err := s.db.DB().Query(`
-		SELECT sr.id, sr.submitted_url, sr.title, sr.status, sr.tags, sr.folder_share_key, f.path, sr.created_at, sr.updated_at
+		SELECT sr.id, sr.submitted_url, sr.title, sr.status, sr.tags, f.share_key, f.path, sr.created_at, sr.updated_at
 		FROM source_requests sr
-		LEFT JOIN folders f ON f.share_key = sr.folder_share_key
+		LEFT JOIN collections c ON c.id=sr.collection_id
+		LEFT JOIN folders f ON f.path=c.path
 		ORDER BY sr.created_at DESC
 	`)
 	if err != nil {
@@ -156,8 +136,11 @@ func (s *RequestsService) Create(title, submittedURL, sourceKey string, tags []T
 
 	var id int64
 	err = s.db.DB().QueryRow(`
-		INSERT INTO source_requests (submitted_url, source_key, title, tags, status, created_at, updated_at)
-		VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7)
+		INSERT INTO source_requests (submitted_url, source_key, title, tags, status, created_at, updated_at, collection_id)
+        VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7,
+        (SELECT MIN(k.collection_id) FROM collection_keys k
+         JOIN collections c ON c.id=k.collection_id JOIN folders f ON f.path=c.path
+         WHERE k.key=$2 OR k.key='url:' || RTRIM($1,'/') HAVING COUNT(DISTINCT k.collection_id)=1))
 		ON CONFLICT DO NOTHING
 		RETURNING id
 	`, submittedURL, sourceKey, title, string(tagsJSON), initialStatus, now, now).Scan(&id)
@@ -185,7 +168,8 @@ func (s *RequestsService) FindExistingSource(sourceKey, canonicalURL string) (*E
 	err := s.db.DB().QueryRow(`
 		SELECT sr.id, sr.submitted_url, sr.title, sr.status, f.path
 		FROM source_requests sr
-		LEFT JOIN folders f ON f.share_key = sr.folder_share_key
+		LEFT JOIN collections c ON c.id=sr.collection_id
+		LEFT JOIN folders f ON f.path=c.path
 		WHERE sr.source_key = $1
 			OR RTRIM(sr.submitted_url, '/') = RTRIM($2, '/')
 		ORDER BY CASE WHEN sr.source_key = $1 THEN 0 ELSE 1 END
@@ -198,7 +182,14 @@ func (s *RequestsService) FindExistingSource(sourceKey, canonicalURL string) (*E
 		&existing.FolderPath,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		err = s.db.DB().QueryRow(`SELECT 0, c.channel_url, c.name, 'added', f.path
+        FROM collection_keys k JOIN collections c ON c.id=k.collection_id
+        JOIN folders f ON f.path=c.path
+        WHERE k.key=$1 OR k.key='url:' || RTRIM($2,'/')
+        ORDER BY c.path LIMIT 1`, sourceKey, canonicalURL).Scan(&existing.ID, &existing.SubmittedURL, &existing.Title, &existing.Status, &existing.FolderPath)
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -206,25 +197,14 @@ func (s *RequestsService) FindExistingSource(sourceKey, canonicalURL string) (*E
 	return &existing, nil
 }
 
-func (s *RequestsService) UpdateStatus(id int64, status string, folderShareKey NullableString) error {
+func (s *RequestsService) UpdateStatus(id int64, status string) error {
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
-	var result sql.Result
-	var err error
-
-	if folderShareKey.Set {
-		result, err = s.db.DB().Exec(`
-			UPDATE source_requests
-			SET status = $1, folder_share_key = $2, updated_at = $3
-			WHERE id = $4
-		`, status, folderShareKey.Value, now, id)
-	} else {
-		result, err = s.db.DB().Exec(`
-			UPDATE source_requests
-			SET status = $1, updated_at = $2
-			WHERE id = $3
-		`, status, now, id)
-	}
+	result, err := s.db.DB().Exec(`
+		UPDATE source_requests
+		SET status = $1, updated_at = $2
+		WHERE id = $3
+	`, status, now, id)
 	if err != nil {
 		return err
 	}

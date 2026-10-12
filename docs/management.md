@@ -20,7 +20,9 @@ Reindex after adding audio or changing file and folder metadata:
 docker compose --env-file .env.local exec app ./audio-share-backend reindex
 ```
 
-The index in PostgreSQL powers browsing, search, and library stats. Reindexing reads configured audio directories, `.info.json` files, and `folder.json` files.
+The index in PostgreSQL powers browsing, search, and library stats. Reindexing reads configured audio directories and `.info.json` files.
+
+Reindexing also updates collection names, creator aliases, and request browse links. A request is linked when its source identity or URL matches exactly one active collection. Linked requests in the indexing state are marked added after their collection is scanned without deferred directories. Requests for incomplete collections remain in indexing until a complete scan succeeds.
 
 A database lock prevents concurrent reindex jobs across containers. If a scheduled reindex is already running, a manual command exits without starting another scan.
 
@@ -62,7 +64,7 @@ You stay signed in for 8 hours by default, including across page refreshes. Set 
 
 After 10 failed admin authentication attempts from an IP within 15 minutes, login and API-key access return `429` with `Retry-After` until the window ends. Existing signed-in sessions remain usable. Adjust `ADMIN_AUTH_FAILURE_LIMIT` and `ADMIN_AUTH_FAILURE_WINDOW` to change these limits. Limits apply separately to each running application instance and reset on restart.
 
-Use Requests to create, edit, update the status of, or delete source requests. Audio lets you mark source-linked tracks as unavailable or requested for removal. Messages sends a note to a known session ID.
+Use Requests to create, edit, update the status of, or delete source requests. Browse links come from the matched collection; changing a request’s status does not change that association. Audio lets you mark source-linked tracks as unavailable or requested for removal. Messages sends a note to a known session ID.
 
 The Health section refreshes every 30 seconds while visible. Its schedules reflect the web server's configuration, so keep the worker's configuration in sync. Job history is collected even when ntfy error reporting is disabled.
 
@@ -203,6 +205,6 @@ Each session can have one pending message, shown on app load until the server pr
 
 The `/stats` page reads from the library index without external scripts or static JSON files. Audio counts by day use the download timestamp in each file's `epoch` field. Source counts use the earliest download date for files in a source folder.
 
-A folder is a source when its `folder.json` entry has an `original_url`. Files in that folder and its subfolders are attributed to the nearest ancestor source folder, so a nested folder with its own `original_url` becomes a separate source. If stats are missing, check the [metadata](setup.md#library-metadata) and reindex.
+Each immediate child directory of an audio root is an archive collection. Statistics attribute tracks in nested directories to that collection. If stats are missing, check the [metadata](setup.md#library-metadata) and reindex.
 
-Total listening duration and duration buckets come from generated waveforms, so their coverage grows as waveform jobs complete. Publication-year counts use `upload_date`, falling back to file modification dates when metadata omits it.
+Total listening duration and duration buckets come from generated waveforms, so their coverage grows as waveform jobs complete. Publication-year counts use valid `upload_date` values; tracks with unknown dates are excluded.

@@ -2,6 +2,7 @@ package services
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -53,7 +54,7 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 	rows, err := s.db.DB().Query(`
 		SELECT id, path, parent_path, folder_name, name, original_url,
 		       url_broken, item_count, directory_size_bytes, poster_image,
-		       upload_date, share_key
+		       upload_date, share_key, COALESCE((SELECT json_agg(cn.name ORDER BY cn.name) FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=folders.path), '[]'::json)
 		FROM folders
 		WHERE parent_path = $1
 		ORDER BY name ASC
@@ -66,11 +67,15 @@ func (s *SearchService) getFoldersByParentPath(parentPath string) ([]FolderRecor
 	var folders []FolderRecord
 	for rows.Next() {
 		var f FolderRecord
+		var aliases []byte
 		var urlBroken int
 		var shareKey *string
 		if err := rows.Scan(&f.ID, &f.Path, &f.ParentPath, &f.FolderName, &f.Name,
 			&f.OriginalURL, &urlBroken, &f.ItemCount, &f.DirectorySize,
-			&f.PosterImage, &f.UploadDate, &shareKey); err != nil {
+			&f.PosterImage, &f.UploadDate, &shareKey, &aliases); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(aliases, &f.Aliases); err != nil {
 			return nil, err
 		}
 		f.URLBroken = urlBroken == 1
@@ -151,6 +156,7 @@ func (s *SearchService) folderToFileSystemItem(f FolderRecord) FileSystemItem {
 
 	if f.OriginalURL != "" || f.URLBroken || f.ItemCount > 0 {
 		item.Metadata = &FolderMetadata{
+			Aliases:     f.Aliases,
 			FolderName:  f.FolderName,
 			Name:        f.Name,
 			OriginalURL: f.OriginalURL,

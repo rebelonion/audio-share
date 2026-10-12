@@ -35,7 +35,6 @@ function RequestEditor({request, onChange, onClose, onAuthFailure}: {
     const [sourceKey, setSourceKey] = useState('');
     const [tags, setTags] = useState<Tag[]>(request?.tags ?? []);
     const [status, setStatus] = useState<RequestStatus>(request?.status ?? 'requested');
-    const [folder, setFolder] = useState(request?.folderShareKey ?? '');
     const [confirmDelete, setConfirmDelete] = useState(false);
     const task = useAdminTask(onAuthFailure);
     const saveDetails = (event: FormEvent) => {
@@ -55,9 +54,9 @@ function RequestEditor({request, onChange, onClose, onAuthFailure}: {
         event.preventDefault();
         if (!request) return;
         void task.run(async signal => {
-            await changeRequestStatus(request.id, {status, folderShareKey: folder.trim() || null}, signal);
+            await changeRequestStatus(request.id, {status}, signal);
             if (!signal.aborted) {
-                onChange({...request, status, folderShareKey: folder.trim() || undefined, folderPath: folder.trim() === request.folderShareKey ? request.folderPath : undefined});
+                onChange({...request, status});
                 task.setNotice('Request status saved.');
             }
         });
@@ -89,8 +88,6 @@ function RequestEditor({request, onChange, onClose, onAuthFailure}: {
             <form onSubmit={saveStatus} className="mt-6 border-t border-[var(--border)] pt-5">
                 <fieldset disabled={task.busy} className="space-y-4">
                     <label className="block text-sm">Status<CustomSelect ariaLabel="Status" fieldSize="md" value={status} onChange={value => setStatus(value as RequestStatus)} options={statuses} disabled={task.busy} /></label>
-                    <label className="block text-sm">Folder share key (optional)<Input value={folder} onChange={event => setFolder(event.target.value)} /></label>
-                    <p className="text-xs text-[var(--muted-foreground)]">Leave the folder key blank to remove the folder association.</p>
                     <Button type="submit" variant="secondary">Save status</Button>
                 </fieldset>
             </form>

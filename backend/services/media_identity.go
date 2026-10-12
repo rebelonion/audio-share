@@ -66,10 +66,8 @@ func readAudioRecord(ctx context.Context, fs *FileSystemService, parent, sourceP
 			if id := strings.TrimSpace(metadata.ID); id != "" {
 				a.MediaID = id
 			}
-			a.Title, a.MetaArtist = metadata.Title, metadata.MetaArtist
-			if a.MetaArtist == "" {
-				a.MetaArtist = metadata.Uploader
-			}
+			a.Title, a.MetaArtist = metadata.Title, strings.TrimSpace(metadata.Uploader)
+			a.ChannelID, a.ChannelURL = strings.TrimSpace(metadata.ChannelID), strings.TrimSpace(metadata.ChannelURL)
 			a.UploadDate, a.WebpageURL, a.Description = metadata.UploadDate, metadata.WebpageURL, metadata.Description
 			a.AgeLimit = metadata.AgeLimit
 			if metadata.Epoch > 0 {
@@ -83,8 +81,8 @@ func readAudioRecord(ctx context.Context, fs *FileSystemService, parent, sourceP
 		failure("read", base+".info.json", err)
 		return AudioFileRecord{}, err
 	}
-	if a.UploadDate == "" {
-		a.UploadDate = info.ModTime().Format("20060102")
+	if !validUploadDate(a.UploadDate) {
+		a.UploadDate = ""
 	}
 	return a, nil
 }
@@ -376,16 +374,16 @@ func storeAudioRecord(ctx context.Context, tx *sql.Tx, a AudioFileRecord, existi
 			path=$2, parent_path=$3, filename=$4, size=$5, mime_type=$6, title=$7, meta_artist=$8,
 			upload_date=$9, webpage_url=$10, description=$11, downloaded_at=$12, source_path=$13,
 			thumbnail=$14, age_limit=$15, media_id=COALESCE($16, media_id), deleted=0, identity_conflicted=FALSE, indexed_at=CURRENT_TIMESTAMP,
-			file_mtime_ns=$17, share_key=COALESCE(share_key, $18)
+			file_mtime_ns=$17, share_key=COALESCE(share_key, $18), channel_id=$19, channel_url=$20
 			WHERE id=$1`, existingID, a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType, a.Title, a.MetaArtist,
-			a.UploadDate, a.WebpageURL, a.Description, nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, nullIfEmpty(a.MediaID), a.FileMtimeNS, key)
+			a.UploadDate, a.WebpageURL, a.Description, nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, nullIfEmpty(a.MediaID), a.FileMtimeNS, key, a.ChannelID, a.ChannelURL)
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO audio_files
 			(path,parent_path,filename,size,mime_type,title,meta_artist,upload_date,webpage_url,description,
-			downloaded_at,source_path,thumbnail,age_limit,media_id,share_key,file_mtime_ns,deleted,indexed_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,0,CURRENT_TIMESTAMP)`,
+			downloaded_at,source_path,thumbnail,age_limit,media_id,share_key,file_mtime_ns,deleted,indexed_at,channel_id,channel_url)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,0,CURRENT_TIMESTAMP,$18,$19)`,
 		a.Path, a.ParentPath, a.Filename, a.Size, a.MimeType, a.Title, a.MetaArtist, a.UploadDate, a.WebpageURL, a.Description,
-		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, nullIfEmpty(a.MediaID), key, a.FileMtimeNS)
+		nullIfEmpty(a.DownloadedAt), nullIfEmpty(a.SourcePath), nullIfEmpty(a.Thumbnail), a.AgeLimit, nullIfEmpty(a.MediaID), key, a.FileMtimeNS, a.ChannelID, a.ChannelURL)
 	return err
 }

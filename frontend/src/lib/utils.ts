@@ -34,13 +34,19 @@ export const formatDate = (dateStr: string) => {
         year = parseInt(dateStr.slice(0, 4));
         month = parseInt(dateStr.slice(4, 6)) - 1;
         day = parseInt(dateStr.slice(6, 8));
-    } else {
+    } else if (/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(dateStr)) {
         const parts = dateStr.split('-');
         year = parseInt(parts[0]);
         month = parseInt(parts[1]) - 1;
         day = parseInt(parts[2]);
+    } else {
+        return '';
     }
-    const date = new Date(year, month, day);
+    const date = new Date(0);
+    date.setFullYear(year, month, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+        return '';
+    }
     return date.toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',

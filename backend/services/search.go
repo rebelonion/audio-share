@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -109,14 +110,20 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				continue
 			}
 			audioArgs = append(audioArgs, likeQuery)
-			fieldClauses = append(fieldClauses, fmt.Sprintf("%s ILIKE $%d", col, len(audioArgs)))
+			clause := fmt.Sprintf("%s ILIKE $%d", col, len(audioArgs))
+			// A collection represents one artist, so its aliases match all descendant
+			// tracks, including tracks from that artist’s other accounts.
+			if f == "artist" {
+				clause = "(" + clause + fmt.Sprintf(" OR EXISTS (SELECT 1 FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=audio_files.source_path AND cn.name ILIKE $%d))", len(audioArgs))
+			}
+			fieldClauses = append(fieldClauses, clause)
 		}
 		if len(fieldClauses) == 0 {
 			audioArgs = append(audioArgs, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery)
 			fieldClauses = []string{
 				fmt.Sprintf("filename ILIKE $%d", len(audioArgs)-4),
 				fmt.Sprintf("title ILIKE $%d", len(audioArgs)-3),
-				fmt.Sprintf("meta_artist ILIKE $%d", len(audioArgs)-2),
+				fmt.Sprintf("(meta_artist ILIKE $%d OR EXISTS (SELECT 1 FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=audio_files.source_path AND cn.name ILIKE $%d))", len(audioArgs)-2, len(audioArgs)-2),
 				fmt.Sprintf("description ILIKE $%d", len(audioArgs)-1),
 				fmt.Sprintf("webpage_url ILIKE $%d", len(audioArgs)),
 			}
@@ -136,12 +143,12 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		audioWhere += " AND COALESCE(age_limit, 0) < 18"
 	}
 	if opts.DateFrom != "" {
-		audioWhere += fmt.Sprintf(" AND upload_date >= $%d", argIdx)
+		audioWhere += fmt.Sprintf(" AND search_upload_date >= $%d", argIdx)
 		audioArgs = append(audioArgs, strings.ReplaceAll(opts.DateFrom, "-", ""))
 		argIdx++
 	}
 	if opts.DateTo != "" {
-		audioWhere += fmt.Sprintf(" AND upload_date <= $%d", argIdx)
+		audioWhere += fmt.Sprintf(" AND search_upload_date <= $%d", argIdx)
 		audioArgs = append(audioArgs, strings.ReplaceAll(opts.DateTo, "-", ""))
 		argIdx++
 	}
@@ -177,16 +184,16 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		likeQuery := "%" + query + "%"
 		folderArgs = append(folderArgs, likeQuery, likeQuery)
 		folderArgIdx = 3
-		folderWhere = "(name ILIKE $1 OR folder_name ILIKE $2)"
+		folderWhere = "(name ILIKE $1 OR folder_name ILIKE $2 OR EXISTS (SELECT 1 FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=folders.path AND cn.name ILIKE $1))"
 	}
 
 	if opts.DateFrom != "" {
-		folderWhere += fmt.Sprintf(" AND upload_date >= $%d", folderArgIdx)
+		folderWhere += fmt.Sprintf(" AND search_upload_date >= $%d", folderArgIdx)
 		folderArgs = append(folderArgs, strings.ReplaceAll(opts.DateFrom, "-", ""))
 		folderArgIdx++
 	}
 	if opts.DateTo != "" {
-		folderWhere += fmt.Sprintf(" AND upload_date <= $%d", folderArgIdx)
+		folderWhere += fmt.Sprintf(" AND search_upload_date <= $%d", folderArgIdx)
 		folderArgs = append(folderArgs, strings.ReplaceAll(opts.DateTo, "-", ""))
 		folderArgIdx++
 	}
@@ -234,10 +241,10 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				audio_files.size, audio_files.mime_type, audio_files.title, audio_files.meta_artist as artist,
 				audio_files.description, audio_files.webpage_url, audio_files.age_limit,
 				NULL as original_url, NULL::bigint as item_count, NULL as directory_size, NULL as poster_image,
-				SUBSTR(audio_files.upload_date,1,4) || '-' || SUBSTR(audio_files.upload_date,5,2) || '-' || SUBSTR(audio_files.upload_date,7,2) as modified_at,
+				audio_files.search_upload_date as modified_at,
 				audio_files.share_key, audio_files.unavailable_at, audio_files.removal_requested_at, %s AS relevance
-			FROM audio_files %s
-			WHERE %s`, audioRank, audioJoin, audioWhere)
+			FROM (SELECT *, %s AS search_upload_date FROM audio_files) audio_files %s
+			WHERE %s`, audioRank, normalizedUploadDateSQL("upload_date"), audioJoin, audioWhere)
 		unionParts = append(unionParts, audioSelect)
 		allArgs = append(allArgs, audioArgs...)
 	}
@@ -256,10 +263,10 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 				NULL as description, NULL as webpage_url, NULL::integer as age_limit,
 				original_url, item_count, directory_size_bytes as directory_size,
 				poster_image,
-				SUBSTR(upload_date,1,4)||'-'||SUBSTR(upload_date,5,2)||'-'||SUBSTR(upload_date,7,2) as modified_at,
+				search_upload_date as modified_at,
 				share_key, NULL::timestamptz as unavailable_at, NULL::timestamptz as removal_requested_at, %s AS relevance
-			FROM folders
-			WHERE %s`, folderRank, reindex(folderWhere, folderOffset))
+			FROM (SELECT *, %s AS search_upload_date FROM folders) folders
+			WHERE %s`, folderRank, normalizedUploadDateSQL("upload_date"), reindex(folderWhere, folderOffset))
 		unionParts = append(unionParts, folderSelect)
 		allArgs = append(allArgs, folderArgs...)
 	}
@@ -347,8 +354,8 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		if directorySize.Valid {
 			r.DirectorySize = directorySize.Int64
 		}
-		if modifiedAt != nil {
-			r.ModifiedAt = *modifiedAt
+		if modifiedAt != nil && validUploadDate(*modifiedAt) {
+			r.ModifiedAt = (*modifiedAt)[:4] + "-" + (*modifiedAt)[4:6] + "-" + (*modifiedAt)[6:8]
 		}
 		if shareKey != nil {
 			r.ShareKey = *shareKey
@@ -365,7 +372,6 @@ func reindex(sql string, start int) string {
 	// Walk through the string and replace $N placeholders
 	var b strings.Builder
 	i := 0
-	n := 1 // current placeholder number being replaced
 	for i < len(sql) {
 		if sql[i] == '$' && i+1 < len(sql) {
 			// Read the number after $
@@ -374,8 +380,8 @@ func reindex(sql string, start int) string {
 				j++
 			}
 			if j > i+1 {
+				n, _ := strconv.Atoi(sql[i+1 : j])
 				b.WriteString(fmt.Sprintf("$%d", start+n-1))
-				n++
 				i = j
 				continue
 			}

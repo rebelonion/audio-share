@@ -269,7 +269,7 @@ func (h *AdminHandler) handleRequestUpdateStatus(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.requests.UpdateStatus(id, body.Status, body.FolderShareKey); err != nil {
+	if err := h.requests.UpdateStatus(id, body.Status); err != nil {
 		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
 		if errors.Is(err, services.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Request not found"})

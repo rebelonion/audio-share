@@ -100,7 +100,9 @@ Each audio file needs a valid `.info.json` file with the same base name. For exa
 {
   "id": "stable-media-id",
   "title": "Song Title",
-  "meta_artist": "Artist Name",
+  "uploader": "Creator Name",
+  "channel_id": "stable-account-id",
+  "channel_url": "https://example.com/creator",
   "upload_date": "20230215",
   "webpage_url": "https://example.com/original-track",
   "description": "Description of the recording",
@@ -110,7 +112,18 @@ Each audio file needs a valid `.info.json` file with the same base name. For exa
 
 Use a stable ID unique within its folder so audio renamed or replaced within that folder retains its share links, likes, and playback history. If `id` is omitted, the app looks for a final `[id]` in the filename, such as `Song [12345].m4a`.
 
-The `epoch` field is the download time as a Unix timestamp, used by the stats page. Include it when exporting yt-dlp metadata; tracks without a positive `epoch` do not appear in the daily download counts. If `meta_artist` is empty, the app uses `uploader`. If `upload_date` is empty, it uses the audio file’s modification date.
+The `epoch` field is the download time as a Unix timestamp, used by the stats page. Include it when exporting yt-dlp metadata; tracks without a positive `epoch` do not appear in the daily download counts. Missing or invalid `upload_date` values remain unknown and are excluded from publication-year statistics.
+
+Include the following creator and date fields in each sidecar:
+
+| Field | Value |
+|-------|-------|
+| `uploader` | Recorded creator display name or login, shown as the track artist |
+| `channel_id` | Stable account ID, stored as a string |
+| `channel_url` | Canonical account URL |
+| `upload_date` | Publication date in `YYYYMMDD` format; archived live broadcasts may use their stream start date |
+
+Use UTC when converting timestamps to dates. Keep explicit date-only values as recorded. Download dates belong in `epoch`.
 
 ### Artwork
 
@@ -125,21 +138,17 @@ song.webp
 song.png
 ```
 
-### Folder metadata
+### Collections and creator metadata
 
-Create `folder.json` in the parent directory of the folders you want to describe. It contains an array of entries:
+Each immediate child directory of a configured audio root is one artist’s collection. All tracks in that directory and its descendants belong to that artist. Keep unrelated artists in separate directories directly under the root. Nested directories retain their labels and hierarchy. Empty directories are skipped; wrapper directories remain when they contain indexed audio descendants. Place independent collections directly under a configured root (or configure a deeper root for an additional wrapper).
 
-```json
-[
-  {
-    "folder_name": "actual_folder_name",
-    "name": "Display Name",
-    "original_url": "https://example.com/channel"
-  }
-]
-```
+Collection display names and source URLs come from the `uploader` and `channel_url` values in descendant audio sidecars. The most frequent value wins unless the three newest nonempty, dated observations agree on another value. Upload dates determine recency; tied dates use the audio path for deterministic ordering. If no uploader is available, the collection uses its directory name.
 
-Folder size is calculated from indexed audio files. Broken-source status is calculated from the tracks’ source-unavailability flags; `directory_size` and `url_broken` in `folder.json` do not override these values. For folder artwork, place `poster.jpg`, `artist.jpg`, `cover.jpg`, or `album.jpg` inside the folder, in that priority order.
+The indexer saves observed uploader names as aliases for the whole collection. Artist search matches every track in the collection under any of those aliases, and browse filtering finds the collection by those names. Aliases remain available after later scans, so an artist can still be found by a previous name. For example, tracks recorded under Alice and AliceASMR in the same collection are all found by either name.
+
+Account identity is `lowercase(hostname(channel_url)):channel_id`. An artist’s collection can contain multiple accounts belonging to that artist; differing account IDs do not split its aliases. An account can appear in multiple collections, but aliases are retained separately for each collection. Tracks without a usable account identity remain browsable but cannot establish an account association.
+
+Folder size and broken-source status are computed from indexed audio. For artwork, place `poster.jpg`, `artist.jpg`, `cover.jpg`, or `album.jpg` inside the folder, in that priority order.
 
 Run a [reindex](management.md#indexing-the-library) after changing library files or metadata.
 

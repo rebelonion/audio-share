@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -16,6 +15,7 @@ import (
 )
 
 type FolderRecord struct {
+	Aliases       []string
 	ID            int64
 	Path          string
 	ParentPath    string
@@ -31,6 +31,8 @@ type FolderRecord struct {
 }
 
 type AudioFileRecord struct {
+	ChannelID          string
+	ChannelURL         string
 	MediaID            string
 	FileMtimeNS        int64
 	ID                 int64
@@ -58,7 +60,8 @@ type AudioFileRecord struct {
 type AudioInfoJSON struct {
 	ID          string  `json:"id"`
 	Title       string  `json:"title"`
-	MetaArtist  string  `json:"meta_artist"`
+	ChannelID   string  `json:"channel_id"`
+	ChannelURL  string  `json:"channel_url"`
 	Uploader    string  `json:"uploader"`
 	UploadDate  string  `json:"upload_date"`
 	WebpageURL  string  `json:"webpage_url"`
@@ -124,16 +127,11 @@ func (s *indexJob) rebuildIndex() error {
 	for slug, dirConfig := range s.fs.GetSlugToDirectoryMap() {
 		log.Printf("Indexing directory: %s (%s)", dirConfig.Name, slug)
 
-		uploadDate := time.Now().Format("20060102")
-		if info, err := os.Stat(dirConfig.Path); err == nil {
-			uploadDate = info.ModTime().Format("20060102")
-		}
 		if err := s.insertFolder(FolderRecord{
 			Path:       slug,
 			ParentPath: "",
 			FolderName: slug,
 			Name:       dirConfig.Name,
-			UploadDate: uploadDate,
 		}); err != nil {
 			return err
 		}
@@ -154,44 +152,48 @@ func (s *indexJob) rebuildIndex() error {
 	if _, err := s.conn.ExecContext(context.Background(), `
 		UPDATE folders SET item_count = (
 			SELECT COUNT(*) FROM folders f2
-			WHERE f2.path LIKE folders.path || '/%'
+			WHERE starts_with(f2.path, folders.path || '/')
 		) + (
 			SELECT COUNT(*) FROM audio_files
-			WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+			WHERE (parent_path = folders.path OR starts_with(parent_path, folders.path || '/'))
 			AND deleted = 0
 		)
 	`); err != nil {
 		return err
 	}
 
-	if _, err := s.conn.ExecContext(context.Background(), `
+	if _, err := s.conn.ExecContext(context.Background(), fmt.Sprintf(`
 		UPDATE folders SET
 			directory_size_bytes = COALESCE(
 				(SELECT SUM(size) FROM audio_files
-				 WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+				 WHERE (parent_path = folders.path OR starts_with(parent_path, folders.path || '/'))
 				 AND deleted = 0),
 				0
 			),
 			url_broken = CASE
 				WHEN EXISTS (
 					SELECT 1 FROM audio_files
-					WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+					WHERE (parent_path = folders.path OR starts_with(parent_path, folders.path || '/'))
 					AND deleted = 0
 				)
 				AND NOT EXISTS (
 					SELECT 1 FROM audio_files
-					WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
+					WHERE (parent_path = folders.path OR starts_with(parent_path, folders.path || '/'))
 					AND deleted = 0 AND unavailable_at IS NULL
 				)
 				THEN 1 ELSE 0
 			END,
 			upload_date = COALESCE(
-				(SELECT MAX(upload_date) FROM audio_files
-				 WHERE (parent_path = folders.path OR parent_path LIKE folders.path || '/%')
-				 AND deleted = 0 AND upload_date IS NOT NULL AND upload_date != ''),
-				folders.upload_date
+				(SELECT MAX(%s) FROM audio_files
+				 WHERE (parent_path = folders.path OR starts_with(parent_path, folders.path || '/'))
+				 AND deleted = 0),
+				''
 			)
-	`); err != nil {
+	`, normalizedUploadDateSQL("upload_date"))); err != nil {
+		return err
+	}
+
+	if err := s.refreshCollections(); err != nil {
 		return err
 	}
 
@@ -263,29 +265,13 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 		return err
 	}
 
-	var folderMetadataList []FolderMetadata
-	metadataPath := filepath.Join(fullPath, "folder.json")
-	if data, err := os.ReadFile(metadataPath); err == nil {
-		if err := json.Unmarshal(data, &folderMetadataList); err != nil {
-			s.failures.Add("parse", metadataPath, err)
-			s.metadataFailures++
-		}
-	} else if !os.IsNotExist(err) {
-		s.failures.Add("read", metadataPath, err)
-		s.metadataFailures++
-	}
-	metadataMap := make(map[string]FolderMetadata)
-	for _, m := range folderMetadataList {
-		metadataMap[m.FolderName] = m
-	}
-
 	for _, entry := range entries {
 		name := entry.Name()
 		if !entry.IsDir() || strings.HasPrefix(name, ".") {
 			continue
 		}
 
-		info, err := entry.Info()
+		_, err := entry.Info()
 		if err != nil {
 			log.Printf("Skipping %s: %v", name, err)
 			s.failures.Add("stat", filepath.Join(fullPath, name), err)
@@ -306,12 +292,6 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 			ParentPath: parentPath,
 			FolderName: name,
 			Name:       name,
-			UploadDate: info.ModTime().Format("20060102"),
-		}
-
-		if m, ok := metadataMap[name]; ok {
-			record.Name = m.Name
-			record.OriginalURL = m.OriginalURL
 		}
 
 		entryPath := filepath.Join(fullPath, name)
@@ -328,7 +308,7 @@ func (s *indexJob) indexDirectory(slug, basePath, relativePath, sourcePath strin
 		}
 
 		childSourcePath := sourcePath
-		if record.OriginalURL != "" {
+		if relativePath == "" {
 			childSourcePath = virtualPath
 		}
 
@@ -401,8 +381,8 @@ func (s *indexJob) insertFolder(f FolderRecord) error {
 		ON CONFLICT(path) DO UPDATE SET
 			parent_path = excluded.parent_path,
 			folder_name = excluded.folder_name,
-			name = excluded.name,
-			original_url = excluded.original_url,
+			name = CASE WHEN EXISTS (SELECT 1 FROM collections c WHERE c.path=excluded.path) THEN folders.name ELSE excluded.name END,
+			original_url = CASE WHEN EXISTS (SELECT 1 FROM collections c WHERE c.path=excluded.path) THEN folders.original_url ELSE excluded.original_url END,
 			poster_image = excluded.poster_image,
 			upload_date = COALESCE(folders.upload_date, excluded.upload_date),
 			share_key = COALESCE(folders.share_key, excluded.share_key),

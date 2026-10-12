@@ -39,16 +39,17 @@ it('creates requests with tags and an initial status', async () => {
     expect(screen.getByText('Night train')).toBeTruthy();
 });
 
-it('saves details and status separately, clears folder associations, and confirms deletion', async () => {
+it('saves details and status separately and confirms deletion', async () => {
     render(<AdminRequests onAuthFailure={authFailure} />);
     fireEvent.click(await screen.findByRole('button', {name: 'Edit Quiet rain'}));
     change('Title', 'Rain at night'); change('Tag 1 color', '#abcdef'); click('Save details');
     await screen.findByText('Request details saved.');
     expect(api.editAdminRequest).toHaveBeenCalledWith(7, {title: 'Rain at night', tags: [{name: 'ASMR', color: '#abcdef'}]}, expect.any(AbortSignal));
     expect(api.changeRequestStatus).not.toHaveBeenCalled();
-    select('Status', 'Added'); change('Folder share key (optional)', ''); click('Save status');
+    expect(screen.queryByLabelText('Folder share key (optional)')).toBeNull();
+    select('Status', 'Added'); click('Save status');
     await screen.findByText('Request status saved.');
-    expect(api.changeRequestStatus).toHaveBeenCalledWith(7, {status: 'added', folderShareKey: null}, expect.any(AbortSignal));
+    expect(api.changeRequestStatus).toHaveBeenCalledWith(7, {status: 'added'}, expect.any(AbortSignal));
     click('Delete request');
     expect(api.deleteAdminRequest).not.toHaveBeenCalled();
     click('Cancel deletion'); click('Delete request'); click('Confirm delete');

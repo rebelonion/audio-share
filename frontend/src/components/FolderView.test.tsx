@@ -75,6 +75,17 @@ afterEach(() => {
 });
 
 describe('FolderView', () => {
+    it('filters collections by an inferred historical uploader alias', () => {
+        render(<ToastProvider><MemoryRouter><FolderView currentPath="root" items={[{
+            name: 'New Name', path: 'root/creator', type: 'folder', modifiedAt: '',
+            metadata: {folder_name: 'creator', name: 'New Name', aliases: ['Old Name']},
+        }]}/></MemoryRouter></ToastProvider>);
+        fireEvent.change(screen.getByRole('textbox'), {target: {value: 'Old Name'}});
+        expect(screen.getByText('New Name')).toBeTruthy();
+        fireEvent.change(screen.getByRole('textbox'), {target: {value: 'Unrelated'}});
+        expect(screen.queryByText('New Name')).toBeNull();
+    });
+
     it('publishes download failures through the global toast provider', async () => {
         mediaAccess.startAudioDownload.mockRejectedValueOnce(
             new MediaAccessError(429, 'rate_limited', 3_600),

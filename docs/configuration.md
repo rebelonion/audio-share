@@ -82,6 +82,12 @@ The table below lists server environment variables and their application default
 | `WAVEFORM_MAX_DURATION` | Time budget for dispatching waveform work; in-flight work finishes afterward (e.g., `2h`, `30m`) | `2h` |
 | `WAVEFORM_WORKERS` | Concurrent waveform generators per job (minimum `1`) | `1` |
 
+## Source request normalization
+
+`SOURCE_NORMALIZER_SCRIPT` configures the Python script used to resolve submitted creator URLs. The app passes a JSON object containing `url` on standard input and reads the normalized result from standard output.
+
+The result's `sourceKey` must match the library account identity: the lowercase hostname from `channel_url`, followed by `:`, followed by `channel_id`. Its `canonicalUrl` is the account URL. The app uses these values to detect existing sources and associate requests with collections. Account names are used for display and searching, not identity matching.
+
 ## Compose variables
 
 These variables configure Compose itself; use `--env-file .env.local` so Compose reads them:

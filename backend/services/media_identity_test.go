@@ -65,3 +65,25 @@ func TestMediaIdentityRequiresSidecar(t *testing.T) {
 		})
 	}
 }
+
+func TestSidecarUploaderIdentityAndUnknownDate(t *testing.T) {
+	dir := t.TempDir()
+	full := filepath.Join(dir, "track.m4a")
+	if err := os.WriteFile(full, []byte("audio"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "track.info.json"), []byte(`{"uploader":"Recorded Creator","meta_artist":"Legacy Name","channel_id":"123","channel_url":"https://example.com/creator","upload_date":"20260230"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := readAudioRecord(context.Background(), NewFileSystemService(dir+":Audio"), "audio", "", full, info, func(string, string, error) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.MetaArtist != "Recorded Creator" || a.ChannelID != "123" || a.ChannelURL != "https://example.com/creator" || a.UploadDate != "" {
+		t.Fatalf("%+v", a)
+	}
+}

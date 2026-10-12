@@ -40,7 +40,7 @@ export const listAdminRequests = async (signal: AbortSignal): Promise<SourceRequ
 };
 export const createAdminRequest = (body: NewRequest, signal: AbortSignal) => request<SourceRequest>('/api/admin/requests', signal, 'POST', body);
 export const editAdminRequest = (id: number, body: {title: string; tags: Tag[]}, signal: AbortSignal) => request(`/api/admin/requests/${id}`, signal, 'PATCH', body);
-export const changeRequestStatus = (id: number, body: {status: RequestStatus; folderShareKey: string | null}, signal: AbortSignal) => request(`/api/admin/requests/${id}/status`, signal, 'PATCH', body);
+export const changeRequestStatus = (id: number, body: {status: RequestStatus}, signal: AbortSignal) => request(`/api/admin/requests/${id}/status`, signal, 'PATCH', body);
 export const deleteAdminRequest = (id: number, signal: AbortSignal) => request(`/api/admin/requests/${id}`, signal, 'DELETE');
 export const listAudioSources = (signal: AbortSignal) => request<AudioSource[]>('/api/admin/audio/sources', signal);
 export const setAudioUnavailable = (key: string, unavailable: boolean, signal: AbortSignal) => request(`/api/admin/audio/${encodeURIComponent(key)}/unavailable`, signal, 'PATCH', {unavailable});

@@ -15,6 +15,7 @@ export interface AudioFile {
 }
 
 export interface FolderMetadata {
+    aliases?: string[];
     folder_name: string;  // Directory name to map to
     name: string;         // Display name
     original_url?: string;

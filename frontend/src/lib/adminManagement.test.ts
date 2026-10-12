@@ -9,7 +9,7 @@ it('uses the existing API paths and cookie authentication for all management act
     const signal = new AbortController().signal;
     await createAdminRequest({title: 'Title', submittedUrl: 'https://example.test', sourceKey: '', tags: [], status: 'requested'}, signal);
     await editAdminRequest(4, {title: 'New title', tags: []}, signal);
-    await changeRequestStatus(4, {status: 'added', folderShareKey: null}, signal);
+    await changeRequestStatus(4, {status: 'added'}, signal);
     await deleteAdminRequest(4, signal);
     await listAudioSources(signal);
     await setAudioUnavailable('key/?', true, signal);

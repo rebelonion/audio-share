@@ -257,6 +257,7 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
 
             if (item.type === 'folder' && item.metadata) {
                 if (item.metadata.name) parts.push(item.metadata.name);
+                parts.push(...(item.metadata.aliases ?? []));
                 if (item.metadata.description) parts.push(item.metadata.description);
             }
 

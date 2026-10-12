@@ -35,8 +35,7 @@ type createRequestBody struct {
 }
 
 type updateStatusBody struct {
-	Status         string                  `json:"status"`
-	FolderShareKey services.NullableString `json:"folderShareKey"`
+	Status string `json:"status"`
 }
 
 type updateRequestBody struct {
