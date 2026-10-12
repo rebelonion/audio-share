@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/onion/audio-share-backend/services"
 )
@@ -84,6 +85,14 @@ func (h *ShareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.RequestURL = strings.TrimSpace(req.RequestURL)
 	if req.RequestURL == "" || len(req.RequestURL) > maxURLLen {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid URL"})
+		return
+	}
+	u, err := url.ParseRequestURI(req.RequestURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || strings.ContainsFunc(req.RequestURL, unicode.IsSpace) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"code":  "invalid_url",
+			"error": "Please enter a valid URL starting with http:// or https://.",
+		})
 		return
 	}
 

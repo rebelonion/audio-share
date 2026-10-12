@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -402,5 +403,38 @@ func TestMaturePreferenceRejectsOversizedBody(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest || response.Header().Get("Set-Cookie") != "" {
 		t.Fatalf("status=%d cookies=%q", response.Code, response.Header().Values("Set-Cookie"))
+	}
+}
+
+func TestShareRejectsInvalidURLBeforeNormalization(t *testing.T) {
+	for _, input := range []string{
+		"RheasieASMR",
+		"not a URL",
+		"example.com/creator",
+		"//example.com/creator",
+		"/creator",
+		"https://",
+		"https:///creator",
+		"https://:443/creator",
+		"ftp://example.com/creator",
+		"javascript:alert(1)",
+		"https://example.com:invalid/creator",
+		"https://example.com/%zz",
+		"https://example.com/creator name",
+	} {
+		t.Run(input, func(t *testing.T) {
+			// No dependencies: invalid input must be rejected before any service is called.
+			handler := NewShareHandler(nil, nil, nil, nil, "test-secret")
+			body, err := json.Marshal(shareRequest{RequestURL: input})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/api/share", strings.NewReader(string(body)))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_url"`) {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
