@@ -163,9 +163,22 @@ export function operationForRequest(input: RequestInfo | URL): ErrorOperation {
     return routes.find(([prefix]) => path.startsWith(prefix))?.[1] || 'page';
 }
 
+// In-app browsers and extensions inject scripts that run as the document itself
+// (e.g. WKWebView's evaluateJavaScript) or from their own origin. Their failures
+// are not ours, so only errors raised by same-origin script files are reported.
+function isAppScript(filename: string): boolean {
+    if (!filename) return true;
+    try {
+        const url = new URL(filename, window.location.href);
+        return url.origin === window.location.origin && url.pathname !== window.location.pathname;
+    } catch {
+        return false;
+    }
+}
+
 export function installErrorReporting(): () => void {
     const onError = (event: ErrorEvent) => {
-        if (event.error) reportError({operation: 'page', stage: 'render', cause: 'unexpected'}, event.error);
+        if (event.error && isAppScript(event.filename)) reportError({operation: 'page', stage: 'render', cause: 'unexpected'}, event.error);
     };
     const onRejection = (event: PromiseRejectionEvent) => {
         reportError({operation: 'page', stage: 'render', cause: 'unexpected'}, event.reason);

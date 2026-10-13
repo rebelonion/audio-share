@@ -173,4 +173,20 @@ describe('error reporting', () => {
         expect(operationForRequest('/api/profile/recovery-key')).toBe('recovery');
         expect(operationForRequest('/api/session/targeted-message')).toBe('targeted-message');
     });
+    it('ignores errors from scripts injected by the browser or extensions', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, {status: 204}));
+        vi.stubGlobal('fetch', fetchMock);
+        window.history.replaceState(null, '', '/share/K4T_peel');
+        const {installErrorReporting} = await import('./errorReporting');
+        const uninstall = installErrorReporting();
+        const dispatch = (filename: string, message: string) => window.dispatchEvent(
+            new ErrorEvent('error', {filename, error: new TypeError(message)}));
+        dispatch(`${window.location.origin}/share/K4T_peel`, "undefined is not an object (evaluating 'window.__firefox__.reader')");
+        dispatch('chrome-extension://wallet/inpage.js', 'ethereum');
+        dispatch(`${window.location.origin}/assets/index-abc.js`, 'app failure');
+        uninstall();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body).context.message).toContain('app failure');
+    });
 });
