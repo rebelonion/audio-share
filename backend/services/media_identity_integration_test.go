@@ -29,10 +29,18 @@ func TestIntegrationAmbiguousMediaIDsNotifyWithoutBlockingIndex(t *testing.T) {
 			}
 			f.index(t)
 			keys := make(map[string]string)
+			survivors := make(map[string]int64)
 			for _, id := range ids {
-				_, keys[id] = f.record(t, "channel/"+id+".m4a")
+				survivors[id], keys[id] = f.record(t, "channel/"+id+".m4a")
 				if removeDuplicate {
+					duplicate, _ := f.record(t, "channel/old-"+id+".m4a")
+					f.seedHistory(t, duplicate)
 					f.remove(t, "channel/old-"+id+".m4a")
+				}
+			}
+			if removeDuplicate {
+				if _, err := f.db.DB().Exec(`UPDATE audio_files SET indexed_at=NOW()-INTERVAL '1 day'`); err != nil {
+					t.Fatal(err)
 				}
 			}
 			f.write(t, "other/new.m4a", "unique", "new audio")
@@ -49,14 +57,44 @@ func TestIntegrationAmbiguousMediaIDsNotifyWithoutBlockingIndex(t *testing.T) {
 			if err := f.db.DB().QueryRow(`SELECT count(*), COALESCE(sum((context->'failureCounts'->>'identity-ambiguous')::int),0) FROM error_reports WHERE operation='reindex'`).Scan(&reports, &count); err != nil {
 				t.Fatal(err)
 			}
-			if reports != 1 || count != 3 {
-				t.Fatalf("reports=%d ambiguity count=%d; want one report with three IDs", reports, count)
-			}
 			for _, id := range ids {
 				_, key := f.record(t, "channel/"+id+".m4a")
 				if key != keys[id] {
 					t.Fatalf("share key changed for %s", id)
 				}
+			}
+			if removeDuplicate {
+				if reports != 0 {
+					t.Fatalf("reports=%d; leftover records of a removed duplicate are not ambiguous", reports)
+				}
+				var leftovers int
+				if err := f.db.DB().QueryRow(`SELECT count(*) FROM audio_files WHERE deleted<>0`).Scan(&leftovers); err != nil || leftovers != 3 {
+					t.Fatalf("leftovers=%d err=%v; removed duplicates stay restorable during the grace period", leftovers, err)
+				}
+				if _, err := f.db.DB().Exec(`UPDATE audio_files SET indexed_at=LOCALTIMESTAMP-INTERVAL '31 days' WHERE deleted<>0`); err != nil {
+					t.Fatal(err)
+				}
+				f.index(t)
+				for _, id := range ids {
+					var records, plays, downloads, likes int
+					if err := f.db.DB().QueryRow(`SELECT
+						(SELECT count(*) FROM audio_files WHERE media_id=$1),
+						(SELECT count(*) FROM play_events WHERE audio_file_id=$2),
+						(SELECT count(*) FROM download_events WHERE audio_file_id=$2),
+						(SELECT count(*) FROM likes WHERE audio_file_id=$2)`, id, survivors[id]).Scan(&records, &plays, &downloads, &likes); err != nil {
+						t.Fatal(err)
+					}
+					if records != 1 || plays != 1 || downloads != 1 || likes != 1 {
+						t.Fatalf("%s: records=%d plays=%d downloads=%d likes=%d; want one merged record with moved history", id, records, plays, downloads, likes)
+					}
+				}
+				if err := f.db.DB().QueryRow(`SELECT count(*) FROM error_reports WHERE operation='reindex'`).Scan(&reports); err != nil || reports != 0 {
+					t.Fatalf("reports=%d err=%v after merge", reports, err)
+				}
+				return
+			}
+			if reports != 1 || count != 3 {
+				t.Fatalf("reports=%d ambiguity count=%d; want one report with three IDs", reports, count)
 			}
 			f.record(t, "other/new.m4a")
 			var blocked int
@@ -136,6 +174,22 @@ func (f mediaFixture) remove(t *testing.T, name string) {
 	t.Helper()
 	if err := os.Remove(filepath.Join(f.dir, name)); err != nil {
 		t.Fatal(err)
+	}
+}
+func (f mediaFixture) seedHistory(t *testing.T, id int64) {
+	t.Helper()
+	if _, err := f.db.db.Exec(`INSERT INTO anonymous_profiles(session_id) VALUES('history-profile') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO likes(profile_id,audio_file_id) SELECT 'history-profile',$1`,
+		`INSERT INTO play_events(audio_file_id) SELECT $1`,
+		`INSERT INTO download_events(audio_file_id) SELECT $1`,
+		`INSERT INTO waveform_cache(audio_file_id,peaks) SELECT $1,'duplicate-waveform'`,
+	} {
+		if _, err := f.db.db.Exec(q, id); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 func (f mediaFixture) seedFavoriteAndWaveform(t *testing.T, id int64) {

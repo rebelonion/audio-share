@@ -182,3 +182,59 @@ func TestMediaMatchingScenarioMatrix(t *testing.T) {
 		})
 	}
 }
+
+func TestMediaCatalogMerges(t *testing.T) {
+	record := func(id int64, path, mediaID string, deleted bool) indexedMedia {
+		return indexedMedia{id: id, path: path, filename: filepath.Base(path), mediaID: mediaID, deleted: deleted, stale: true}
+	}
+	file := func(path, mediaID string) AudioFileRecord {
+		return AudioFileRecord{Path: path, Filename: filepath.Base(path), MediaID: mediaID}
+	}
+	conflicted := record(2, "b", "A", true)
+	conflicted.identityConflicted = true
+	recent := record(3, "c", "A", true)
+	recent.stale = false
+	cases := []struct {
+		name    string
+		records []indexedMedia
+		files   []AudioFileRecord
+		want    map[int64]int64
+	}{
+		{name: "soft-deleted duplicate",
+			records: []indexedMedia{record(1, "a", "A", false), record(2, "b", "A", true)},
+			files:   []AudioFileRecord{file("a", "A")},
+			want:    map[int64]int64{2: 1}},
+		{name: "live duplicate missing from disk",
+			records: []indexedMedia{record(1, "a", "A", false), record(2, "b", "A", false), record(3, "c", "A", true)},
+			files:   []AudioFileRecord{file("a", "A")},
+			want:    map[int64]int64{2: 1, 3: 1}},
+		{name: "within grace period",
+			records: []indexedMedia{record(1, "a", "A", false), record(2, "b", "A", true), recent},
+			files:   []AudioFileRecord{file("a", "A")},
+			want:    map[int64]int64{2: 1}},
+		{name: "both files present",
+			records: []indexedMedia{record(1, "a", "A", false)},
+			files:   []AudioFileRecord{file("a", "A"), file("b", "A")},
+			want:    map[int64]int64{}},
+		{name: "no record owns the file",
+			records: []indexedMedia{record(1, "a", "A", true), record(2, "b", "A", true)},
+			files:   []AudioFileRecord{file("c", "A")},
+			want:    map[int64]int64{}},
+		{name: "blocked identity",
+			records: []indexedMedia{record(1, "a", "A", false), conflicted},
+			files:   []AudioFileRecord{file("a", "A")},
+			want:    map[int64]int64{}},
+		{name: "other record path reused by a different file",
+			records: []indexedMedia{record(1, "a", "A", false), record(2, "b", "A", true)},
+			files:   []AudioFileRecord{file("a", "A"), file("b", "B")},
+			want:    map[int64]int64{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := newMediaCatalog(tc.records, tc.files).merges(tc.files)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("merges=%v; want %v", got, tc.want)
+			}
+		})
+	}
+}

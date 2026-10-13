@@ -9,6 +9,8 @@ type indexedMedia struct {
 	id                                  int64
 	path, filename, mediaID, sourcePath string
 	deleted, identityConflicted         bool
+	// Not seen on disk for mediaMergeGrace.
+	stale bool
 }
 
 type mediaUpdate struct {
@@ -54,6 +56,49 @@ func newMediaCatalog(records []indexedMedia, files []AudioFileRecord) mediaCatal
 	return c
 }
 
+// Once a duplicate file has stayed gone for the grace period, its leftover records
+// fold into the record that still owns the only file with that ID. Until then a
+// returning duplicate can reclaim its record. Blocked identities stay manual.
+// Returns loser record ID -> survivor record ID.
+func (c mediaCatalog) merges(files []AudioFileRecord) map[int64]int64 {
+	onDisk := make(map[string]bool)
+	paths := make(map[string][]string)
+	for _, a := range files {
+		onDisk[a.Path] = true
+		if a.MediaID != "" {
+			paths[a.MediaID] = append(paths[a.MediaID], a.Path)
+		}
+	}
+	merges := make(map[int64]int64)
+	for id, matches := range paths {
+		records := c.byID[id]
+		if len(matches) != 1 || len(records) < 2 {
+			continue
+		}
+		survivor, exists := c.owners[matches[0]]
+		if !exists || survivor.mediaID != id || survivor.identityConflicted {
+			continue
+		}
+		var losers []int64
+		for _, record := range records {
+			if record.id == survivor.id {
+				continue
+			}
+			if record.identityConflicted || onDisk[record.path] {
+				losers = nil
+				break
+			}
+			if record.stale {
+				losers = append(losers, record.id)
+			}
+		}
+		for _, loser := range losers {
+			merges[loser] = survivor.id
+		}
+	}
+	return merges
+}
+
 func (c mediaCatalog) conflicts(files []AudioFileRecord) []indexedMedia {
 	var conflicts []indexedMedia
 	for _, a := range files {
@@ -69,13 +114,21 @@ func (c mediaCatalog) conflicts(files []AudioFileRecord) []indexedMedia {
 func (c mediaCatalog) plan(files []AudioFileRecord, recoverOnly bool, pathMissing func(string) (bool, error), failure mediaFailure) ([]mediaUpdate, error) {
 	diskCounts := make(map[string]int)
 	currentIDs := make(map[string]string)
+	pathsByID := make(map[string]string)
 	for _, a := range files {
 		currentIDs[a.Path] = a.MediaID
 		if a.MediaID != "" {
 			diskCounts[a.MediaID]++
+			pathsByID[a.MediaID] = a.Path
 		}
 	}
 	for id, count := range diskCounts {
+		if count == 1 && len(c.byID[id]) > 1 {
+			// Leftover records are harmless while the only file keeps its own record.
+			if owner, exists := c.owners[pathsByID[id]]; exists && owner.mediaID == id {
+				continue
+			}
+		}
 		if count > 1 || len(c.byID[id]) > 1 {
 			err := fmt.Errorf("ambiguous media ID %q: %d files, %d records; keeping records separate", id, count, len(c.byID[id]))
 			log.Printf("%s: %v", files[0].ParentPath, err)

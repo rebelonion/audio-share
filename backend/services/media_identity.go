@@ -222,15 +222,16 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 		}
 		files = append(files, a)
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id, path, filename, COALESCE(media_id, ''), COALESCE(source_path, ''), deleted <> 0, identity_conflicted
-		FROM audio_files WHERE parent_path = $1 FOR UPDATE`, parent)
+	rows, err := tx.QueryContext(ctx, `SELECT id, path, filename, COALESCE(media_id, ''), COALESCE(source_path, ''), deleted <> 0, identity_conflicted,
+		COALESCE(indexed_at < LOCALTIMESTAMP - $2::interval, FALSE)
+		FROM audio_files WHERE parent_path = $1 FOR UPDATE`, parent, mediaMergeGrace)
 	if err != nil {
 		return err
 	}
 	var indexed []indexedMedia
 	for rows.Next() {
 		var old indexedMedia
-		if err := rows.Scan(&old.id, &old.path, &old.filename, &old.mediaID, &old.sourcePath, &old.deleted, &old.identityConflicted); err != nil {
+		if err := rows.Scan(&old.id, &old.path, &old.filename, &old.mediaID, &old.sourcePath, &old.deleted, &old.identityConflicted, &old.stale); err != nil {
 			rows.Close()
 			return err
 		}
@@ -265,6 +266,20 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 			scanErr = fmt.Errorf("incomplete metadata in %s", parent)
 		}
 		return commitMediaBlocks(ctx, tx, blocked, fmt.Errorf("%w: %w", errIncompleteAudioDirectory, scanErr), failure)
+	}
+	if !recoverOnly {
+		if merges := catalog.merges(files); len(merges) > 0 {
+			if err := mergeMediaRecords(ctx, tx, merges); err != nil {
+				return err
+			}
+			remaining := indexed[:0:0]
+			for _, old := range indexed {
+				if _, merged := merges[old.id]; !merged {
+					remaining = append(remaining, old)
+				}
+			}
+			catalog = newMediaCatalog(remaining, files)
+		}
 	}
 	updates, err := catalog.plan(files, recoverOnly, func(path string) (bool, error) {
 		full, err := resolveMediaPath(fs, path)
@@ -301,6 +316,32 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 		if !restored[old.id] {
 			reportMediaBlock(old, failure)
 		}
+	}
+	return nil
+}
+
+const mediaMergeGrace = "30 days"
+
+// The merged record's share key is dropped; its history and likes move to the survivor.
+func mergeMediaRecords(ctx context.Context, tx *sql.Tx, merges map[int64]int64) error {
+	for loser, survivor := range merges {
+		for _, statement := range []string{
+			`UPDATE play_events SET audio_file_id=$2 WHERE audio_file_id=$1`,
+			`UPDATE download_events SET audio_file_id=$2 WHERE audio_file_id=$1`,
+			`INSERT INTO likes (profile_id, audio_file_id, created_at)
+				SELECT profile_id, $2, created_at FROM likes WHERE audio_file_id=$1 ON CONFLICT DO NOTHING`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement, loser, survivor); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM waveform_cache WHERE audio_file_id=$1`, loser); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM audio_files WHERE id=$1`, loser); err != nil {
+			return err
+		}
+		log.Printf("merged duplicate audio record %d into %d", loser, survivor)
 	}
 	return nil
 }
