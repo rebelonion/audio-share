@@ -60,6 +60,29 @@ func TestErrorDiagnosticFields(t *testing.T) {
 	}
 }
 
+func TestErrorFingerprintSeparatesBrowserPageErrors(t *testing.T) {
+	page := func(message string) ErrorEvent {
+		return ErrorEvent{Operation: "page", Stage: "render", Cause: "unexpected", Code: "TypeError", Outcome: "blocked",
+			Context: ErrorContext{Message: message}}
+	}
+	helmet := page("Cannot read properties of undefined (reading 'add')").fingerprint("browser")
+	if got := page("  cannot read properties of undefined   (reading 'add')").fingerprint("browser"); got != helmet {
+		t.Fatal("case or spacing split the group")
+	}
+	if page("Failed at line 12").fingerprint("browser") != page("Failed at line 340").fingerprint("browser") {
+		t.Fatal("numbers split the group")
+	}
+	if got := page("undefined is not an object (evaluating 'window.__firefox__.reader')").fingerprint("browser"); got == helmet {
+		t.Fatal("different page errors share a group")
+	}
+	search := ErrorEvent{Operation: "search", Stage: "response", Cause: "unavailable", Outcome: "blocked", Context: ErrorContext{Message: "HTTP 503"}}
+	other := search
+	other.Context.Message = "HTTP 500"
+	if search.fingerprint("browser") != other.fingerprint("browser") {
+		t.Fatal("request errors grouped by message")
+	}
+}
+
 func TestIntegrationErrorAlertsThresholdCooldownAndConcurrentWorkers(t *testing.T) {
 	db := integrationDatabase(t)
 	if err := db.Migrate(context.Background()); err != nil {

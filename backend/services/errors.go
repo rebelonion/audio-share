@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Context accompanies each report but does not affect alert grouping.
+// Context accompanies each report. Only the message of a browser page error
+// affects alert grouping; see fingerprint.
 type ErrorEvent struct {
 	EventID        string       `json:"eventId"`
 	Operation      string       `json:"operation"`
@@ -83,8 +86,26 @@ func DatabaseErrorCode(err error) string {
 	return "unknown"
 }
 
+// Browser page errors share one operation, stage and cause whatever failed, so
+// their message is part of the group. Otherwise unrelated crashes (or one noisy
+// visitor) would combine into a single alert.
 func (e ErrorEvent) fingerprint(origin string) string {
-	return strings.Join([]string{origin, e.Operation, e.Method, e.Stage, e.Cause, SafeErrorCode(e.Code), e.Outcome}, "/")
+	parts := []string{origin, e.Operation, e.Method, e.Stage, e.Cause, SafeErrorCode(e.Code), e.Outcome}
+	if origin == "browser" && e.Operation == "page" && e.Context.Message != "" {
+		parts = append(parts, messageSignature(e.Context.Message))
+	}
+	return strings.Join(parts, "/")
+}
+
+var messageDigits = regexp.MustCompile(`[0-9]+`)
+
+// messageSignature ignores case, spacing and numbers, so line numbers, counts
+// and IDs within an otherwise identical message do not split the group.
+func messageSignature(message string) string {
+	normalized := strings.Join(strings.Fields(strings.ToLower(message)), " ")
+	normalized = messageDigits.ReplaceAllString(normalized, "#")
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:6])
 }
 
 var diagnosticLabel = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,100}$`)
