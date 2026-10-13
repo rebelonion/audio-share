@@ -78,12 +78,10 @@ func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := clientip.FromRequest(r)
-	source := "ip:" + ip
-	if session, ok := currentSessionID(r, h.secret); ok {
-		source = "session:" + session
-	}
+	// Sessions are not used here: a page reports errors before its first
+	// response sets the cookie, so one visit would count as several sources.
 	mac := hmac.New(sha256.New, h.secret)
-	mac.Write([]byte("error-report:" + source))
+	mac.Write([]byte("error-report:ip:" + ip + "\nua:" + r.UserAgent()))
 	sourceHash := hex.EncodeToString(mac.Sum(nil))
 	if !h.allow(sourceHash, ip) {
 		w.Header().Set("Retry-After", "60")

@@ -72,7 +72,7 @@ The table below lists server environment variables and their application default
 | `ERROR_ALERT_COOLDOWN` | Minimum time between alerts for the same error group | `30m` |
 | `ERROR_REPORT_RETENTION` | Raw report retention | `168h` |
 | `ERROR_BROWSER_THRESHOLD` | Browser reports required per group/window | `10` |
-| `ERROR_BROWSER_MIN_SOURCES` | Distinct browser sources required (signed session, or IP fallback) | `3` |
+| `ERROR_BROWSER_MIN_SOURCES` | Distinct browser sources required (IP address and user agent) | `3` |
 | `ERROR_SERVER_THRESHOLD` | Server reports required per group/window | `5` |
 | `ERROR_MUTATION_THRESHOLD` | Lower threshold for failed likes/preferences writes, recovery, contact, source submissions | `3` |
 | `ERROR_JOB_THRESHOLD` | Failed or degraded job runs required | `1` |

@@ -116,8 +116,8 @@ func TestErrorIngestionValidationSessionAndLimits(t *testing.T) {
 	if w := send(validReport); w.Code != 204 {
 		t.Fatal(w.Code)
 	}
-	if len(recorder.events) != 1 || recorder.events[0].sourceHash == "session-a" || len(recorder.events[0].sourceHash) != 64 {
-		t.Fatalf("session identity not hashed: %+v", recorder.events)
+	if len(recorder.events) != 1 || len(recorder.events[0].sourceHash) != 64 {
+		t.Fatalf("source identity not hashed: %+v", recorder.events)
 	}
 	for _, body := range []string{
 		strings.Replace(validReport, `"captcha"`, `"arbitrary-value"`, 1),
@@ -149,12 +149,13 @@ func TestErrorIngestionNoRecursiveFailureOrSessionCreation(t *testing.T) {
 }
 
 func TestErrorIngestionSourceIdentity(t *testing.T) {
-	record := func(secret, address, cookie string) string {
+	record := func(secret, address, userAgent, cookie string) string {
 		t.Helper()
 		recorder := &memoryErrors{}
 		r := httptest.NewRequest("POST", "/api/errors", strings.NewReader(validReport))
 		r.RemoteAddr = address
 		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("User-Agent", userAgent)
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
 		}
@@ -169,26 +170,23 @@ func TestErrorIngestionSourceIdentity(t *testing.T) {
 		}
 		return source
 	}
-	ipSource := record("secret", "192.0.2.1:1234", "")
-	if got := record("secret", "192.0.2.1:5678", ""); got != ipSource {
+	const chrome, firefox = "Mozilla/5.0 Chrome/154.0", "Mozilla/5.0 Firefox/140.0"
+	source := record("secret", "192.0.2.1:1234", chrome, "")
+	if got := record("secret", "192.0.2.1:5678", chrome, ""); got != source {
 		t.Fatal("same IP counted as different sources")
 	}
-	if got := record("secret", "192.0.2.2:1234", ""); got == ipSource {
+	if got := record("secret", "192.0.2.2:1234", chrome, ""); got == source {
 		t.Fatal("different IPs counted as the same source")
 	}
-	if got := record("secret", "192.0.2.1:1234", "invalid"); got != ipSource {
-		t.Fatal("invalid session did not fall back to IP")
+	if got := record("secret", "192.0.2.1:1234", firefox, ""); got == source {
+		t.Fatal("different browsers on one IP counted as the same source")
 	}
-	if got := record("different-secret", "192.0.2.1:1234", ""); got == ipSource {
+	if got := record("different-secret", "192.0.2.1:1234", chrome, ""); got == source {
 		t.Fatal("source hash not keyed by secret")
 	}
-	cookie := signValue("192.0.2.1", []byte("secret"))
-	sessionSource := record("secret", "192.0.2.1:1234", cookie)
-	if sessionSource == ipSource {
-		t.Fatal("session and IP namespaces collided")
-	}
-	if got := record("secret", "192.0.2.2:1234", cookie); got != sessionSource {
-		t.Fatal("valid session identity changed with IP")
+	// A session cookie set mid-visit must not split one browser into two sources.
+	if got := record("secret", "192.0.2.1:1234", chrome, signValue("session-a", []byte("secret"))); got != source {
+		t.Fatal("session cookie changed the source")
 	}
 }
 
