@@ -5,12 +5,14 @@ import {Button} from '@/components/ui/Button';
 import {Input} from '@/components/ui/Field';
 import CustomSelect from '@/components/CustomSelect';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
+import {useAdminPolling} from '@/components/admin/useAdminTask';
 import {Helmet} from 'react-helmet-async';
 import {Activity, Copy, LockKeyhole, RefreshCw, LogOut} from 'lucide-react';
-import {AdminAccessError, getLibraryHealth, getAdminSession, loginAdmin, logoutAdmin, type AdminSession, type LibraryHealth, type JobRun, type JobDetails, type HealthTrack} from '@/lib/operations';
+import {getLibraryHealth, getAdminSession, loginAdmin, logoutAdmin, type AdminSession, type LibraryHealth, type JobRun, type JobDetails, type HealthTrack} from '@/lib/operations';
 import AdminRequests from '@/components/admin/AdminRequests';
 import AdminAudio from '@/components/admin/AdminAudio';
 import AdminMessages from '@/components/admin/AdminMessages';
+import AdminTraffic from '@/components/admin/AdminTraffic';
 import {DEFAULT_TITLE} from '@/lib/config';
 
 const number = (value: number) => value.toLocaleString();
@@ -169,47 +171,17 @@ export default function Admin() {
     const [checking, setChecking] = useState(true);
     const [working, setWorking] = useState(false);
     const [logoutPending, setLogoutPending] = useState(false);
-    const [health, setHealth] = useState<LibraryHealth | null>(null);
-    const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const requestRef = useRef<AbortController | null>(null);
     const mounted = useRef(false);
     const connected = session !== null;
 
-    const clearHealth = useCallback(() => {
-        requestRef.current?.abort();
-        requestRef.current = null;
-        setHealth(null);
-        setLoading(false);
-    }, []);
-
     const onAuthFailure = useCallback((message: string) => {
-        clearHealth(); setSession(null); setSection('health'); setError(message);
-    }, [clearHealth]);
-
-    const refresh = useCallback(async () => {
-        if (requestRef.current) return;
-        const controller = new AbortController();
-        requestRef.current = controller;
-        setLoading(true);
-        setError('');
-        try {
-            const snapshot = await getLibraryHealth(controller.signal);
-            if (!controller.signal.aborted) setHealth(snapshot);
-        } catch (cause) {
-            if (controller.signal.aborted) return;
-            if (cause instanceof AdminAccessError) {
-                setSession(null);
-                setHealth(null);
-            }
-            setError(cause instanceof Error ? cause.message : 'Library health could not be refreshed.');
-        } finally {
-            if (requestRef.current === controller) {
-                requestRef.current = null;
-                setLoading(false);
-            }
-        }
+        setSession(null); setSection('health'); setError(message);
     }, []);
+    // Polls only while the Health section is open, keeping the last snapshot
+    // between visits; locking or losing the session clears it.
+    const {value: health, error: healthError, loading, refresh, reset: resetHealth} = useAdminPolling(getLibraryHealth, 30_000, onAuthFailure, connected && section === 'health');
+    useEffect(() => { if (!session) resetHealth(); }, [session, resetHealth]);
 
     useEffect(() => {
         mounted.current = true;
@@ -219,27 +191,25 @@ export default function Admin() {
         }).catch(cause => {
             if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not check your admin session.');
         }).finally(() => { if (!controller.signal.aborted) setChecking(false); });
-        return () => { mounted.current = false; controller.abort(); requestRef.current?.abort(); requestRef.current = null; };
+        return () => { mounted.current = false; controller.abort(); };
     }, []);
 
     useEffect(() => {
         if (!session) return;
         const expires = Date.parse(session.expiresAt);
-        const refreshVisible = () => {
-            if (Date.now() >= expires) {
-                clearHealth();
-                setSession(null);
-                setError('Your admin session expired. Unlock the dashboard again.');
-            } else if (!document.hidden) void refresh();
+        const expireIfDue = () => {
+            if (Date.now() < expires) return;
+            setSession(null);
+            setError('Your admin session expired. Unlock the dashboard again.');
         };
-        refreshVisible();
-        const interval = window.setInterval(refreshVisible, 30_000);
+        expireIfDue();
+        const interval = window.setInterval(expireIfDue, 30_000);
         // Clamp long lifetimes to the browser's maximum timeout; the interval
         // and visibility check also enforce expiry after suspension.
-        const timeout = window.setTimeout(refreshVisible, Math.min(Math.max(0, expires - Date.now()), 2_147_483_647));
-        document.addEventListener('visibilitychange', refreshVisible);
-        return () => { window.clearInterval(interval); window.clearTimeout(timeout); document.removeEventListener('visibilitychange', refreshVisible); };
-    }, [session, refresh, clearHealth]);
+        const timeout = window.setTimeout(expireIfDue, Math.min(Math.max(0, expires - Date.now()), 2_147_483_647));
+        document.addEventListener('visibilitychange', expireIfDue);
+        return () => { window.clearInterval(interval); window.clearTimeout(timeout); document.removeEventListener('visibilitychange', expireIfDue); };
+    }, [session]);
 
     const connect = async (event: FormEvent) => {
         event.preventDefault();
@@ -254,7 +224,7 @@ export default function Admin() {
         } finally { if (mounted.current) setWorking(false); }
     };
     const disconnect = async () => {
-        clearHealth(); setSession(null); setLogoutPending(true); setWorking(true); setError('');
+        setSession(null); setLogoutPending(true); setWorking(true); setError('');
         try {
             await logoutAdmin();
             if (mounted.current) setLogoutPending(false);
@@ -266,10 +236,11 @@ export default function Admin() {
     return <div className="mx-auto max-w-6xl">
         <Helmet><title>Admin - {DEFAULT_TITLE}</title><meta name="robots" content="noindex,nofollow" /></Helmet>
         <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-            <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Administration</p><h1 className="text-4xl sm:text-5xl">Library management</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Library health, source requests, audio flags, and messages.</p></div>
-            {connected && <div className="flex gap-2">{section === 'health' && <Button variant="secondary" disabled={loading} onClick={() => void refresh()}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</Button>}<Button variant="secondary" onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</Button></div>}
+            <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Administration</p><h1 className="text-4xl sm:text-5xl">Library management</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Library health, traffic, source requests, audio flags, and messages.</p></div>
+            {connected && <div className="flex gap-2">{section === 'health' && <Button variant="secondary" disabled={loading} onClick={refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</Button>}<Button variant="secondary" onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</Button></div>}
         </header>
-        {error && <Alert className="mb-5">{error}{health && section === 'health' && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</Alert>}
+        {error && <Alert className="mb-5">{error}</Alert>}
+        {connected && section === 'health' && healthError && <Alert className="mb-5">{healthError}{health && <span className="mt-1 block">Showing the last successful snapshot below.</span>}</Alert>}
         {checking && <p role="status">Checking admin session…</p>}
         {logoutPending && <Button variant="secondary" disabled={working} onClick={() => void disconnect()}>{working ? 'Locking dashboard…' : 'Retry locking dashboard'}</Button>}
         {!checking && !connected && !logoutPending && <Card as="form" onSubmit={event => void connect(event)} className="max-w-lg">
@@ -281,9 +252,10 @@ export default function Admin() {
             <Button type="submit" variant="primary" className="mt-4" disabled={working || !draftKey.trim()}>{working ? 'Unlocking…' : 'Unlock dashboard'}</Button>
         </Card>}
         {session && <p className="mb-3 text-xs text-[var(--muted-foreground)]">Session expires <Timestamp value={session.expiresAt} />.</p>}
-        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages']].map(([value, label]) => <Button variant={section === value ? 'selected' : 'secondary'} key={value} aria-pressed={section === value} onClick={() => setSection(value)}>{label}</Button>)}</nav>}
+        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['traffic', 'Traffic'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages']].map(([value, label]) => <Button variant={section === value ? 'selected' : 'secondary'} key={value} aria-pressed={section === value} onClick={() => setSection(value)}>{label}</Button>)}</nav>}
         {connected && section === 'health' && <p className="mb-5 text-xs text-[var(--muted-foreground)]">{health ? <>Snapshot: <Timestamp value={health.generatedAt} /> · refreshes every 30 seconds while visible</> : loading ? 'Loading library health…' : 'No snapshot loaded. Use Refresh to try again.'}</p>}
         {connected && section === 'health' && health && <HealthView health={health} />}
+        {connected && section === 'traffic' && <AdminTraffic onAuthFailure={onAuthFailure} />}
         {connected && section === 'requests' && <AdminRequests onAuthFailure={onAuthFailure} />}
         {connected && section === 'audio' && <AdminAudio onAuthFailure={onAuthFailure} />}
         {connected && section === 'messages' && <AdminMessages onAuthFailure={onAuthFailure} />}

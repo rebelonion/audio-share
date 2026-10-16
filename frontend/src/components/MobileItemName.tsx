@@ -3,6 +3,7 @@ import {Folder, Music, ShieldAlert, Unlink} from "lucide-react";
 import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
+import {isMatureAge} from '@/lib/api';
 import React from "react";
 
 interface ItemNameProps {
@@ -49,12 +50,15 @@ function MobileItemName({ item }: ItemNameProps) {
                     </Link>
                 ) : (
                     <div
-                        className="flex min-h-8 items-center"
+                        className="flex min-h-8 items-center gap-2"
                         title={item.title || item.name}
                     >
                         <div className="font-medium leading-snug line-clamp-2">
                             {item.title || item.name}
                         </div>
+                        {isMatureAge(item.ageLimit) && (
+                            <Badge size="sm">18+</Badge>
+                        )}
                     </div>
                 )}
                 {item.type === 'audio' && item.removalRequestedAt && (

@@ -19,6 +19,8 @@ type AdminHandler struct {
 	db           *sql.DB
 	requests     *services.RequestsService
 	HealthConfig services.HealthConfig
+	Traffic      *services.TrafficMeter
+	ActiveMedia  func() (streams, downloads int)
 }
 
 func NewAdminHandler(db *sql.DB, requests *services.RequestsService) *AdminHandler {
@@ -32,6 +34,10 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "health" && r.Method == http.MethodGet:
 		h.handleHealth(w, r)
+	case path == "traffic" && r.Method == http.MethodGet:
+		h.handleTraffic(w, r)
+	case path == "traffic/live" && r.Method == http.MethodGet:
+		h.handleTrafficLive(w)
 	// Audio
 	case path == "audio/sources" && r.Method == http.MethodGet:
 		h.handleAudioSources(w, r)
@@ -354,4 +360,35 @@ func (h *AdminHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	health.Config = h.HealthConfig
 	writeJSON(w, http.StatusOK, health)
+}
+
+func (h *AdminHandler) handleTraffic(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	rangeName := r.URL.Query().Get("range")
+	if rangeName == "" {
+		rangeName = "24h"
+	}
+	if !services.ValidTrafficRange(rangeName) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Unknown traffic range"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	report, err := services.ReadTraffic(ctx, h.db, rangeName)
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not load traffic"})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (h *AdminHandler) handleTrafficLive(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	live := h.Traffic.Live()
+	if h.ActiveMedia != nil {
+		streams, downloads := h.ActiveMedia()
+		live.ActiveStreams, live.ActiveDownloads = int64(streams), int64(downloads)
+	}
+	writeJSON(w, http.StatusOK, live)
 }

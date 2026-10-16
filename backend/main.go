@@ -110,7 +110,9 @@ func run() error {
 	if err := validateWebFiles(cfg); err != nil {
 		return err
 	}
-	handler, err := appHandler(cfg, db, fsService, l)
+	traffic := services.NewTrafficMeter(db.DB())
+	traffic.Errors = db.Errors
+	handler, err := appHandler(cfg, db, fsService, l, traffic)
 	if err != nil {
 		return err
 	}
@@ -120,10 +122,11 @@ func run() error {
 	}
 	defer listener.Close()
 	log.Printf("Starting build %s on %s; management on %s", buildID, listener.Addr(), admin.Addr())
-	return serveUntilStopped(ctx, listener, l.public(handler), admin, l, nil)
+	traffic.Start()
+	return serveUntilStopped(ctx, listener, l.public(handler), admin, l, traffic.Close)
 }
 
-func appHandler(cfg *config.Config, db *services.Database, fsService *services.FileSystemService, l *lifecycle) (http.Handler, error) {
+func appHandler(cfg *config.Config, db *services.Database, fsService *services.FileSystemService, l *lifecycle, traffic *services.TrafficMeter) (http.Handler, error) {
 	webhookService := services.NewWebhookService(cfg.IndexWebhookURL, cfg.IndexWebhookToken)
 	searchService := services.NewSearchService(db, fsService, webhookService)
 
@@ -252,6 +255,8 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	preferencesHandler := handlers.NewPreferencesHandler(cfg.SessionSecret)
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
 	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
+	adminHandler.Traffic = traffic
+	adminHandler.ActiveMedia = l.activeMedia
 	adminHandler.HealthConfig = services.HealthConfig{BuildID: buildID, IndexSchedule: cfg.IndexSchedule,
 		WaveformSchedule: cfg.WaveformCron, ErrorReportsEnabled: cfg.NtfyErrorTopic != ""}
 
@@ -332,7 +337,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 		handler = handlers.ReportHTTPErrors(db.Errors, handler)
 	}
 	handler = securityHeaders.Middleware(rateLimiter.Middleware(corsMiddleware(cfg.CORSOrigins, handler)))
-	return clientIPs.Middleware(handler), nil
+	return handlers.CountTraffic(traffic, clientIPs.Middleware(handler)), nil
 }
 
 func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {

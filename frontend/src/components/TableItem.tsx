@@ -6,6 +6,7 @@ import React from "react";
 import {FileSystemItem} from "@/types";
 import {Link} from 'react-router';
 import PosterImage from '@/components/PosterImage';
+import {isMatureAge} from '@/lib/api';
 
 interface TableItemProps {
     item: FileSystemItem;
@@ -67,6 +68,9 @@ function TableItem({ item, showDurationColumn, handleAudioSelect, copiedShareKey
                             </div>
                         </div>
                         <span className="truncate" title={item.title || item.name}>{item.title || item.name}</span>
+                        {isMatureAge(item.ageLimit) && (
+                            <Badge size="sm" className="ml-2">18+</Badge>
+                        )}
                         {item.removalRequestedAt && (
                             <Badge size="sm" className="ml-2">Removal requested</Badge>
                         )}

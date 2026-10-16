@@ -83,7 +83,7 @@ func TestIntegrationAudioSurvivesShutdownAndGrantWorksOnNextInstance(t *testing.
 	start := func() (string, *lifecycle, <-chan error) {
 		t.Helper()
 		l := newLifecycle(db.CheckSchema)
-		handler, err := appHandler(cfg, db, fs, l)
+		handler, err := appHandler(cfg, db, fs, l, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -163,7 +163,7 @@ func TestIntegrationAudioSurvivesShutdownAndGrantWorksOnNextInstance(t *testing.
 		}
 	}
 	old.mu.Lock()
-	active := old.media
+	active := old.streams + old.downloads
 	old.mu.Unlock()
 	if active != 2 {
 		t.Fatalf("expected two active media responses, got %d", active)

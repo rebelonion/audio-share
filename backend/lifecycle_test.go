@@ -38,7 +38,7 @@ func TestRetirementAndShutdownPreserveLiveResponse(t *testing.T) {
 			w.Write([]byte("new request"))
 			return
 		}
-		done := l.startMedia()
+		done := l.startMedia(false)
 		defer done()
 		w.Write([]byte(payload[:100]))
 		w.(http.Flusher).Flush()

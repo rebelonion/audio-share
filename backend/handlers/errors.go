@@ -170,6 +170,28 @@ func (w *errorResponseWriter) Write(p []byte) (int, error) {
 	}
 	return n, err
 }
+
+// ReadFrom passes copies through so the server's sendfile path still applies.
+func (w *errorResponseWriter) ReadFrom(src io.Reader) (int64, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	var n int64
+	var err error
+	if from, ok := w.ResponseWriter.(io.ReaderFrom); ok {
+		n, err = from.ReadFrom(src)
+	} else {
+		n, err = io.Copy(writerOnly{w.ResponseWriter}, src)
+	}
+	if err != nil && !isClientDisconnect(err) {
+		w.writeError = err
+	}
+	return n, err
+}
+
+// writerOnly hides a writer's ReadFrom so io.Copy uses its Write.
+type writerOnly struct{ io.Writer }
+
 func (w *errorResponseWriter) Flush() {
 	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)

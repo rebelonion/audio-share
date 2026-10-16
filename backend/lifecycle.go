@@ -20,12 +20,13 @@ import (
 )
 
 type lifecycle struct {
-	mu                    sync.Mutex
-	state                 string
-	requests, media, jobs int
-	check                 func(context.Context) error
-	stop                  chan struct{}
-	once                  sync.Once
+	mu                 sync.Mutex
+	state              string
+	requests, jobs     int
+	streams, downloads int
+	check              func(context.Context) error
+	stop               chan struct{}
+	once               sync.Once
 }
 
 func newLifecycle(check func(context.Context) error) *lifecycle {
@@ -69,11 +70,22 @@ func (l *lifecycle) public(next http.Handler) http.Handler {
 	})
 }
 
-func (l *lifecycle) startMedia() func() {
+// startMedia counts an open audio response until the returned function runs.
+func (l *lifecycle) startMedia(download bool) func() {
+	count := &l.streams
+	if download {
+		count = &l.downloads
+	}
 	l.mu.Lock()
-	l.media++
+	*count++
 	l.mu.Unlock()
-	return func() { l.mu.Lock(); l.media--; l.mu.Unlock() }
+	return func() { l.mu.Lock(); *count--; l.mu.Unlock() }
+}
+
+func (l *lifecycle) activeMedia() (streams, downloads int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.streams, l.downloads
 }
 
 func (l *lifecycle) job(fn func()) func() {
@@ -104,7 +116,7 @@ func (l *lifecycle) management() http.Handler {
 			Requests int    `json:"activeRequests"`
 			Media    int    `json:"activeMediaResponses"`
 			Jobs     int    `json:"activeJobs"`
-		}{buildID, l.state, l.requests, l.media, l.jobs})
+		}{buildID, l.state, l.requests, l.streams + l.downloads, l.jobs})
 	})
 	for _, action := range []string{"retire", "resume", "shutdown"} {
 		mux.HandleFunc("POST /"+action, func(w http.ResponseWriter, r *http.Request) {
@@ -151,17 +163,20 @@ func serveUntilStopped(ctx context.Context, public net.Listener, handler http.Ha
 	l.mu.Lock()
 	l.state = "stopping"
 	l.mu.Unlock()
+	var shutdownErr error
 	if public != nil {
 		// No deployment deadline: the orchestrator must not kill a live response.
-		if err := web.Shutdown(context.Background()); err != nil {
-			return err
-		}
+		shutdownErr = web.Shutdown(context.Background())
 	}
+	// Runs even if shutdown failed, so jobs finish and final counts are saved.
 	if finishJobs != nil {
 		finishJobs()
 	}
-	if err := admin.Shutdown(context.Background()); err != nil {
-		return err
+	if err := admin.Shutdown(context.Background()); err != nil && shutdownErr == nil {
+		shutdownErr = err
+	}
+	if shutdownErr != nil {
+		return shutdownErr
 	}
 	if errors.Is(serveErr, http.ErrServerClosed) {
 		return nil

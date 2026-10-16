@@ -35,7 +35,10 @@ var chaptersSchema string
 //go:embed migrations/009_collections.sql
 var collectionsSchema string
 
-const SchemaVersion = 9
+//go:embed migrations/010_traffic.sql
+var trafficSchema string
+
+const SchemaVersion = 10
 
 type schemaMigration struct {
 	version       int
@@ -53,6 +56,7 @@ var schemaMigrations = []schemaMigration{
 	{7, 5, shareSubmissionsSchema},
 	{8, 5, chaptersSchema},
 	{9, 9, collectionsSchema},
+	{10, 9, trafficSchema},
 }
 
 // Migrate adopts the current legacy schema or creates a fresh one. All changes,

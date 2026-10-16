@@ -126,3 +126,19 @@ it('locks all admin sections when a management endpoint rejects the session', as
     expect(screen.queryByText('Private conflict')).toBeNull();
     expect(screen.queryByLabelText('Message')).toBeNull();
 });
+
+it('polls health only while the Health section is open and keeps the snapshot between visits', async () => {
+    vi.useFakeTimers();
+    vi.mocked(getAdminSession).mockResolvedValue({expiresAt: new Date(Date.now() + 3_600_000).toISOString()});
+    mount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(getLibraryHealth).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', {name: 'Messages'}));
+    await act(async () => { await vi.advanceTimersByTimeAsync(90_000); });
+    expect(getLibraryHealth).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', {name: 'Health'}));
+    // The kept snapshot shows straight away while it refreshes.
+    expect(screen.getByText('Private conflict')).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(getLibraryHealth).toHaveBeenCalledTimes(2);
+});

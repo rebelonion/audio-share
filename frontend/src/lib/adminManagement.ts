@@ -46,3 +46,27 @@ export const listAudioSources = (signal: AbortSignal) => request<AudioSource[]>(
 export const setAudioUnavailable = (key: string, unavailable: boolean, signal: AbortSignal) => request(`/api/admin/audio/${encodeURIComponent(key)}/unavailable`, signal, 'PATCH', {unavailable});
 export const setAudioRemovalRequested = (key: string, removalRequested: boolean, signal: AbortSignal) => request(`/api/admin/audio/${encodeURIComponent(key)}/removal-request`, signal, 'PATCH', {removalRequested});
 export const sendTargetedMessage = (body: TargetedMessageDraft, signal: AbortSignal) => request<{id: number}>('/api/admin/targeted-messages', signal, 'POST', body);
+
+export type TrafficKind = 'stream' | 'download' | 'artwork' | 'api' | 'web';
+export type TrafficRange = '1h' | '24h' | '7d' | '30d';
+export interface TrafficCount {bytes: number; requests: number}
+export interface TrafficWindow {window: TrafficRange | 'all'; total: TrafficCount; byKind: Partial<Record<TrafficKind, TrafficCount>>}
+export interface TrafficReport {
+    generatedAt: string;
+    trackingSince: string | null;
+    windows: TrafficWindow[];
+    range: TrafficRange;
+    rangeTotal: TrafficWindow;
+    bucketSeconds: number;
+    points: {at: string; bytes: number; byKind: Partial<Record<TrafficKind, number>>}[];
+}
+export interface TrafficLive {
+    intervalSeconds: number;
+    samples: {at: string; bytes: number; seconds: number}[];
+    activeStreams: number;
+    activeDownloads: number;
+    discarded: TrafficCount;
+    saving: {lastSavedAt: string | null; failingSince: string | null; lastError: string; unsaved: TrafficCount; pruneError: string};
+}
+export const getTraffic = (range: TrafficRange, signal: AbortSignal) => request<TrafficReport>(`/api/admin/traffic?range=${range}`, signal);
+export const getTrafficLive = (signal: AbortSignal) => request<TrafficLive>('/api/admin/traffic/live', signal);

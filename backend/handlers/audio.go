@@ -27,7 +27,7 @@ import (
 )
 
 type AudioHandler struct {
-	onMediaStart           func() func()
+	onMediaStart           func(download bool) func()
 	fs                     *services.FileSystemService
 	db                     *sql.DB
 	streamBytesPerSecond   int64
@@ -54,7 +54,7 @@ type AccessFailureLimiter interface {
 }
 
 type AudioHandlerOptions struct {
-	OnMediaStart           func() func()
+	OnMediaStart           func(download bool) func()
 	StreamBytesPerSecond   int64
 	StreamBurstBytes       int64
 	DownloadBytesPerSecond int64
@@ -108,34 +108,21 @@ func NewAudioHandler(fs *services.FileSystemService, db *sql.DB, options AudioHa
 	}
 }
 
+// parseAudioRoute splits /api/audio/key/{key}[/thumbnail|/meta|/waveform|/download|/access].
+func parseAudioRoute(urlPath string) (key, action string) {
+	path := strings.Trim(strings.TrimPrefix(urlPath, "/api/audio/key/"), "/")
+	for _, suffix := range []string{"access", "thumbnail", "meta", "waveform", "download"} {
+		if key, ok := strings.CutSuffix(path, "/"+suffix); ok {
+			return key, suffix
+		}
+	}
+	return path, "stream"
+}
+
 func (h *AudioHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
 
-	// Path format: /api/audio/key/{key}[/thumbnail|/meta|/waveform|/download|/access]
-	path := strings.TrimPrefix(r.URL.Path, "/api/audio/key/")
-	path = strings.Trim(path, "/")
-
-	var key, action string
-	if strings.HasSuffix(path, "/access") {
-		key = strings.TrimSuffix(path, "/access")
-		action = "access"
-	} else if strings.HasSuffix(path, "/thumbnail") {
-		key = strings.TrimSuffix(path, "/thumbnail")
-		action = "thumbnail"
-	} else if strings.HasSuffix(path, "/meta") {
-		key = strings.TrimSuffix(path, "/meta")
-		action = "meta"
-	} else if strings.HasSuffix(path, "/waveform") {
-		key = strings.TrimSuffix(path, "/waveform")
-		action = "waveform"
-	} else if strings.HasSuffix(path, "/download") {
-		key = strings.TrimSuffix(path, "/download")
-		action = "download"
-	} else {
-		key = path
-		action = "stream"
-	}
-
+	key, action := parseAudioRoute(r.URL.Path)
 	if key == "" {
 		http.Error(w, "Key required", http.StatusBadRequest)
 		return
@@ -588,7 +575,7 @@ func (h *AudioHandler) handleStream(w http.ResponseWriter, r *http.Request, key 
 	}
 
 	if r.Method == http.MethodGet && h.onMediaStart != nil {
-		done := h.onMediaStart()
+		done := h.onMediaStart(download)
 		defer done()
 	}
 	reader := newThrottledReadSeeker(

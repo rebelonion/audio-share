@@ -41,7 +41,7 @@ func member(value, options string) bool {
 }
 
 func (e ErrorEvent) Valid() bool {
-	return member(e.Operation, "captcha|session|media-access|playback|download|browse|search|recommendations|recent|popular|new-tracks|unavailable-tracks|stats|requests|likes|profile|recovery|preferences|contact|source-request|targeted-message|metadata|waveform|artwork|page|version|playback-record|admin|reindex|playback-cleanup|index-webhook") &&
+	return member(e.Operation, "captcha|session|media-access|playback|download|browse|search|recommendations|recent|popular|new-tracks|unavailable-tracks|stats|requests|likes|profile|recovery|preferences|contact|source-request|targeted-message|metadata|waveform|artwork|page|version|playback-record|admin|reindex|playback-cleanup|index-webhook|traffic") &&
 		member(e.Stage, "request|response|setup|solve|verify|play|read|render|import|run|normalize|deliver|store|parse") &&
 		member(e.Cause, "network|timeout|unavailable|invalid-response|unexpected|media-network|media-decode|media-source|missing-file|io|partial-failure|invalid-data|panic|cloudflare") &&
 		member(e.Outcome, "blocked|degraded") && (e.Method == "" || member(e.Method, "GET|HEAD|POST|PUT|PATCH|DELETE")) && e.Status >= 0 && e.Status <= 599
