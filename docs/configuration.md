@@ -55,10 +55,6 @@ The table below lists server environment variables and their application default
 | `INDEX_SCHEDULE` | Cron expression for automatic reindexing (e.g., `0 */6 * * *`) | - (disabled) |
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
 | `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen to audio files` |
-| `BANNER_MESSAGE` | Optional global info banner message (injected into frontend) | - |
-| `BANNER_VARIANT` | Banner style: `info`, `warning`, or `success` | `info` |
-| `BANNER_LINK_TEXT` | Optional banner link text | - |
-| `BANNER_LINK_URL` | Optional banner link URL, internal path or absolute URL | - |
 | `POPULAR_BANLIST` | Comma-separated words; tracks whose title contains any of them (case-insensitive) are hidden from the popular carousel | - |
 | `RYBBIT_URL` | Rybbit base URL without a trailing slash; the server appends `/api/script.js` | - |
 | `RYBBIT_SITE_ID` | Rybbit site ID; both Rybbit settings are required to enable analytics | - |

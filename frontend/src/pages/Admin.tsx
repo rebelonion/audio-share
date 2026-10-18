@@ -13,6 +13,7 @@ import AdminRequests from '@/components/admin/AdminRequests';
 import AdminAudio from '@/components/admin/AdminAudio';
 import AdminMessages from '@/components/admin/AdminMessages';
 import AdminTraffic from '@/components/admin/AdminTraffic';
+import AdminBanner from '@/components/admin/AdminBanner';
 import {DEFAULT_TITLE} from '@/lib/config';
 
 const number = (value: number) => value.toLocaleString();
@@ -236,7 +237,7 @@ export default function Admin() {
     return <div className="mx-auto max-w-6xl">
         <Helmet><title>Admin - {DEFAULT_TITLE}</title><meta name="robots" content="noindex,nofollow" /></Helmet>
         <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-            <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Administration</p><h1 className="text-4xl sm:text-5xl">Library management</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Library health, traffic, source requests, audio flags, and messages.</p></div>
+            <div><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-[var(--primary)]"><Activity className="h-4 w-4" /> Administration</p><h1 className="text-4xl sm:text-5xl">Library management</h1><p className="mt-2 text-sm text-[var(--muted-foreground)]">Library health, traffic, source requests, audio flags, messages, and the site banner.</p></div>
             {connected && <div className="flex gap-2">{section === 'health' && <Button variant="secondary" disabled={loading} onClick={refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh</Button>}<Button variant="secondary" onClick={() => void disconnect()}><LogOut className="h-4 w-4" /> Lock dashboard</Button></div>}
         </header>
         {error && <Alert className="mb-5">{error}</Alert>}
@@ -252,12 +253,13 @@ export default function Admin() {
             <Button type="submit" variant="primary" className="mt-4" disabled={working || !draftKey.trim()}>{working ? 'Unlocking…' : 'Unlock dashboard'}</Button>
         </Card>}
         {session && <p className="mb-3 text-xs text-[var(--muted-foreground)]">Session expires <Timestamp value={session.expiresAt} />.</p>}
-        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['traffic', 'Traffic'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages']].map(([value, label]) => <Button variant={section === value ? 'selected' : 'secondary'} key={value} aria-pressed={section === value} onClick={() => setSection(value)}>{label}</Button>)}</nav>}
+        {connected && <nav aria-label="Admin sections" className="mb-6 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">{[['health', 'Health'], ['traffic', 'Traffic'], ['requests', 'Requests'], ['audio', 'Audio'], ['messages', 'Messages'], ['banner', 'Banner']].map(([value, label]) => <Button variant={section === value ? 'selected' : 'secondary'} key={value} aria-pressed={section === value} onClick={() => setSection(value)}>{label}</Button>)}</nav>}
         {connected && section === 'health' && <p className="mb-5 text-xs text-[var(--muted-foreground)]">{health ? <>Snapshot: <Timestamp value={health.generatedAt} /> · refreshes every 30 seconds while visible</> : loading ? 'Loading library health…' : 'No snapshot loaded. Use Refresh to try again.'}</p>}
         {connected && section === 'health' && health && <HealthView health={health} />}
         {connected && section === 'traffic' && <AdminTraffic onAuthFailure={onAuthFailure} />}
         {connected && section === 'requests' && <AdminRequests onAuthFailure={onAuthFailure} />}
         {connected && section === 'audio' && <AdminAudio onAuthFailure={onAuthFailure} />}
         {connected && section === 'messages' && <AdminMessages onAuthFailure={onAuthFailure} />}
+        {connected && section === 'banner' && <AdminBanner onAuthFailure={onAuthFailure} />}
     </div>;
 }

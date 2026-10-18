@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -421,5 +423,73 @@ func TestSPAHandlerReusesShareLookupForMetadataAndInitialData(t *testing.T) {
 	}
 	if meta.Title != "Track title" || meta.Artist != "Artist" || !meta.Thumbnail {
 		t.Fatalf("unexpected initial share metadata: %#v", meta)
+	}
+}
+
+type bannerStub struct {
+	banner *services.Banner
+	err    error
+}
+
+func (s bannerStub) Current(context.Context) (*services.Banner, error) { return s.banner, s.err }
+
+func TestSPAHandlerInjectsCurrentBanner(t *testing.T) {
+	banner := &services.Banner{Message: `Closed </script><script>alert(1)</script>`, Variant: "warning", LinkText: "More", LinkURL: "/requests"}
+	handler := newSnapshotTestHandler(t, SPAHandlerOptions{Banner: bannerStub{banner: banner}})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/about", nil))
+	body := rec.Body.String()
+	const prefix = `<script>window.__BANNER__=`
+	start := strings.Index(body, prefix)
+	if start < 0 {
+		t.Fatalf("banner not injected: %s", body)
+	}
+	if strings.Contains(body, "<script>alert(1)") {
+		t.Fatalf("banner message escaped its script: %s", body)
+	}
+	start += len(prefix)
+	end := strings.Index(body[start:], "</script>")
+	var got services.Banner
+	if err := json.Unmarshal([]byte(body[start:start+end]), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got != *banner {
+		t.Fatalf("got %+v, want %+v", got, *banner)
+	}
+}
+
+func TestSPAHandlerOmitsBannerWhenNoneOrUnavailable(t *testing.T) {
+	for name, source := range map[string]bannerSource{
+		"none":        bannerStub{},
+		"unavailable": bannerStub{err: errors.New("db down")},
+	} {
+		handler := newSnapshotTestHandler(t, SPAHandlerOptions{Banner: source})
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "__BANNER__") {
+			t.Errorf("%s: status %d, body %s", name, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestAdminBannerRoutesNotFoundWithoutStore(t *testing.T) {
+	handler := NewAdminHandler(nil, nil)
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(method, "/api/admin/banner", strings.NewReader(`{"message":"m"}`)))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", method, rec.Code)
+		}
+	}
+}
+
+func TestAdminBannerRejectsOversizedBody(t *testing.T) {
+	handler := NewAdminHandler(nil, nil)
+	handler.Banner = services.NewBannerStore(nil)
+	rec := httptest.NewRecorder()
+	body := `{"message":"` + strings.Repeat("a", 17*1024) + `"}`
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/admin/banner", strings.NewReader(body)))
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status %d, want 413: %s", rec.Code, rec.Body.String())
 	}
 }

@@ -4,6 +4,7 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import AdminRequests from './AdminRequests';
 import AdminAudio from './AdminAudio';
 import AdminMessages from './AdminMessages';
+import AdminBanner from './AdminBanner';
 import * as api from '@/lib/adminManagement';
 import {AdminAccessError} from '@/lib/operations';
 import type {SourceRequest} from '@/types';
@@ -142,4 +143,67 @@ it('clears removal confirmation when filtering the selected track out', async ()
     expect((screen.getByRole('button', {name: 'Mark removal requested'}) as HTMLButtonElement).disabled).toBe(false);
     click('Mark source unavailable');
     await waitFor(() => expect(api.setAudioUnavailable).toHaveBeenCalledWith('ocean', true, expect.any(AbortSignal)));
+});
+
+it('shows, updates, and removes the site banner with a preview', async () => {
+    vi.mocked(api.getSiteBanner).mockResolvedValue({banner: null});
+    vi.mocked(api.saveSiteBanner).mockImplementation(async body => ({banner: {...body, message: body.message.trim()}}));
+    vi.mocked(api.clearSiteBanner).mockResolvedValue({banner: null});
+    render(<AdminBanner onAuthFailure={authFailure} />);
+    await screen.findByText('No banner');
+    expect((screen.getByRole('button', {name: 'Show banner'}) as HTMLButtonElement).disabled).toBe(true);
+    change('Message', ' Requests are paused. '); select('Banner style', 'Warning'); change('Link text (optional)', 'Details'); change('Link URL (optional)', '/requests');
+    const preview = screen.getByRole('region', {name: 'Banner preview'});
+    expect(preview.textContent).toContain('Requests are paused.');
+    expect(preview.textContent).toContain('Details');
+    click('Show banner');
+    await screen.findByText(/Banner saved/);
+    expect(api.saveSiteBanner).toHaveBeenCalledWith({message: ' Requests are paused. ', variant: 'warning', linkText: 'Details', linkUrl: '/requests'}, expect.any(AbortSignal));
+    expect(screen.getByText('Showing')).toBeTruthy();
+    expect((screen.getByRole('button', {name: 'Update banner'}) as HTMLButtonElement).disabled).toBe(true);
+    click('Remove banner');
+    await screen.findByText(/Banner removed/);
+    expect(screen.getByText('No banner')).toBeTruthy();
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('');
+});
+
+it('shows banner validation errors from the server', async () => {
+    vi.mocked(api.getSiteBanner).mockResolvedValue({banner: {message: 'Old', variant: 'info'}});
+    vi.mocked(api.saveSiteBanner).mockRejectedValue(new Error('link text and link URL must be set together'));
+    render(<AdminBanner onAuthFailure={authFailure} />);
+    await screen.findByText('Showing');
+    change('Link text (optional)', 'Details');
+    click('Update banner');
+    await screen.findByText('link text and link URL must be set together');
+    expect((screen.getByLabelText('Link text (optional)') as HTMLInputElement).value).toBe('Details');
+});
+
+it('offers a retry when the banner fails to load', async () => {
+    vi.mocked(api.getSiteBanner).mockRejectedValueOnce(new Error('Could not load data. Try refreshing.')).mockResolvedValueOnce({banner: {message: 'Live', variant: 'info'}});
+    render(<AdminBanner onAuthFailure={authFailure} />);
+    await screen.findByText('Could not load data. Try refreshing.');
+    expect(screen.queryByLabelText('Message')).toBeNull();
+    click('Retry');
+    await screen.findByText('Showing');
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('Live');
+});
+
+it('counts banner length like the server and labels the pending action', async () => {
+    vi.mocked(api.getSiteBanner).mockResolvedValue({banner: {message: 'Live', variant: 'info'}});
+    let finishRemove!: () => void;
+    vi.mocked(api.clearSiteBanner).mockImplementation(() => new Promise(done => { finishRemove = () => done({banner: null}); }));
+    render(<AdminBanner onAuthFailure={authFailure} />);
+    await screen.findByText('Showing');
+    // 500 emoji are 1,000 UTF-16 units but 500 characters to the server.
+    change('Message', '🎧'.repeat(500));
+    expect(screen.getByText('500 / 500')).toBeTruthy();
+    expect((screen.getByRole('button', {name: 'Update banner'}) as HTMLButtonElement).disabled).toBe(false);
+    change('Message', '🎧'.repeat(501));
+    expect(screen.getByText('1 character over the 500-character limit')).toBeTruthy();
+    expect((screen.getByRole('button', {name: 'Update banner'}) as HTMLButtonElement).disabled).toBe(true);
+    click('Remove banner');
+    expect(screen.getByRole('button', {name: 'Removing…'})).toBeTruthy();
+    expect(screen.getByRole('button', {name: 'Update banner'})).toBeTruthy();
+    await act(async () => finishRemove());
+    await screen.findByText(/Banner removed/);
 });

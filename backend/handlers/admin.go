@@ -20,6 +20,7 @@ type AdminHandler struct {
 	requests     *services.RequestsService
 	HealthConfig services.HealthConfig
 	Traffic      *services.TrafficMeter
+	Banner       *services.BannerStore
 	ActiveMedia  func() (streams, downloads int)
 }
 
@@ -38,6 +39,12 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleTraffic(w, r)
 	case path == "traffic/live" && r.Method == http.MethodGet:
 		h.handleTrafficLive(w)
+	case path == "banner" && h.Banner != nil && r.Method == http.MethodGet:
+		h.handleBannerGet(w, r)
+	case path == "banner" && h.Banner != nil && r.Method == http.MethodPut:
+		h.handleBannerSet(w, r)
+	case path == "banner" && h.Banner != nil && r.Method == http.MethodDelete:
+		h.handleBannerClear(w, r)
 	// Audio
 	case path == "audio/sources" && r.Method == http.MethodGet:
 		h.handleAudioSources(w, r)
@@ -391,4 +398,59 @@ func (h *AdminHandler) handleTrafficLive(w http.ResponseWriter) {
 		live.ActiveStreams, live.ActiveDownloads = int64(streams), int64(downloads)
 	}
 	writeJSON(w, http.StatusOK, live)
+}
+
+// Banner handlers
+
+type bannerResponse struct {
+	Banner *services.Banner `json:"banner"`
+}
+
+func (h *AdminHandler) handleBannerGet(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	banner, err := h.Banner.Get(r.Context())
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: banner read failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not load the banner"})
+		return
+	}
+	writeJSON(w, http.StatusOK, bannerResponse{Banner: banner})
+}
+
+func (h *AdminHandler) handleBannerSet(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var body services.Banner
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Banner is too large"})
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return
+	}
+	banner, err := h.Banner.Set(r.Context(), body)
+	var invalid *services.BannerError
+	if errors.As(err, &invalid) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": invalid.Error()})
+		return
+	}
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: banner save failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not save the banner"})
+		return
+	}
+	writeJSON(w, http.StatusOK, bannerResponse{Banner: banner})
+}
+
+func (h *AdminHandler) handleBannerClear(w http.ResponseWriter, r *http.Request) {
+	if err := h.Banner.Clear(r.Context()); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: banner clear failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not remove the banner"})
+		return
+	}
+	writeJSON(w, http.StatusOK, bannerResponse{})
 }

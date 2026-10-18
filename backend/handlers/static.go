@@ -1,22 +1,22 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"html"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/onion/audio-share-backend/services"
 )
 
 type FrontendConfig struct {
 	DefaultTitle       string `json:"defaultTitle,omitempty"`
 	DefaultDescription string `json:"defaultDescription,omitempty"`
-	BannerMessage      string `json:"bannerMessage,omitempty"`
-	BannerVariant      string `json:"bannerVariant,omitempty"`
-	BannerLinkText     string `json:"bannerLinkText,omitempty"`
-	BannerLinkURL      string `json:"bannerLinkUrl,omitempty"`
 	CapPublicEndpoint  string `json:"capPublicEndpoint,omitempty"`
 	BuildID            string `json:"buildId,omitempty"`
 	ErrorReporting     bool   `json:"errorReporting,omitempty"`
@@ -31,6 +31,11 @@ type SPAHandler struct {
 	searchService   snapshotSearchService
 	requestsService snapshotRequestsService
 	sessionSecret   []byte
+	banner          bannerSource
+}
+
+type bannerSource interface {
+	Current(context.Context) (*services.Banner, error)
 }
 
 type SPAHandlerOptions struct {
@@ -38,6 +43,7 @@ type SPAHandlerOptions struct {
 	SearchService   snapshotSearchService
 	RequestsService snapshotRequestsService
 	SessionSecret   string
+	Banner          bannerSource
 }
 
 func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSiteID string, db *sql.DB, options ...SPAHandlerOptions) *SPAHandler {
@@ -78,6 +84,7 @@ func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSit
 		handler.searchService = options[0].SearchService
 		handler.requestsService = options[0].RequestsService
 		handler.sessionSecret = []byte(options[0].SessionSecret)
+		handler.banner = options[0].Banner
 	}
 	return handler
 }
@@ -301,13 +308,13 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 		b.WriteString(`<meta name="twitter:card" content="summary_large_image">`)
 	}
 
-	doc = strings.Replace(doc, "</head>", b.String()+"</head>", 1)
-
 	snapshot, initialData := h.renderPageSnapshot(r, meta, shareRow, shareLookupErr)
+	b.WriteString(initialData)
+	b.WriteString(h.bannerScript(r))
+
+	// One pass per insertion point; snapshot pages can be large.
+	doc = strings.Replace(doc, "</head>", b.String()+"</head>", 1)
 	doc = strings.Replace(doc, `<div id="root"></div>`, `<div id="root">`+snapshot+`</div>`, 1)
-	if initialData != "" {
-		doc = strings.Replace(doc, "</head>", initialData+"</head>", 1)
-	}
 
 	cacheControl := "no-cache"
 	if r.URL.Path == "/admin" {
@@ -323,4 +330,26 @@ func (h *SPAHandler) serveRoute(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}
 	w.Write([]byte(doc))
+}
+
+// bannerScript exposes the admin-set site banner to the frontend. It is read
+// per response so changes apply without a redeploy.
+func (h *SPAHandler) bannerScript(r *http.Request) string {
+	if h.banner == nil {
+		return ""
+	}
+	banner, err := h.banner.Current(r.Context())
+	// A visitor leaving mid-wait is not a read failure.
+	if err != nil && r.Context().Err() == nil {
+		log.Printf("spa: banner read failed: %v", err)
+	}
+	if banner == nil {
+		return ""
+	}
+	// json.Marshal escapes <, >, and & so the message cannot close the script.
+	data, err := json.Marshal(banner)
+	if err != nil {
+		return ""
+	}
+	return `<script>window.__BANNER__=` + string(data) + `</script>`
 }

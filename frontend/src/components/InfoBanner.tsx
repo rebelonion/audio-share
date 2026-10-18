@@ -3,7 +3,7 @@ import {IconButton} from '@/components/ui/Button'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
-import { INFO_BANNER, type BannerVariant } from '@/lib/config'
+import { INFO_BANNER, type BannerVariant, type SiteBanner as BannerContent } from '@/lib/config'
 import { useRybbit } from '@/hooks/useRybbit'
 
 const styles: Record<BannerVariant, {
@@ -28,9 +28,10 @@ const styles: Record<BannerVariant, {
   },
 }
 
-function getDismissKey(message: string, linkUrl: string) {
+// Any visible change to the banner shows it again to visitors who dismissed it.
+function getDismissKey({ message, variant, linkText, linkUrl }: BannerContent) {
   let hash = 5381
-  const value = `${message}|${linkUrl}`
+  const value = `${message}|${variant}|${linkText ?? ''}|${linkUrl ?? ''}`
   for (let i = 0; i < value.length; i += 1) {
     hash = ((hash << 5) + hash) + value.charCodeAt(i)
   }
@@ -57,22 +58,64 @@ function storeDismissal(key: string) {
   }
 }
 
+interface ViewProps {
+  banner: BannerContent
+  onDismiss?: () => void
+  onLinkClick?: () => void
+  // Renders the link inertly, for the admin preview.
+  preview?: boolean
+}
+
+export function InfoBannerView({ banner, onDismiss, onLinkClick, preview }: ViewProps) {
+  const variantStyle = styles[banner.variant]
+  const Icon = variantStyle.icon
+  const linkClassName = `font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`
+  const { linkText, linkUrl } = banner
+
+  return (
+    <SiteBanner className={variantStyle.className} aria-label={preview ? 'Banner preview' : 'Site notice'}
+      icon={<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      action={onDismiss && <IconButton size="sm" onClick={onDismiss} aria-label="Dismiss notice"><X className="h-4 w-4" aria-hidden="true" /></IconButton>}>
+      <span>{banner.message}</span>
+      {linkText && linkUrl && (
+        <>
+          {' '}
+          {preview ? (
+            <span className={linkClassName}>{linkText}</span>
+          ) : isExternalUrl(linkUrl) ? (
+            <a
+              href={linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onLinkClick}
+              className={linkClassName}
+            >
+              {linkText}
+            </a>
+          ) : (
+            <Link to={linkUrl} onClick={onLinkClick} className={linkClassName}>
+              {linkText}
+            </Link>
+          )}
+        </>
+      )}
+    </SiteBanner>
+  )
+}
+
 export default function InfoBanner() {
   const { track } = useRybbit()
-  const dismissKey = getDismissKey(INFO_BANNER.message, INFO_BANNER.linkUrl)
-  const [dismissed, setDismissed] = useState(() => wasDismissed(dismissKey))
+  const dismissKey = INFO_BANNER ? getDismissKey(INFO_BANNER) : ''
+  const [dismissed, setDismissed] = useState(() => !INFO_BANNER || wasDismissed(dismissKey))
 
-  if (!INFO_BANNER.enabled || dismissed) return null
-
-  const variantStyle = styles[INFO_BANNER.variant]
-  const Icon = variantStyle.icon
-  const hasLink = INFO_BANNER.linkText && INFO_BANNER.linkUrl
+  if (!INFO_BANNER || dismissed) return null
+  const banner = INFO_BANNER
 
   const handleLinkClick = () => {
     track('info-banner-link-click', {
-      url: INFO_BANNER.linkUrl,
-      text: INFO_BANNER.linkText,
-      variant: INFO_BANNER.variant,
+      url: banner.linkUrl,
+      text: banner.linkText,
+      variant: banner.variant,
     })
   }
 
@@ -80,40 +123,10 @@ export default function InfoBanner() {
     storeDismissal(dismissKey)
     setDismissed(true)
     track('info-banner-dismiss', {
-      message: INFO_BANNER.message,
-      variant: INFO_BANNER.variant,
+      message: banner.message,
+      variant: banner.variant,
     })
   }
 
-  return (
-    <SiteBanner className={variantStyle.className} aria-label="Site notice"
-      icon={<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
-      action={<IconButton size="sm" onClick={handleDismiss} aria-label="Dismiss notice"><X className="h-4 w-4" aria-hidden="true" /></IconButton>}>
-      <span>{INFO_BANNER.message}</span>
-      {hasLink && (
-        <>
-          {' '}
-          {isExternalUrl(INFO_BANNER.linkUrl) ? (
-            <a
-              href={INFO_BANNER.linkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={handleLinkClick}
-              className={`font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`}
-            >
-              {INFO_BANNER.linkText}
-            </a>
-          ) : (
-            <Link
-              to={INFO_BANNER.linkUrl}
-              onClick={handleLinkClick}
-              className={`font-medium underline underline-offset-4 transition-colors ${variantStyle.linkClassName}`}
-            >
-              {INFO_BANNER.linkText}
-            </Link>
-          )}
-        </>
-      )}
-    </SiteBanner>
-  )
+  return <InfoBannerView banner={banner} onDismiss={handleDismiss} onLinkClick={handleLinkClick} />
 }

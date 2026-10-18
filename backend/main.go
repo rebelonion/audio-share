@@ -256,6 +256,8 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	requestsHandler := handlers.NewRequestsHandler(requestsService)
 	adminHandler := handlers.NewAdminHandler(db.DB(), requestsService)
 	adminHandler.Traffic = traffic
+	bannerStore := services.NewBannerStore(db.DB())
+	adminHandler.Banner = bannerStore
 	adminHandler.ActiveMedia = l.activeMedia
 	adminHandler.HealthConfig = services.HealthConfig{BuildID: buildID, IndexSchedule: cfg.IndexSchedule,
 		WaveformSchedule: cfg.WaveformCron, ErrorReportsEnabled: cfg.NtfyErrorTopic != ""}
@@ -263,10 +265,6 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	frontendConfig := handlers.FrontendConfig{
 		DefaultTitle:       cfg.DefaultTitle,
 		DefaultDescription: cfg.DefaultDescription,
-		BannerMessage:      cfg.BannerMessage,
-		BannerVariant:      cfg.BannerVariant,
-		BannerLinkText:     cfg.BannerLinkText,
-		BannerLinkURL:      cfg.BannerLinkURL,
 		CapPublicEndpoint:  cfg.CapPublicEndpoint,
 		BuildID:            buildID,
 		ErrorReporting:     db.Errors != nil,
@@ -282,10 +280,16 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 			SearchService:   searchService,
 			RequestsService: requestsService,
 			SessionSecret:   cfg.SessionSecret,
+			Banner:          bannerStore,
 		},
 	)
 
 	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
+	for _, name := range []string{"BANNER_MESSAGE", "BANNER_VARIANT", "BANNER_LINK_TEXT", "BANNER_LINK_URL"} {
+		if os.Getenv(name) != "" {
+			log.Printf("WARNING: %s is no longer read; set the site banner from the admin dashboard's Banner tab", name)
+		}
+	}
 	adminAuth := middleware.NewAdminAuth(cfg.RequestsAPIKey, cfg.SessionSecret, adminSessionTTL, cfg.CORSOrigins, adminFailures)
 	if cfg.RequestsAPIKey == "" {
 		log.Println("WARNING: REQUESTS_API_KEY is not set — /api/admin and the admin dashboard are disabled")

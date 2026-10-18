@@ -1,4 +1,5 @@
 import {API_BASE} from './api';
+import type {SiteBanner} from './config';
 import {AdminAccessError, checkAdminThrottle} from './operations';
 import type {RequestStatus, RequestsByStatus, SourceRequest, Tag} from '@/types';
 
@@ -70,3 +71,7 @@ export interface TrafficLive {
 }
 export const getTraffic = (range: TrafficRange, signal: AbortSignal) => request<TrafficReport>(`/api/admin/traffic?range=${range}`, signal);
 export const getTrafficLive = (signal: AbortSignal) => request<TrafficLive>('/api/admin/traffic/live', signal);
+
+export const getSiteBanner = (signal: AbortSignal) => request<{banner: SiteBanner | null}>('/api/admin/banner', signal);
+export const saveSiteBanner = (body: SiteBanner, signal: AbortSignal) => request<{banner: SiteBanner}>('/api/admin/banner', signal, 'PUT', body);
+export const clearSiteBanner = (signal: AbortSignal) => request<{banner: null}>('/api/admin/banner', signal, 'DELETE');

@@ -156,7 +156,7 @@ Run a [reindex](management.md#indexing-the-library) after changing library files
 
 Set `DEFAULT_TITLE` and `DEFAULT_DESCRIPTION` in `.env.local`, and put Markdown for the About page in `content/about.md` (or your configured content directory).
 
-For a site-wide announcement, set `BANNER_MESSAGE` and choose `BANNER_VARIANT=info`, `warning`, or `success`. Use `BANNER_LINK_TEXT` and `BANNER_LINK_URL` to add an optional link.
+For a site-wide announcement, open the admin dashboard's Banner tab. Choose an info, warning, or success style and optionally add a link. Changes take effect on visitors' next page load without a redeploy. The old `BANNER_*` environment variables are no longer read.
 
 For optional analytics, set `RYBBIT_URL` to your Rybbit base URL without a trailing slash and `RYBBIT_SITE_ID` to the site ID. The old `UMAMI_*` variables are no longer read.
 
