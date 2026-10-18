@@ -13,8 +13,10 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -60,6 +62,38 @@ func (h *ErrorHandler) allow(source, ip string) bool {
 	return true
 }
 
+// Baidu renders crawled pages in a sandbox that answers slow requests with a
+// synthetic 503 after about 7s, so its reports describe failures that never
+// happened. The renderer sends a plain Chrome user agent and its addresses have
+// no reverse DNS, so it is recognized by network instead.
+var crawlerRendererNetworks = []netip.Prefix{
+	netip.MustParsePrefix("116.179.33.0/24"),
+	netip.MustParsePrefix("124.64.200.0/23"),
+}
+
+var chromeVersion = regexp.MustCompile(`Chrome/([0-9]+)\.`)
+
+// isCrawlerRenderer also rejects Chrome releases from before 2022. Headless
+// renderers and scrapers pin these; real visitors have long since updated.
+func isCrawlerRenderer(ip, userAgent string) bool {
+	if match := chromeVersion.FindStringSubmatch(userAgent); match != nil {
+		if major, err := strconv.Atoi(match[1]); err == nil && major < 100 {
+			return true
+		}
+	}
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, network := range crawlerRendererNetworks {
+		if network.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 var reportID = regexp.MustCompile(`^[a-f0-9-]{36}$`)
 
 func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +102,8 @@ func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if isBotLikeUserAgent(r.UserAgent()) {
+	ip := clientip.FromRequest(r)
+	if isBotLikeUserAgent(r.UserAgent()) || isCrawlerRenderer(ip, r.UserAgent()) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -77,7 +112,6 @@ func (h *ErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
-	ip := clientip.FromRequest(r)
 	// Sessions are not used here: a page reports errors before its first
 	// response sets the cookie, so one visit would count as several sources.
 	mac := hmac.New(sha256.New, h.secret)

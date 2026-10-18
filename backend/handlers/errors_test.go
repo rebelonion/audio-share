@@ -102,6 +102,34 @@ func TestHTTPErrorPreservesDiagnosticCode(t *testing.T) {
 	}
 }
 
+func TestErrorIngestionIgnoresCrawlerRenderers(t *testing.T) {
+	const currentChrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+	send := func(address, userAgent string) int {
+		recorder := &memoryErrors{}
+		r := httptest.NewRequest(http.MethodPost, "/api/errors", strings.NewReader(validReport))
+		r.RemoteAddr = address
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("User-Agent", userAgent)
+		NewErrorHandler(recorder, "secret").ServeHTTP(httptest.NewRecorder(), r)
+		return len(recorder.events)
+	}
+	for name, request := range map[string][2]string{
+		"Baidu renderer network": {"116.179.33.200:1234", currentChrome},
+		"secondary network":      {"124.64.201.7:1234", currentChrome},
+		"outdated Chrome":        {"192.0.2.1:1234", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36"},
+	} {
+		if got := send(request[0], request[1]); got != 0 {
+			t.Errorf("%s: recorded %d reports", name, got)
+		}
+	}
+	if got := send("116.179.32.174:1234", currentChrome); got != 1 {
+		t.Fatal("neighbouring network was ignored")
+	}
+	if got := send("192.0.2.1:1234", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1"); got != 1 {
+		t.Fatal("Safari report was ignored")
+	}
+}
+
 func TestErrorIngestionValidationSessionAndLimits(t *testing.T) {
 	recorder := &memoryErrors{}
 	h := NewErrorHandler(recorder, "secret")
