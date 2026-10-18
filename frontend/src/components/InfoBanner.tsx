@@ -1,10 +1,11 @@
 import SiteBanner from '@/components/ui/SiteBanner'
 import {IconButton} from '@/components/ui/Button'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
 import { INFO_BANNER, type BannerVariant, type SiteBanner as BannerContent } from '@/lib/config'
 import { useRybbit } from '@/hooks/useRybbit'
+import { formatBannerPart, hasLiveParts, parseBannerMessage } from '@/lib/bannerTokens'
 
 const styles: Record<BannerVariant, {
   icon: typeof Info
@@ -58,6 +59,32 @@ function storeDismissal(key: string) {
   }
 }
 
+// Renders the message with its date and countdown placeholders filled in for
+// this visitor, ticking once a second while any of them change over time.
+function BannerMessage({ message }: { message: string }) {
+  const parts = useMemo(() => parseBannerMessage(message), [message])
+  const live = hasLiveParts(parts)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!live) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [live])
+
+  return (
+    <span>
+      {parts.map((part, index) => part.type === 'text'
+        ? <span key={index}>{part.text}</span>
+        : (
+          <time key={index} dateTime={part.iso} className={part.type === 'countdown' ? 'font-medium tabular-nums' : 'font-medium'}>
+            {formatBannerPart(part, now)}
+          </time>
+        ))}
+    </span>
+  )
+}
+
 interface ViewProps {
   banner: BannerContent
   onDismiss?: () => void
@@ -76,7 +103,7 @@ export function InfoBannerView({ banner, onDismiss, onLinkClick, preview }: View
     <SiteBanner className={variantStyle.className} aria-label={preview ? 'Banner preview' : 'Site notice'}
       icon={<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
       action={onDismiss && <IconButton size="sm" onClick={onDismiss} aria-label="Dismiss notice"><X className="h-4 w-4" aria-hidden="true" /></IconButton>}>
-      <span>{banner.message}</span>
+      <BannerMessage message={banner.message} />
       {linkText && linkUrl && (
         <>
           {' '}

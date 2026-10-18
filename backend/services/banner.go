@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +60,8 @@ func (b Banner) Normalize() (Banner, error) {
 		return invalid("message must be at most %d characters", maxBannerMessage)
 	case b.Variant != "info" && b.Variant != "warning" && b.Variant != "success":
 		return invalid("variant must be info, warning, or success")
+	case bannerTokenError(b.Message) != "":
+		return invalid("%s", bannerTokenError(b.Message))
 	case (b.LinkText == "") != (b.LinkURL == ""):
 		return invalid("link text and link URL must be set together")
 	case utf8.RuneCountInString(b.LinkText) > maxBannerLinkText:
@@ -69,6 +72,38 @@ func (b Banner) Normalize() (Banner, error) {
 		return invalid("link URL must be a site path like /requests or an http(s) URL")
 	}
 	return b, nil
+}
+
+// Placeholders the frontend fills in per visitor (lib/bannerTokens.ts), such as
+// {countdown:2026-10-20T18:00Z|Live now}. Other braces are left as text.
+var bannerTokenPattern = regexp.MustCompile(`\{(datetime|date|time|relative|countdown):([^{}]*)\}`)
+
+// Timestamps need an explicit offset so every visitor reads the same moment.
+var bannerTimestampLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04Z07:00"}
+
+// bannerTokenError describes the first malformed placeholder, or returns "".
+func bannerTokenError(message string) string {
+	for _, match := range bannerTokenPattern.FindAllStringSubmatch(message, -1) {
+		kind, body := match[1], match[2]
+		stamp, _, hasEnd := strings.Cut(body, "|")
+		if hasEnd && kind != "countdown" {
+			return fmt.Sprintf("%s: only countdowns take text after |", match[0])
+		}
+		if !validBannerTimestamp(strings.TrimSpace(stamp)) {
+			return fmt.Sprintf("%s: use a time with a zone, like 2026-10-20T18:00Z or 2026-10-20T13:00-05:00", match[0])
+		}
+	}
+	return ""
+}
+
+func validBannerTimestamp(value string) bool {
+	upper := strings.ToUpper(value)
+	for _, layout := range bannerTimestampLayouts {
+		if _, err := time.Parse(layout, upper); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func validBannerLink(link string) bool {

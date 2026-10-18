@@ -207,3 +207,16 @@ it('counts banner length like the server and labels the pending action', async (
     await act(async () => finishRemove());
     await screen.findByText(/Banner removed/);
 });
+
+it('inserts a time placeholder into the banner message', async () => {
+    vi.mocked(api.getSiteBanner).mockResolvedValue({banner: null});
+    render(<AdminBanner onAuthFailure={authFailure} />);
+    await screen.findByText('No banner');
+    change('Message', 'Live in ');
+    expect((screen.getByRole('button', {name: 'Insert'}) as HTMLButtonElement).disabled).toBe(true);
+    change('Moment', '2026-10-20T18:00'); change('Text once it ends (optional)', 'now');
+    click('Insert');
+    const iso = new Date('2026-10-20T18:00').toISOString().replace(':00.000Z', 'Z');
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe(`Live in {countdown:${iso}|now}`);
+    expect(screen.getByRole('region', {name: 'Banner preview'}).querySelector('time')).toBeTruthy();
+});

@@ -23,6 +23,18 @@ func TestBannerNormalize(t *testing.T) {
 	}
 }
 
+func TestBannerNormalizeAcceptsTokens(t *testing.T) {
+	for _, message := range []string{
+		"Live {countdown:2026-10-20T18:00Z|now} at {time:2026-10-20T13:00-05:00}",
+		"{datetime:2026-10-20T18:00:30.5Z} {date:2026-10-20t18:00z} {relative: 2026-10-20T18:00:00+02:00 }",
+		"Unknown {placeholders} and {other:stuff} stay as text",
+	} {
+		if _, err := (Banner{Message: message}).Normalize(); err != nil {
+			t.Errorf("%q rejected: %v", message, err)
+		}
+	}
+}
+
 func TestBannerNormalizeRejectsInvalid(t *testing.T) {
 	for name, banner := range map[string]Banner{
 		"empty message":      {Message: "   "},
@@ -40,6 +52,10 @@ func TestBannerNormalizeRejectsInvalid(t *testing.T) {
 		"control character":  {Message: "m", LinkText: "t", LinkURL: "/\x00/evil.example"},
 		"space in url":       {Message: "m", LinkText: "t", LinkURL: "https://example.com/a b"},
 		"long link text":     {Message: "m", LinkText: strings.Repeat("a", maxBannerLinkText+1), LinkURL: "/"},
+		"token without zone": {Message: "Starts {time:2026-10-20T18:00}"},
+		"token bad date":     {Message: "Starts {date:2026-13-20T18:00Z}"},
+		"token not a time":   {Message: "Starts {countdown:soon}"},
+		"end text on date":   {Message: "Starts {date:2026-10-20T18:00Z|now}"},
 	} {
 		_, err := banner.Normalize()
 		if _, ok := err.(*BannerError); !ok {
