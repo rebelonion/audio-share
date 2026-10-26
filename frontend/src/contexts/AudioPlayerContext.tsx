@@ -390,7 +390,8 @@ export function AudioPlayerProvider({children}: {children: ReactNode}) {
 
     const togglePlay = useCallback(() => {
         const audio = audioRef.current;
-        if (audio && !audio.paused) {
+        // A source that fails to load after play() leaves paused === false; treat it as stopped so the click retries.
+        if (audio && !audio.paused && !audio.error) {
             pause();
             return;
         }

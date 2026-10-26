@@ -356,3 +356,58 @@ func TestIntegrationPlaybackPreparationErrorTimings(t *testing.T) {
 		})
 	}
 }
+
+// A re-download indexed beside its original plays under the original share key once
+// the original file is deleted.
+func TestIntegrationAudioRecoveryFoldsReplacementIndexedBesideOriginal(t *testing.T) {
+	db := recoveryDatabase(t)
+	dir := t.TempDir()
+	fs := services.NewFileSystemService(dir + ":Audio")
+	write := func(name, body string, epoch int) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name+".info.json"), []byte(fmt.Sprintf(`{"id":"vid","epoch":%d}`, epoch)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name+".m4a"), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	index := func() {
+		t.Helper()
+		if err := services.NewSearchService(db, fs, nil).RebuildIndex(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keyFor := func(name string) string {
+		t.Helper()
+		var key string
+		if err := db.DB().QueryRow(`SELECT share_key FROM audio_files WHERE filename=$1`, name+".m4a").Scan(&key); err != nil {
+			t.Fatal(err)
+		}
+		return key
+	}
+	write("old title [vid]", "old audio", 1700000000)
+	index()
+	originalKey := keyFor("old title [vid]")
+	write("new title [vid]", "replacement audio", 1800000000)
+	index()
+	if err := os.Remove(filepath.Join(dir, "old title [vid].m4a")); err != nil {
+		t.Fatal(err)
+	}
+	manager := newTestHandlerAccessKeyManager(t, "10/1m")
+	handler := NewAudioHandler(fs, db.DB(), AudioHandlerOptions{SessionSecret: "test-secret", AccessKeys: manager})
+	grant, err := manager.IssueCaptchaCleared("session-one", "192.0.2.1", originalKey, services.MediaPurposeStream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := signedAudioRequest(http.MethodGet, "https://example.test/api/audio/key/"+originalKey+"?access_key="+grant.AccessKey, "", "test-secret", "session-one")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "replacement audio" {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if got := keyFor("new title [vid]"); got != originalKey {
+		t.Fatalf("file share key=%s, want original %s", got, originalKey)
+	}
+}

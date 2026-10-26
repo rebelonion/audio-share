@@ -70,3 +70,16 @@ it('clears timers when the player closes', () => {
     act(() => result.current.closePlayer());
     expect(result.current.sleepTimer.mode).toBe('off');
 });
+it('retries instead of pausing when the source failed after play', () => {
+    const {result} = renderHook(useGlobalAudioPlayer, {wrapper});
+    act(() => result.current.playTrack(track('a')));
+    engine.play.mockClear();
+    (engine.audioRef as {current: unknown}).current = {paused: false, error: {code: 4}};
+    try {
+        act(() => result.current.togglePlay());
+        expect(engine.pause).not.toHaveBeenCalled();
+        expect(engine.play).toHaveBeenCalledTimes(1);
+    } finally {
+        engine.audioRef.current = null;
+    }
+});

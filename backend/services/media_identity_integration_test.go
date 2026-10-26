@@ -135,6 +135,10 @@ func newMediaFixture(t *testing.T) mediaFixture {
 }
 func (f mediaFixture) write(t *testing.T, name, id, body string) {
 	t.Helper()
+	f.writeDownloaded(t, name, id, body, 1700000000)
+}
+func (f mediaFixture) writeDownloaded(t *testing.T, name, id, body string, epoch int) {
+	t.Helper()
 	full := filepath.Join(f.dir, name)
 	if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
 		t.Fatal(err)
@@ -149,7 +153,7 @@ func (f mediaFixture) write(t *testing.T, name, id, body string) {
 		}
 	}
 	if id != "" {
-		data, _ := json.Marshal(map[string]any{"id": id, "title": name, "epoch": 1700000000})
+		data, _ := json.Marshal(map[string]any{"id": id, "title": name, "epoch": epoch})
 		if err := os.WriteFile(full[:len(full)-len(filepath.Ext(full))]+".info.json", data, 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -1579,5 +1583,60 @@ func TestIntegrationMediaBlockPersistenceFailureAbortsIndex(t *testing.T) {
 	var reports int
 	if err := f.db.db.QueryRow(`SELECT count(*) FROM error_reports WHERE operation='reindex' AND outcome='blocked'`).Scan(&reports); err != nil || reports == 0 {
 		t.Fatalf("missing failed-index report: reports=%d err=%v", reports, err)
+	}
+}
+
+// Pinchflat downloads a retitled video before deleting the old file, so the index can
+// see both and give the replacement its own record.
+func TestIntegrationMediaReplacementIndexedBesideOriginalKeepsOriginalKey(t *testing.T) {
+	for _, mode := range []string{"playback-recovery", "index", "index-after-soft-delete", "legacy-timestamp-column"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newMediaFixture(t)
+			if mode == "legacy-timestamp-column" {
+				// Adopted legacy schemas store downloaded_at as a timestamp rather than TEXT.
+				if _, err := f.db.db.Exec(`ALTER TABLE audio_files ALTER COLUMN downloaded_at TYPE timestamp USING downloaded_at::timestamptz`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.write(t, "channel/old title [vid].m4a", "vid", "old audio")
+			f.index(t)
+			oldID, oldKey := f.record(t, "channel/old title [vid].m4a")
+			f.writeDownloaded(t, "channel/new title [vid].m4a", "vid", "new audio", 1800000000)
+			f.index(t)
+			newID, _ := f.record(t, "channel/new title [vid].m4a")
+			if newID == oldID {
+				t.Fatal("coexisting files should keep separate records")
+			}
+			f.seedHistory(t, newID)
+			f.remove(t, "channel/old title [vid].m4a")
+			switch mode {
+			case "playback-recovery":
+				if err := RecoverMissingAudio(context.Background(), f.db.db, f.fs, oldID); err != nil {
+					t.Fatal(err)
+				}
+			case "index-after-soft-delete":
+				if _, err := f.db.db.Exec(`UPDATE audio_files SET deleted=1 WHERE id=$1`, oldID); err != nil {
+					t.Fatal(err)
+				}
+				f.index(t)
+			default:
+				f.index(t)
+			}
+			id, key := f.record(t, "channel/new title [vid].m4a")
+			if id != oldID || key != oldKey {
+				t.Fatalf("file record=%d/%s, want original %d/%s", id, key, oldID, oldKey)
+			}
+			var records, deleted, likes, plays, downloads int
+			if err := f.db.db.QueryRow(`SELECT count(*), COALESCE(sum(deleted),0),
+				(SELECT count(*) FROM likes WHERE audio_file_id=$1),
+				(SELECT count(*) FROM play_events WHERE audio_file_id=$1),
+				(SELECT count(*) FROM download_events WHERE audio_file_id=$1)
+				FROM audio_files`, oldID).Scan(&records, &deleted, &likes, &plays, &downloads); err != nil {
+				t.Fatal(err)
+			}
+			if records != 1 || deleted != 0 || likes != 1 || plays != 1 || downloads != 1 {
+				t.Fatalf("records=%d deleted=%d likes=%d plays=%d downloads=%d", records, deleted, likes, plays, downloads)
+			}
+		})
 	}
 }

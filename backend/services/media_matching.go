@@ -1,6 +1,7 @@
 package services
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 )
@@ -8,6 +9,7 @@ import (
 type indexedMedia struct {
 	id                                  int64
 	path, filename, mediaID, sourcePath string
+	downloadedAt                        sql.NullTime
 	deleted, identityConflicted         bool
 	// Not seen on disk for mediaMergeGrace.
 	stale bool
@@ -97,6 +99,53 @@ func (c mediaCatalog) merges(files []AudioFileRecord) map[int64]int64 {
 		}
 	}
 	return merges
+}
+
+// A re-download indexed while its original was still on disk gets its own record.
+// Once the original file is gone, the re-download's record folds into the original so
+// the original share key, history and likes follow the file. Only an unambiguous pair
+// qualifies: one file with the ID, owned by one of exactly two records, downloaded
+// strictly later than the other. Duplicates without that ordering wait for merges.
+// Returns loser record ID -> survivor record ID.
+func (c mediaCatalog) replacements(files []AudioFileRecord, recoverOnly bool, pathMissing func(string) (bool, error)) (map[int64]int64, error) {
+	onDisk := make(map[string]bool)
+	paths := make(map[string][]string)
+	for _, a := range files {
+		onDisk[a.Path] = true
+		if a.MediaID != "" {
+			paths[a.MediaID] = append(paths[a.MediaID], a.Path)
+		}
+	}
+	merges := make(map[int64]int64)
+	for id, matches := range paths {
+		records := c.byID[id]
+		if len(matches) != 1 || len(records) != 2 {
+			continue
+		}
+		replacement, exists := c.owners[matches[0]]
+		if !exists || replacement.mediaID != id || replacement.identityConflicted {
+			continue
+		}
+		original := records[0]
+		if original.id == replacement.id {
+			original = records[1]
+		}
+		// Playback recovery only repairs active records; restoring deleted ones waits for the index.
+		if original.identityConflicted || onDisk[original.path] || (recoverOnly && original.deleted) {
+			continue
+		}
+		if !original.downloadedAt.Valid || !replacement.downloadedAt.Valid || !replacement.downloadedAt.Time.After(original.downloadedAt.Time) {
+			continue
+		}
+		missing, err := pathMissing(original.path)
+		if err != nil {
+			return nil, err
+		}
+		if missing {
+			merges[replacement.id] = original.id
+		}
+	}
+	return merges, nil
 }
 
 func (c mediaCatalog) conflicts(files []AudioFileRecord) []indexedMedia {

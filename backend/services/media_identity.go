@@ -88,7 +88,8 @@ func readAudioRecord(ctx context.Context, fs *FileSystemService, parent, sourceP
 }
 
 // RecoverMissingAudio shares one folder refresh across callers and server processes.
-// Only existing active records can be refreshed; no records are merged.
+// Only existing active records can be refreshed; the only merge is folding a
+// replacement's newer record into the missing original (see mediaCatalog.replacements).
 func RecoverMissingAudio(ctx context.Context, db *sql.DB, fs *FileSystemService, id int64) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, MediaPreparationTimeout)
 	defer cancel()
@@ -222,7 +223,7 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 		}
 		files = append(files, a)
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id, path, filename, COALESCE(media_id, ''), COALESCE(source_path, ''), deleted <> 0, identity_conflicted,
+	rows, err := tx.QueryContext(ctx, `SELECT id, path, filename, COALESCE(media_id, ''), COALESCE(source_path, ''), downloaded_at, deleted <> 0, identity_conflicted,
 		COALESCE(indexed_at < LOCALTIMESTAMP - $2::interval, FALSE)
 		FROM audio_files WHERE parent_path = $1 FOR UPDATE`, parent, mediaMergeGrace)
 	if err != nil {
@@ -231,10 +232,12 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 	var indexed []indexedMedia
 	for rows.Next() {
 		var old indexedMedia
-		if err := rows.Scan(&old.id, &old.path, &old.filename, &old.mediaID, &old.sourcePath, &old.deleted, &old.identityConflicted, &old.stale); err != nil {
+		var downloadedAt sql.NullString
+		if err := rows.Scan(&old.id, &old.path, &old.filename, &old.mediaID, &old.sourcePath, &downloadedAt, &old.deleted, &old.identityConflicted, &old.stale); err != nil {
 			rows.Close()
 			return err
 		}
+		old.downloadedAt = parseDownloadedAt(downloadedAt)
 		indexed = append(indexed, old)
 	}
 	if err := rows.Err(); err != nil {
@@ -267,21 +270,7 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 		}
 		return commitMediaBlocks(ctx, tx, blocked, fmt.Errorf("%w: %w", errIncompleteAudioDirectory, scanErr), failure)
 	}
-	if !recoverOnly {
-		if merges := catalog.merges(files); len(merges) > 0 {
-			if err := mergeMediaRecords(ctx, tx, merges); err != nil {
-				return err
-			}
-			remaining := indexed[:0:0]
-			for _, old := range indexed {
-				if _, merged := merges[old.id]; !merged {
-					remaining = append(remaining, old)
-				}
-			}
-			catalog = newMediaCatalog(remaining, files)
-		}
-	}
-	updates, err := catalog.plan(files, recoverOnly, func(path string) (bool, error) {
+	pathMissing := func(path string) (bool, error) {
 		full, err := resolveMediaPath(fs, path)
 		if err != nil {
 			return false, err
@@ -298,7 +287,38 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 			return false, fmt.Errorf("%w: %w", errIncompleteAudioDirectory, err)
 		}
 		return false, nil
-	}, failure)
+	}
+	mergeInto := func(merges map[int64]int64) error {
+		if err := mergeMediaRecords(ctx, tx, merges); err != nil {
+			return err
+		}
+		remaining := indexed[:0:0]
+		for _, old := range indexed {
+			if _, merged := merges[old.id]; !merged {
+				remaining = append(remaining, old)
+			}
+		}
+		indexed = remaining
+		catalog = newMediaCatalog(indexed, files)
+		return nil
+	}
+	replacements, err := catalog.replacements(files, recoverOnly, pathMissing)
+	if err != nil {
+		return commitMediaBlocks(ctx, tx, blocked, err, failure)
+	}
+	if len(replacements) > 0 {
+		if err := mergeInto(replacements); err != nil {
+			return err
+		}
+	}
+	if !recoverOnly {
+		if merges := catalog.merges(files); len(merges) > 0 {
+			if err := mergeInto(merges); err != nil {
+				return err
+			}
+		}
+	}
+	updates, err := catalog.plan(files, recoverOnly, pathMissing, failure)
 	if err == nil {
 		err = applyMediaUpdates(ctx, tx, fs, fullDir, updates, recoverOnly, failure)
 	}
@@ -322,6 +342,14 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 
 const mediaMergeGrace = "30 days"
 
+// downloaded_at is TEXT holding RFC3339 on fresh schemas and a timestamp on adopted
+// legacy ones. Scanning a timestamp into a string formats it as RFC3339 in Go, so the
+// server's DateStyle never matters. Unparseable values are treated as unknown.
+func parseDownloadedAt(value sql.NullString) sql.NullTime {
+	at, err := time.Parse(time.RFC3339, value.String)
+	return sql.NullTime{Time: at, Valid: value.Valid && err == nil}
+}
+
 // The merged record's share key is dropped; its history and likes move to the survivor.
 func mergeMediaRecords(ctx context.Context, tx *sql.Tx, merges map[int64]int64) error {
 	for loser, survivor := range merges {
@@ -330,6 +358,8 @@ func mergeMediaRecords(ctx context.Context, tx *sql.Tx, merges map[int64]int64) 
 			`UPDATE download_events SET audio_file_id=$2 WHERE audio_file_id=$1`,
 			`INSERT INTO likes (profile_id, audio_file_id, created_at)
 				SELECT profile_id, $2, created_at FROM likes WHERE audio_file_id=$1 ON CONFLICT DO NOTHING`,
+			`UPDATE audio_files SET removal_requested_at=COALESCE(audio_files.removal_requested_at, loser.removal_requested_at)
+				FROM audio_files loser WHERE loser.id=$1 AND audio_files.id=$2`,
 		} {
 			if _, err := tx.ExecContext(ctx, statement, loser, survivor); err != nil {
 				return err
