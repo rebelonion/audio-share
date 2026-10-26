@@ -1640,3 +1640,52 @@ func TestIntegrationMediaReplacementIndexedBesideOriginalKeepsOriginalKey(t *tes
 		})
 	}
 }
+
+// Recovery must fit the playback deadline in large folders of large yt-dlp sidecars,
+// so it only reads sidecars of files it might rewrite.
+func TestIntegrationMediaRecoveryReadsOnlyUnindexedSidecars(t *testing.T) {
+	for _, mode := range []string{"rename", "fold-back"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newMediaFixture(t)
+			for i := range 20 {
+				f.write(t, fmt.Sprintf("channel/other %d [id-%d].m4a", i, i), fmt.Sprintf("id-%d", i), "audio")
+			}
+			f.write(t, "channel/old title [vid].m4a", "vid", "old audio")
+			f.index(t)
+			oldID, oldKey := f.record(t, "channel/old title [vid].m4a")
+			f.writeDownloaded(t, "channel/new title [vid].m4a", "vid", "new audio", 1800000000)
+			if mode == "fold-back" {
+				f.index(t)
+			}
+			f.remove(t, "channel/old title [vid].m4a")
+			f.fs.mediaIO = newMediaFileIO(8)
+			var mu sync.Mutex
+			var read []string
+			original := f.fs.mediaIO.readSidecar
+			f.fs.mediaIO.readSidecar = func(path string) ([]byte, error) {
+				mu.Lock()
+				read = append(read, filepath.Base(path))
+				mu.Unlock()
+				return original(path)
+			}
+			if err := RecoverMissingAudio(context.Background(), f.db.db, f.fs, oldID); err != nil {
+				t.Fatal(err)
+			}
+			if len(read) != 1 || read[0] != "new title [vid].info.json" {
+				t.Fatalf("recovery read sidecars %v", read)
+			}
+			var title string
+			if err := f.db.db.QueryRow(`SELECT title FROM audio_files WHERE id=$1`, oldID).Scan(&title); err != nil {
+				t.Fatal(err)
+			}
+			id, key := f.record(t, "channel/new title [vid].m4a")
+			if id != oldID || key != oldKey || title != "channel/new title [vid].m4a" {
+				t.Fatalf("record=%d/%s title=%q, want %d/%s with the new sidecar title", id, key, title, oldID, oldKey)
+			}
+			var others int
+			if err := f.db.db.QueryRow(`SELECT count(*) FROM audio_files WHERE deleted=0 AND title LIKE 'channel/other %'`).Scan(&others); err != nil || others != 20 {
+				t.Fatalf("untouched records with metadata=%d err=%v", others, err)
+			}
+		})
+	}
+}

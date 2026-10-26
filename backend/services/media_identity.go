@@ -188,6 +188,12 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 	if recoverOnly && len(entries) >= limit {
 		return fmt.Errorf("media recovery directory exceeds 10000 entries")
 	}
+	var known map[string]string
+	if recoverOnly {
+		if known, err = recoveryKnownIdentities(ctx, tx, parent, entries); err != nil {
+			return err
+		}
+	}
 	var files []AudioFileRecord
 	complete := true
 	var scanErr error
@@ -196,6 +202,10 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 			return err
 		}
 		if entry.IsDir() || fs.audioExts[strings.ToLower(filepath.Ext(entry.Name()))] == "" {
+			continue
+		}
+		if id, ok := known[entry.Name()]; ok {
+			files = append(files, AudioFileRecord{Path: parent + "/" + entry.Name(), ParentPath: parent, Filename: entry.Name(), MediaID: id})
 			continue
 		}
 		full := filepath.Join(fullDir, entry.Name())
@@ -338,6 +348,49 @@ func reconcileAudioDirectory(ctx context.Context, conn *sql.Conn, fs *FileSystem
 		}
 	}
 	return nil
+}
+
+// Playback recovery never rewrites a file already indexed at its own path, so it can
+// take that file's identity from the database instead of reading its sidecar. yt-dlp
+// sidecars are often hundreds of KB, and reading a whole large folder over a network
+// share would not fit the playback deadline. Files sharing an identity with a missing
+// record are still read, since a fold-back rewrites them.
+func recoveryKnownIdentities(ctx context.Context, tx *sql.Tx, parent string, entries []os.DirEntry) (map[string]string, error) {
+	present := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		present[entry.Name()] = true
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT filename, COALESCE(media_id, '') FROM audio_files
+		WHERE parent_path = $1 AND deleted = 0`, parent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	known := make(map[string]string)
+	wanted := make(map[string]bool)
+	for rows.Next() {
+		var filename, id string
+		if err := rows.Scan(&filename, &id); err != nil {
+			return nil, err
+		}
+		if id == "" {
+			id = mediaIDFromFilename(filename)
+		}
+		if !present[filename] {
+			wanted[id] = true
+		} else if id != "" {
+			known[filename] = id
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for filename, id := range known {
+		if wanted[id] {
+			delete(known, filename)
+		}
+	}
+	return known, nil
 }
 
 const mediaMergeGrace = "30 days"

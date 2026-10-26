@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const MediaPreparationTimeout = 5 * time.Second
+const MediaPreparationTimeout = 10 * time.Second
 
 // mediaIOSlotWait bounds how long a caller waits for a free worker, so brief
 // saturation queues on the caller's goroutine instead of failing immediately.
