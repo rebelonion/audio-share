@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,6 +13,11 @@ const (
 	playbackClaimCleanupGrace   = 15 * time.Minute
 	playbackClaimCleanupBatch   = 10_000
 	playbackClaimCleanupBatches = 10
+
+	// The home page lists are global, so a short cache spares the play_events
+	// scans on every visit at the cost of a little staleness.
+	recentlyPlayedCacheTTL = 30 * time.Second
+	popularTracksCacheTTL  = 60 * time.Second
 )
 
 const trackSummaryColumns = `
@@ -67,13 +73,23 @@ func removalDiscoveryFilter(includeRemovalRequested bool) string {
 type PlaybackService struct {
 	db                 *Database
 	legacyAccessKeyTTL time.Duration
-	popularBanPatterns []string
+	popularBanPatterns atomic.Pointer[[]string]
+
+	recentlyPlayedCache ttlCache[discoveryListKey, []PlaybackResult]
+	popularTracksCache  ttlCache[discoveryListKey, []PlaybackResult]
+}
+
+type discoveryListKey struct {
+	limit                   int
+	includeRemovalRequested bool
 }
 
 func NewPlaybackService(db *Database, legacyAccessKeyTTL time.Duration) *PlaybackService {
 	return &PlaybackService{
-		db:                 db,
-		legacyAccessKeyTTL: legacyAccessKeyTTL,
+		db:                  db,
+		legacyAccessKeyTTL:  legacyAccessKeyTTL,
+		recentlyPlayedCache: newTTLCache[discoveryListKey, []PlaybackResult](recentlyPlayedCacheTTL),
+		popularTracksCache:  newTTLCache[discoveryListKey, []PlaybackResult](popularTracksCacheTTL),
 	}
 }
 
@@ -87,7 +103,22 @@ func (s *PlaybackService) SetPopularBanlist(words []string) {
 			patterns = append(patterns, "%"+escaper.Replace(word)+"%")
 		}
 	}
-	s.popularBanPatterns = patterns
+	s.popularBanPatterns.Store(&patterns)
+	s.popularTracksCache.invalidate()
+}
+
+func (s *PlaybackService) popularBanList() []string {
+	if patterns := s.popularBanPatterns.Load(); patterns != nil {
+		return *patterns
+	}
+	return nil
+}
+
+// InvalidateDiscoveryLists drops the cached home page lists so a change to a
+// track's visibility or status shows up on the next request.
+func (s *PlaybackService) InvalidateDiscoveryLists() {
+	s.recentlyPlayedCache.invalidate()
+	s.popularTracksCache.invalidate()
 }
 
 func (s *PlaybackService) CleanupAccessKeyClaims() error {
@@ -326,7 +357,14 @@ func (s *PlaybackService) GetRecommendations(shareKey string, limit int, include
 	return results, nil
 }
 
+// GetRecentlyPlayed is cached briefly; the returned slice is shared.
 func (s *PlaybackService) GetRecentlyPlayed(limit int, includeRemovalRequested bool) ([]PlaybackResult, error) {
+	return s.recentlyPlayedCache.get(discoveryListKey{limit, includeRemovalRequested}, func() ([]PlaybackResult, error) {
+		return s.loadRecentlyPlayed(limit, includeRemovalRequested)
+	})
+}
+
+func (s *PlaybackService) loadRecentlyPlayed(limit int, includeRemovalRequested bool) ([]PlaybackResult, error) {
 	rows, err := s.db.DB().Query(`
 		SELECT `+trackSummaryColumns+`,
 			COUNT(*) as play_count,
@@ -360,7 +398,14 @@ func (s *PlaybackService) GetRecentlyPlayed(limit int, includeRemovalRequested b
 	return results, nil
 }
 
+// GetPopularTracks is cached briefly; the returned slice is shared.
 func (s *PlaybackService) GetPopularTracks(limit int, includeRemovalRequested bool) ([]PlaybackResult, error) {
+	return s.popularTracksCache.get(discoveryListKey{limit, includeRemovalRequested}, func() ([]PlaybackResult, error) {
+		return s.loadPopularTracks(limit, includeRemovalRequested)
+	})
+}
+
+func (s *PlaybackService) loadPopularTracks(limit int, includeRemovalRequested bool) ([]PlaybackResult, error) {
 	// Trending score: recent play rate vs historical baseline.
 	// score = (plays_last_7d + 1) / (avg_plays_per_7d_over_prior_84d + 1)
 	// Consistently popular items score ~1.0; items spiking above their norm score high.
@@ -388,7 +433,7 @@ func (s *PlaybackService) GetPopularTracks(limit int, includeRemovalRequested bo
 		GROUP BY af.id, f.id, pw.recent_7d, pw.older_84d
 		ORDER BY (pw.recent_7d + 1.0) / (pw.older_84d::float / 12.0 + 1.0) DESC
 		LIMIT $1
-	`, limit, s.popularBanPatterns)
+	`, limit, s.popularBanList())
 	if err != nil {
 		return nil, err
 	}

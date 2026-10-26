@@ -258,6 +258,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	adminHandler.Traffic = traffic
 	bannerStore := services.NewBannerStore(db.DB())
 	adminHandler.Banner = bannerStore
+	adminHandler.Playback = playbackService
 	adminHandler.ActiveMedia = l.activeMedia
 	adminHandler.HealthConfig = services.HealthConfig{BuildID: buildID, IndexSchedule: cfg.IndexSchedule,
 		WaveformSchedule: cfg.WaveformCron, ErrorReportsEnabled: cfg.NtfyErrorTopic != ""}

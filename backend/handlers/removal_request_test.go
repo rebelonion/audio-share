@@ -362,3 +362,55 @@ func TestSPASnapshotHidesRemovalRequestedAudioExternally(t *testing.T) {
 		t.Fatalf("unexpected local initial data: %#v", localContents.Items)
 	}
 }
+
+type countingInvalidator struct{ calls int }
+
+func (c *countingInvalidator) InvalidateDiscoveryLists() { c.calls++ }
+
+func TestAdminTrackStatusChangesClearCachedDiscoveryLists(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		update  string
+		rows    int64
+		status  int
+		cleared int
+	}{
+		{name: "removal request", path: "removal-request", body: `{"removalRequested":true}`, update: "UPDATE audio_files SET removal_requested_at", rows: 1, status: http.StatusOK, cleared: 1},
+		{name: "unavailable", path: "unavailable", body: `{"unavailable":true}`, update: "UPDATE audio_files SET unavailable_at", rows: 1, status: http.StatusOK, cleared: 1},
+		{name: "unknown track", path: "removal-request", body: `{"removalRequested":true}`, update: "UPDATE audio_files SET removal_requested_at", rows: 0, status: http.StatusNotFound, cleared: 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			mock.ExpectExec(test.update).WillReturnResult(sqlmock.NewResult(0, test.rows))
+
+			invalidator := &countingInvalidator{}
+			handler := NewAdminHandler(db, nil)
+			handler.Playback = invalidator
+			request := httptest.NewRequest(
+				http.MethodPatch,
+				"https://example.test/api/admin/audio/track-key/"+test.path,
+				strings.NewReader(test.body),
+			)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+
+			if recorder.Code != test.status {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if invalidator.calls != test.cleared {
+				t.Fatalf("discovery lists cleared %d times, want %d", invalidator.calls, test.cleared)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

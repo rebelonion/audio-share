@@ -173,12 +173,13 @@ func TestSetPopularBanlistBuildsEscapedPatterns(t *testing.T) {
 	service.SetPopularBanlist([]string{" ASMR ", "", "100%", "snake_case", `back\slash`})
 
 	want := []string{"%ASMR%", `%100\%%`, `%snake\_case%`, `%back\\slash%`}
-	if len(service.popularBanPatterns) != len(want) {
-		t.Fatalf("patterns = %q, want %q", service.popularBanPatterns, want)
+	got := service.popularBanList()
+	if len(got) != len(want) {
+		t.Fatalf("patterns = %q, want %q", got, want)
 	}
 	for i := range want {
-		if service.popularBanPatterns[i] != want[i] {
-			t.Fatalf("patterns = %q, want %q", service.popularBanPatterns, want)
+		if got[i] != want[i] {
+			t.Fatalf("patterns = %q, want %q", got, want)
 		}
 	}
 }

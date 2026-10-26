@@ -21,6 +21,7 @@ type AdminHandler struct {
 	HealthConfig services.HealthConfig
 	Traffic      *services.TrafficMeter
 	Banner       *services.BannerStore
+	Playback     discoveryListInvalidator
 	ActiveMedia  func() (streams, downloads int)
 }
 
@@ -169,6 +170,7 @@ func (h *AdminHandler) handleAudioUnavailable(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Not found"})
 		return
 	}
+	h.invalidateDiscoveryLists()
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
@@ -205,8 +207,23 @@ func (h *AdminHandler) handleAudioRemovalRequest(w http.ResponseWriter, r *http.
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Not found"})
 		return
 	}
+	h.invalidateDiscoveryLists()
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// discoveryListInvalidator is the part of PlaybackService that caches the
+// home page lists.
+type discoveryListInvalidator interface {
+	InvalidateDiscoveryLists()
+}
+
+// invalidateDiscoveryLists makes a track status change show on the home page
+// right away instead of after the playback cache expires.
+func (h *AdminHandler) invalidateDiscoveryLists() {
+	if h.Playback != nil {
+		h.Playback.InvalidateDiscoveryLists()
+	}
 }
 
 // Requests handlers
