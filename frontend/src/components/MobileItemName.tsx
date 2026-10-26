@@ -29,9 +29,9 @@ function MobileItemName({ item }: ItemNameProps) {
                     <div className="relative">
                         <Music className="h-5 w-5 text-[var(--primary)]"/>
                         {item.removalRequestedAt ? (
-                            <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested"/>
+                            <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-warning" aria-label="Removal requested"/>
                         ) : item.unavailableAt ? (
-                            <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
+                            <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-warning" aria-label="Source unavailable"/>
                         ) : null}
                     </div>
                 )}

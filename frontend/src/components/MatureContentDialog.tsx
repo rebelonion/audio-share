@@ -25,7 +25,7 @@ export default function MatureContentDialog({
     return (
         <Dialog open={open} onClose={onCancel} labelledBy={titleId} describedBy={descriptionId} className="max-w-sm">
             <div className="flex items-start gap-3 border-b border-[var(--border)] p-4">
-                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-amber-500/12 text-amber-500">
+                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-warning/[0.12] text-warning">
                     <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">

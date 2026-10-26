@@ -74,6 +74,7 @@ export default function RecoveryPanel() {
                 setQrDataUrl(await QRCode.toDataURL(url, {
                     width: 640,
                     margin: 3,
+                    // Fixed dark-on-light palette regardless of theme so the code always scans.
                     color: {dark: '#131109', light: '#ece7de'},
                     errorCorrectionLevel: 'M',
                 }));

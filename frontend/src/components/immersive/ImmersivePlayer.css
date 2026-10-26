@@ -16,6 +16,9 @@
     font-family: var(--font-sans);
 }
 
+/* The reserved scrollbar gutter sits beside the fixed player; match it to the scene. */
+:root[data-immersive] { background-color: #17243c; }
+
 .immersive-scene-loading { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: var(--immersive-muted); }
 .immersive-chrome { position: absolute; transition: opacity 800ms ease, transform 800ms ease; }
 .immersive-header { inset: 0 0 auto; z-index: 2; padding: max(24px, env(safe-area-inset-top)) 36px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(#101c3260, transparent); }
@@ -32,9 +35,13 @@
     --muted-foreground: var(--immersive-muted);
     --border: #415464;
     --primary: #e9bb7d;
+    --primary-rgb: 233 187 125;
+    /* Derived from --primary-rgb on :root, so it has to be restated here to pick up the gold. */
+    --shadow-primary-glow: 0 8px 20px rgb(var(--primary-rgb) / 0.12);
     --primary-tint: color-mix(in srgb, var(--primary) 12%, transparent);
     --primary-border-hover: #8496a1;
     --muted: var(--card-hover);
+    --switch-track: var(--card-hover);
     --primary-border: color-mix(in srgb, var(--primary) 30%, transparent);
     --primary-wash: color-mix(in srgb, var(--primary) 8%, transparent);
 }

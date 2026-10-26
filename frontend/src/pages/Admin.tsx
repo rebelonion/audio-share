@@ -25,7 +25,7 @@ function Timestamp({value}: {value?: string | null}) {
 
 function Status({state}: {state: JobRun['state']}) {
     const color = state === 'succeeded' ? 'text-[var(--success-text)]' : state === 'running' ? 'text-[var(--primary)]'
-        : state === 'failed' ? 'text-[var(--error-text)]' : 'text-amber-400';
+        : state === 'failed' ? 'text-[var(--error-text)]' : 'text-warning-strong';
     return <span className={`inline-flex items-center gap-2 text-xs font-medium ${color}`}>
         <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
         {state === 'succeeded' ? 'Completed' : state === 'degraded' ? 'Completed with issues' : state[0].toUpperCase() + state.slice(1)}

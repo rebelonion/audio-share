@@ -11,10 +11,10 @@ import type { SourceRequest, RequestsByStatus, RequestStatus } from '@/types';
 
 const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string }> = {
     requested: { label: 'Requested', color: 'var(--muted-foreground)' },
-    downloading: { label: 'Downloading', color: '#3b82f6' },
-    indexing: { label: 'Indexing', color: '#f59e0b' },
-    added: { label: 'Added', color: '#10b981' },
-    rejected: { label: 'Rejected', color: '#ef4444' },
+    downloading: { label: 'Downloading', color: 'var(--info)' },
+    indexing: { label: 'Indexing', color: 'var(--warning)' },
+    added: { label: 'Added', color: 'var(--positive)' },
+    rejected: { label: 'Rejected', color: 'var(--destructive)' },
 };
 
 function formatDate(iso: string): string {

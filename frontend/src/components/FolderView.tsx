@@ -633,7 +633,7 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
                                                                     : 'h-[116px]'
                                                         } border border-[var(--border)] rounded-xl mb-3 overflow-hidden transition-colors ${
                                                             entry.item.type === 'audio' ? 'cursor-pointer' : ''
-                                                        } ${entry.item.type === 'audio' && entry.item.unavailableAt ? 'bg-amber-500/5' : 'bg-[var(--card)]'}`}
+                                                        } ${entry.item.type === 'audio' && entry.item.unavailableAt ? 'bg-warning/5' : 'bg-[var(--card)]'}`}
                                                         title={entry.item.type === 'audio' && entry.item.unavailableAt ? 'The original source of this audio is no longer available.' : undefined}
                                                         onClick={() => entry.item.type === 'audio' && handleAudioSelect(entry.item)}
                                                     >

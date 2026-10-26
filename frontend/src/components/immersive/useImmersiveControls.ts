@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 
 export function useImmersiveControls(onEscape: () => void) {
     const rootRef = useRef<HTMLDivElement>(null);
@@ -17,6 +17,15 @@ export function useImmersiveControls(onEscape: () => void) {
             if (focused instanceof HTMLElement && rootRef.current?.contains(focused) && focused.matches(':focus-visible')) return;
             setControlsVisible(false);
         }, 4500);
+    }, []);
+
+    // Holds the whole page, including toasts and dialogs portaled to body, on the dark palette.
+    // A layout effect so a light-theme page never paints a light frame under the opening player.
+    useLayoutEffect(() => {
+        document.documentElement.dataset.immersive = '';
+        return () => {
+            delete document.documentElement.dataset.immersive;
+        };
     }, []);
 
     useEffect(() => {

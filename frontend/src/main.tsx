@@ -7,8 +7,10 @@ import { detectAdBlocking } from './lib/adBlockProbe'
 import { setRybbitAdBlockTraits } from './lib/rybbitIdentity'
 import './index.css'
 import {installErrorReporting} from './lib/errorReporting'
+import {startThemeSync} from './lib/theme'
 
 installErrorReporting()
+startThemeSync()
 
 void detectAdBlocking()
   .then(result => setRybbitAdBlockTraits(result.status, result.adDeliveryStatus))

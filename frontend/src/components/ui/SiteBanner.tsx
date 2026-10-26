@@ -1,6 +1,8 @@
 import type {ComponentProps, ReactNode} from 'react';
 
-export default function SiteBanner({icon, action, children, className = 'border-[rgba(196,136,42,0.45)] bg-[rgba(35,29,19,0.96)] text-[var(--foreground)]', ...props}: ComponentProps<'section'> & {icon: ReactNode; action: ReactNode}) {
+export const infoBannerClass = 'border-[var(--banner-info-border)] bg-[var(--banner-info-bg)] text-[var(--foreground)]';
+
+export default function SiteBanner({icon, action, children, className = infoBannerClass, ...props}: ComponentProps<'section'> & {icon: ReactNode; action: ReactNode}) {
     return <section {...props} className={`border-b ${className}`}>
         <div className="px-4 sm:px-6 lg:px-8 py-3">
             <div className="flex items-center gap-3">

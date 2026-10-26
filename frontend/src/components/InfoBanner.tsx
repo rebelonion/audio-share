@@ -1,4 +1,4 @@
-import SiteBanner from '@/components/ui/SiteBanner'
+import SiteBanner, {infoBannerClass} from '@/components/ui/SiteBanner'
 import {IconButton} from '@/components/ui/Button'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
@@ -14,13 +14,13 @@ const styles: Record<BannerVariant, {
 }> = {
   info: {
     icon: Info,
-    className: 'border-[rgba(196,136,42,0.45)] bg-[rgba(35,29,19,0.96)] text-[var(--foreground)]',
+    className: infoBannerClass,
     linkClassName: 'text-[var(--primary)] hover:text-[var(--primary-hover)]',
   },
   warning: {
     icon: AlertTriangle,
-    className: 'border-[rgba(190,120,42,0.62)] bg-[rgba(58,38,14,0.96)] text-[var(--foreground)]',
-    linkClassName: 'text-[#efb65f] hover:text-[#ffd08a]',
+    className: 'border-[var(--banner-warning-border)] bg-[var(--banner-warning-bg)] text-[var(--foreground)]',
+    linkClassName: 'text-[var(--banner-warning-link)] hover:text-[var(--banner-warning-link-hover)]',
   },
   success: {
     icon: CheckCircle2,

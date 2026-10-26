@@ -10,16 +10,23 @@ const variants = {
 
 export interface ButtonStyleProps {
     variant?: keyof typeof variants;
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'xs' | 'sm' | 'md' | 'lg';
+    shape?: 'rounded' | 'pill';
     className?: string;
 }
 
+/** Icon buttons are fixed squares; the text-only xs size and pill shape don't apply. */
+export type IconButtonStyleProps = Omit<ButtonStyleProps, 'size' | 'shape'> & {size?: 'sm' | 'md' | 'lg'};
+
+// Text size lives with padding so callers never need to override base classes (Tailwind won't let them win reliably).
+const textSizes = {xs: 'px-3 py-1.5 text-[0.65rem]', sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2 text-sm', lg: 'px-4 py-3 text-sm'};
+
 const focusClass = 'transition-[color,background-color,border-color,text-decoration-color,fill,stroke,transform] active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50 [&:disabled_*]:pointer-events-none';
 
-export function buttonClass({variant = 'primary', size = 'md', className = ''}: ButtonStyleProps) {
-    return `inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium ${focusClass} ${variants[variant]} ${variant === 'link' ? 'p-0' : size === 'sm' ? 'px-3 py-1.5' : size === 'lg' ? 'px-4 py-3' : 'px-4 py-2'} ${className}`;
+export function buttonClass({variant = 'primary', size = 'md', shape = 'rounded', className = ''}: ButtonStyleProps) {
+    return `inline-flex items-center justify-center gap-2 ${shape === 'pill' ? 'rounded-full' : 'rounded-md'} font-medium ${focusClass} ${variants[variant]} ${variant === 'link' ? 'p-0 text-sm' : textSizes[size]} ${className}`;
 }
 
-export function iconButtonClass({variant = 'ghost', size = 'md', className = ''}: ButtonStyleProps) {
+export function iconButtonClass({variant = 'ghost', size = 'md', className = ''}: IconButtonStyleProps) {
     return `inline-flex shrink-0 items-center justify-center rounded-full ${focusClass} ${variants[variant]} ${size === 'sm' ? 'h-9 w-9 sm:h-7 sm:w-7' : size === 'lg' ? 'h-11 w-11' : 'h-9 w-9'} ${className}`;
 }

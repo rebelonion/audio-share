@@ -203,7 +203,7 @@ export default function Share() {
                 </div>
             ) : removalRestricted ? (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
-                    <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-amber-500/35 bg-amber-500/10 text-amber-400">
+                    <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-warning/35 bg-warning/10 text-warning-strong">
                         <ShieldAlert className="h-7 w-7" aria-hidden="true" />
                     </div>
                     <p className="text-[0.65rem] uppercase tracking-[0.22em] text-[var(--muted-foreground)] mb-3">Removal request</p>
@@ -270,7 +270,7 @@ export default function Share() {
                         )}
                         <div className="relative">
                             <div className="grid gap-6 sm:grid-cols-[minmax(0,15rem)_1fr] sm:items-center">
-                                <div className="aspect-video overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--secondary)] shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+                                <div className="aspect-video overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--secondary)] [box-shadow:var(--shadow-artwork)]">
                                     {meta?.thumbnail ? (
                                         <img src={thumbnailUrl} alt={`${displayTitle} artwork`} className="h-full w-full object-cover" width={480} height={270} />
                                     ) : (
@@ -363,7 +363,7 @@ export default function Share() {
                                                     },
                                                 )}
                                                 className={meta.unavailableAt
-                                                    ? 'flex items-center gap-2 text-amber-400 transition-colors hover:text-amber-300'
+                                                    ? 'flex items-center gap-2 text-warning-strong transition-colors hover:text-warning-hover'
                                                     : 'flex items-center gap-2 transition-colors hover:text-[var(--primary)]'
                                                 }
                                             >

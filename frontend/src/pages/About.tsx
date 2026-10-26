@@ -53,7 +53,7 @@ export default function About() {
             </Helmet>
             <div className="max-w-4xl mx-auto animate-slideUp">
                 {error && (
-                    <div className="mb-4 p-3 bg-yellow-900/20 text-yellow-400 rounded-lg">
+                    <div className="mb-4 p-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)]">
                         Note: Using default content. {error}
                     </div>
                 )}

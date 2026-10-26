@@ -316,7 +316,7 @@ export default function Search() {
                                     key={`${result.type}:${result.id}`}
                                     className={`flex flex-col gap-3 border border-[var(--border)] rounded-lg p-4 transition-colors group sm:flex-row sm:items-start ${
                                         result.type === 'audio' && (result.unavailableAt || result.removalRequestedAt)
-                                            ? 'bg-amber-500/5 hover:bg-amber-500/10'
+                                            ? 'bg-warning/5 hover:bg-warning/10'
                                             : 'bg-[var(--card)] hover:bg-[var(--card-hover)]'
                                     }`}
                                     title={result.type === 'audio' && result.removalRequestedAt
@@ -338,9 +338,9 @@ export default function Search() {
                                                     <div className="relative">
                                                         <Music className="h-5 w-5 text-[var(--primary)]" />
                                                         {result.removalRequestedAt ? (
-                                                            <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested" />
+                                                            <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-warning" aria-label="Removal requested" />
                                                         ) : result.unavailableAt ? (
-                                                            <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable" />
+                                                            <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-warning" aria-label="Source unavailable" />
                                                         ) : null}
                                                     </div>
                                                 )}

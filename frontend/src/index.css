@@ -22,11 +22,22 @@
         -webkit-text-size-adjust: 100%;
         -webkit-tap-highlight-color: transparent;
 
+        --font-display: 'Cormorant Garamond', Georgia, serif;
+        --font-sans: 'Jost', system-ui, sans-serif;
+    }
+
+    /* Dark is the default palette.
+       Tokens built from other tokens (--warning, --shadow-primary-glow) resolve here on :root. A nested
+       override of an input (e.g. --primary-rgb) doesn't reach them; override the derived token as well. */
+    :root {
+        color-scheme: dark;
+
         --background: #0d0b09;
         --foreground: #ece7de;
         --card: #131109;
         --card-hover: #1b1712;
         --card-foreground: #ece7de;
+        --primary-rgb: 196 136 42;
         --primary: #c4882a;
         --primary-foreground: #3b2914;
         --primary-hover: #d49940;
@@ -59,9 +70,104 @@
         --warning-bg: rgba(245, 158, 11, 0.1);
         --warning-border: rgba(245, 158, 11, 0.35);
         --warning-text: #fde68a;
+        /* Solid accents for icons and chart marks; channels let Tailwind apply opacity.
+           warning is for non-text (3:1); text uses strong (4.5:1 on every surface); hover adds contrast on top of it (lighter here, darker in light). */
+        --warning-rgb: 245 158 11;
+        --warning-strong-rgb: 251 191 36;
+        --warning-hover-rgb: 252 211 77;
+        --warning: rgb(var(--warning-rgb));
+        --info: #3b82f6;
+        --positive: #10b981;
+        --destructive: #ef4444;
 
-        --font-display: 'Cormorant Garamond', Georgia, serif;
-        --font-sans: 'Jost', system-ui, sans-serif;
+        --banner-info-bg: rgba(35, 29, 19, 0.96);
+        --banner-info-border: rgba(196, 136, 42, 0.45);
+        --banner-warning-bg: rgba(58, 38, 14, 0.96);
+        --banner-warning-border: rgba(190, 120, 42, 0.62);
+        --banner-warning-link: #efb65f;
+        --banner-warning-link-hover: #ffd08a;
+
+        --overlay: rgba(0, 0, 0, 0.6);
+        --overlay-strong: rgba(0, 0, 0, 0.7);
+        --hover-wash: rgba(255, 255, 255, 0.05);
+        --switch-thumb: #fff;
+        --switch-track: #352d1e;
+        --scrollbar-track: rgba(0, 0, 0, 0.15);
+        --noise-opacity: 0.035;
+
+        --shadow-dialog: 0 24px 80px rgba(0, 0, 0, 0.55);
+        --shadow-artwork: 0 16px 40px rgba(0, 0, 0, 0.35);
+        --shadow-primary-glow: 0 8px 20px rgb(var(--primary-rgb) / 0.12);
+    }
+
+    /* Warm parchment counterpart to the dark palette; same token names, text pairs kept at WCAG AA.
+       Suspended while the immersive player is open so it, and the toasts and dialogs above it, stay dark. */
+    :root[data-theme='light']:not([data-immersive]) {
+        color-scheme: light;
+
+        --background: #f4eee3;
+        --foreground: #2a2116;
+        --card: #fbf8f2;
+        --card-hover: #f1e9dc;
+        --card-foreground: #2a2116;
+        --primary-rgb: 154 95 20;
+        --primary: #9a5f14;
+        --primary-foreground: #fffaf1;
+        --primary-hover: #84500f;
+        --primary-wash: rgba(154, 95, 20, 0.05);
+        --primary-tint: rgba(154, 95, 20, 0.09);
+        --primary-soft: rgba(154, 95, 20, 0.16);
+        --primary-soft-hover: rgba(154, 95, 20, 0.24);
+        --primary-soft-foreground: #6e420c;
+        --primary-selected: #f3e6cf;
+        --primary-selected-hover: #ecdcbf;
+        --primary-border: rgba(154, 95, 20, 0.4);
+        --primary-border-hover: rgba(154, 95, 20, 0.55);
+        --secondary: #ebe3d5;
+        --secondary-hover: #e3d9c8;
+        --secondary-translucent: rgba(235, 227, 213, 0.75);
+        --muted: #e2d7c5;
+        --muted-foreground: #6b5d4c;
+        --border: #dccfba;
+        --border-subtle: rgba(220, 207, 186, 0.6);
+        --border-strong: rgba(220, 207, 186, 0.9);
+        --card-translucent: rgba(251, 248, 242, 0.6);
+        --card-hover-subtle: rgba(241, 233, 220, 0.5);
+
+        --error-bg: rgba(250, 227, 218, 0.95);
+        --error-border: rgba(190, 75, 40, 0.45);
+        --error-text: #a3361a;
+        --success-bg: rgba(243, 230, 200, 0.95);
+        --success-border: rgba(154, 95, 20, 0.5);
+        --success-text: #7a4b0e;
+        --warning-bg: rgba(217, 119, 6, 0.12);
+        --warning-border: rgba(217, 119, 6, 0.4);
+        --warning-text: #8a3d0b;
+        --warning-rgb: 178 94 4;
+        --warning-strong-rgb: 154 74 6;
+        --warning-hover-rgb: 124 58 8;
+        --info: #2563eb;
+        --positive: #047857;
+        --destructive: #c81e1e;
+
+        --banner-info-bg: rgba(246, 234, 212, 0.97);
+        --banner-info-border: rgba(154, 95, 20, 0.35);
+        --banner-warning-bg: rgba(246, 226, 194, 0.97);
+        --banner-warning-border: rgba(190, 110, 30, 0.5);
+        --banner-warning-link: #8f520b;
+        --banner-warning-link-hover: #6e3e06;
+
+        --overlay: rgba(42, 33, 22, 0.4);
+        --overlay-strong: rgba(42, 33, 22, 0.5);
+        --hover-wash: rgba(42, 33, 22, 0.05);
+        /* Off track: >= 3:1 against the white thumb and the card/secondary surfaces. */
+        --switch-track: #8c7a62;
+        --scrollbar-track: rgba(42, 33, 22, 0.08);
+        --noise-opacity: 0.025;
+
+        --shadow-dialog: 0 24px 80px rgba(60, 40, 15, 0.22);
+        --shadow-artwork: 0 16px 40px rgba(60, 40, 15, 0.16);
+        --shadow-primary-glow: 0 8px 20px rgb(var(--primary-rgb) / 0.14);
     }
 
     html {
@@ -114,9 +220,9 @@
         background-color: var(--background);
         color: var(--foreground);
         background-image:
-            radial-gradient(ellipse at 15% 40%, rgba(196, 136, 42, 0.07) 0%, transparent 55%),
-            radial-gradient(ellipse at 85% 10%, rgba(196, 136, 42, 0.05) 0%, transparent 45%),
-            radial-gradient(ellipse at 50% 90%, rgba(196, 136, 42, 0.04) 0%, transparent 50%);
+            radial-gradient(ellipse at 15% 40%, rgb(var(--primary-rgb) / 0.07) 0%, transparent 55%),
+            radial-gradient(ellipse at 85% 10%, rgb(var(--primary-rgb) / 0.05) 0%, transparent 45%),
+            radial-gradient(ellipse at 50% 90%, rgb(var(--primary-rgb) / 0.04) 0%, transparent 50%);
         background-attachment: fixed;
         position: relative;
         isolation: isolate;
@@ -136,7 +242,7 @@
         background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22noise%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.85%22%20numOctaves%3D%224%22%20stitchTiles%3D%22stitch%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url(%23noise)%22%20opacity%3D%221%22%2F%3E%3C%2Fsvg%3E");
         background-repeat: repeat;
         background-size: 200px 200px;
-        opacity: 0.035;
+        opacity: var(--noise-opacity);
         pointer-events: none;
     }
 }
@@ -287,7 +393,7 @@
             90deg,
             var(--muted) 0%,
             var(--muted) 35%,
-            rgba(196, 136, 42, 0.07) 50%,
+            rgb(var(--primary-rgb) / 0.07) 50%,
             var(--muted) 65%,
             var(--muted) 100%
         );
@@ -303,7 +409,7 @@
 
     .custom-scrollbar {
         scrollbar-width: thin;
-        scrollbar-color: var(--primary) rgba(0, 0, 0, 0.15);
+        scrollbar-color: var(--primary) var(--scrollbar-track);
     }
 
     .custom-scrollbar::-webkit-scrollbar {
@@ -312,7 +418,7 @@
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.15);
+        background: var(--scrollbar-track);
         border-radius: 2px;
     }
 

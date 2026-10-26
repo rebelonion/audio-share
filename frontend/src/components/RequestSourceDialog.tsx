@@ -247,7 +247,7 @@ export default function RequestSourceDialog({ isOpen, onCloseAction }: RequestSo
                             <Link
                                 to={`/browse/${status.folderPath.split('/').map(encodeURIComponent).join('/')}`}
                                 onClick={handleClose}
-                                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-current px-2.5 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5"
+                                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-current px-2.5 py-1.5 text-sm font-medium hover:bg-[var(--hover-wash)]"
                             >
                                 <Folder className="h-4 w-4" />
                                 Browse

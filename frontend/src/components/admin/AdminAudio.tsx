@@ -44,7 +44,7 @@ export default function AdminAudio({onAuthFailure}: {onAuthFailure: AuthFailure}
                 <p className="mb-1 [overflow-wrap:anywhere] text-xs text-[var(--muted-foreground)]">{item.filename} · {item.shareKey}</p>
                 <SourceLink url={item.webpageUrl} />
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className={item.unavailableAt ? 'text-amber-400' : 'text-[var(--muted-foreground)]'}>{item.unavailableAt ? 'Source unavailable' : 'Source not flagged'}</span>
+                    <span className={item.unavailableAt ? 'text-warning-strong' : 'text-[var(--muted-foreground)]'}>{item.unavailableAt ? 'Source unavailable' : 'Source not flagged'}</span>
                     <span className={item.removalRequestedAt ? 'text-[var(--error-text)]' : 'text-[var(--muted-foreground)]'}>· {item.removalRequestedAt ? 'Removal requested' : 'No removal request'}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">

@@ -18,8 +18,8 @@ function TrackImage({ track }: { track: UnavailableTrack }) {
 
     if (!imageUrl) {
         return (
-            <div className="w-full h-full bg-amber-500/10 flex items-center justify-center">
-                <Music className="h-8 w-8 text-amber-500/50" />
+            <div className="w-full h-full bg-warning/10 flex items-center justify-center">
+                <Music className="h-8 w-8 text-warning/50" />
             </div>
         );
     }
@@ -72,7 +72,7 @@ export default function UnavailableBanner({ tracks }: Props) {
             Unavailable Sources
         </h2>
         <div
-            className="group rounded-lg border border-[var(--border)] bg-amber-500/5 hover:bg-amber-500/10 transition-colors overflow-hidden"
+            className="group rounded-lg border border-[var(--border)] bg-warning/5 hover:bg-warning/10 transition-colors overflow-hidden"
             onMouseEnter={() => { paused.current = true; }}
             onMouseLeave={() => { paused.current = false; }}
         >
@@ -86,7 +86,7 @@ export default function UnavailableBanner({ tracks }: Props) {
                 </div>
 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium mb-1.5">
+                    <div className="flex items-center gap-1.5 text-xs text-warning-strong font-medium mb-1.5">
                         {track.removalRequestedAt ? (
                             <>
                                 <ShieldAlert className="h-3 w-3 flex-shrink-0" />
@@ -119,8 +119,8 @@ export default function UnavailableBanner({ tracks }: Props) {
                                 onClick={() => goTo(i)}
                                 className={`h-1.5 rounded-full transition-[width,background-color] duration-300 ${
                                     i === index
-                                        ? 'w-4 bg-amber-500'
-                                        : 'w-1.5 bg-amber-500/30 hover:bg-amber-500/60'
+                                        ? 'w-4 bg-warning'
+                                        : 'w-1.5 bg-warning/30 hover:bg-warning/60'
                                 }`}
                             />
                         ))}

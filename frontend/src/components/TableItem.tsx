@@ -27,7 +27,7 @@ function TableItem({ item, showDurationColumn, handleAudioSelect, copiedShareKey
         <tr
             className={`file-row h-[65px] border-t border-[var(--border)] hover:bg-[var(--card-hover)] ${
                 item.type === 'audio' ? 'cursor-pointer' : ''
-            } ${item.type === 'audio' && (item.unavailableAt || item.removalRequestedAt) ? 'bg-amber-500/5 hover:bg-amber-500/10' : ''}`}
+            } ${item.type === 'audio' && (item.unavailableAt || item.removalRequestedAt) ? 'bg-warning/5 hover:bg-warning/10' : ''}`}
             title={item.type === 'audio' && item.removalRequestedAt
                 ? 'A removal request has been received. This item is only visible on the local network.'
                 : item.type === 'audio' && item.unavailableAt
@@ -61,9 +61,9 @@ function TableItem({ item, showDurationColumn, handleAudioSelect, copiedShareKey
                             <div className="relative">
                                 <Music className="h-5 w-5 text-[var(--primary)]"/>
                                 {item.removalRequestedAt ? (
-                                    <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-amber-500" aria-label="Removal requested"/>
+                                    <ShieldAlert className="absolute -bottom-1 -right-1 h-3.5 w-3.5 text-warning" aria-label="Removal requested"/>
                                 ) : item.unavailableAt ? (
-                                    <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-amber-500" aria-label="Source unavailable"/>
+                                    <Unlink className="absolute -bottom-1 -right-1 h-3 w-3 text-warning" aria-label="Source unavailable"/>
                                 ) : null}
                             </div>
                         </div>

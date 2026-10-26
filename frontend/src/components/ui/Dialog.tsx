@@ -77,7 +77,7 @@ export default function Dialog({open, onClose, labelledBy, describedBy, initialF
 
     if (!open) return null;
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain bg-black/60 p-4 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain bg-[var(--overlay)] p-4 backdrop-blur-sm"
             onClick={event => {
                 if (event.target === event.currentTarget && openDialogs[openDialogs.length - 1] === rootRef.current) {
                     event.stopPropagation();
@@ -85,7 +85,7 @@ export default function Dialog({open, onClose, labelledBy, describedBy, initialF
                 }
             }}>
             <div ref={rootRef} onKeyDown={handleKeyDown} role="dialog" aria-modal="true" aria-labelledby={labelledBy} aria-describedby={describedBy} tabIndex={-1}
-                className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-[0_24px_80px_rgba(0,0,0,0.55)] animate-fadeIn ${className}`}>
+                className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg border border-[var(--border)] bg-[var(--card)] [box-shadow:var(--shadow-dialog)] animate-fadeIn ${className}`}>
                 {children}
             </div>
         </div>, document.body,

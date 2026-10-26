@@ -143,7 +143,7 @@ export default function Likes() {
                                         {missing ? 'Audio file no longer available' : track.artist || track.parentFolderName || 'Unknown artist'}
                                         {!missing && removalRequested
                                             ? <Badge size="sm" className="ml-2">Removal requested</Badge>
-                                            : sourceUnavailable && <span className="ml-2 text-amber-500">Original source unavailable</span>}
+                                            : sourceUnavailable && <span className="ml-2 text-warning-strong">Original source unavailable</span>}
                                     </div>
                                 </button>
                                 <TrackQuickActions track={playerTrack} className="shrink-0" />

@@ -95,7 +95,7 @@ const UnavailableTooltip = ({active, payload, label}: UnavailableTooltipProps) =
     return (
         <div className="bg-[var(--card)] border border-[var(--border)] p-3 rounded-lg shadow-lg max-w-xs">
             <p className="text-[var(--foreground)] font-semibold mb-1">{label}</p>
-            <p className="text-sm text-amber-500">Marked unavailable: {payload[0].value.toLocaleString()}</p>
+            <p className="text-sm text-warning-strong">Marked unavailable: {payload[0].value.toLocaleString()}</p>
             {sources.length > 0 && (
                 <div className="mt-2 border-t border-[var(--border)] pt-2 space-y-1">
                     {displayedSources.map(source => (
@@ -128,7 +128,7 @@ const UnavailableBar = (props: BarShapeProps) => {
         <Rectangle
             {...props}
             radius={[6, 6, 0, 0]}
-            fill={isInitialBacklog ? 'var(--muted-foreground)' : '#f59e0b'}
+            fill={isInitialBacklog ? 'var(--muted-foreground)' : 'var(--warning)'}
             fillOpacity={isInitialBacklog ? 0.65 : 0.85}
         />
     );
@@ -260,36 +260,8 @@ export function AudioChart({data}: AudioChartProps) {
                     Total: <span className="text-[var(--primary)] font-bold text-xl">{data.total.toLocaleString()}</span> files
                 </p>
                 <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                        <span className="text-sm text-[var(--muted-foreground)]">Cumulative</span>
-                        <div
-                            className={`relative w-11 h-6 rounded-full transition-colors ${
-                                showCumulative ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                            }`}
-                            onClick={() => setShowCumulative(!showCumulative)}
-                        >
-                            <div
-                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                                    showCumulative ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                            />
-                        </div>
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                        <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
-                        <div
-                            className={`relative w-11 h-6 rounded-full transition-colors ${
-                                hideZeroDays ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                            }`}
-                            onClick={() => setHideZeroDays(!hideZeroDays)}
-                        >
-                            <div
-                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                                    hideZeroDays ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                            />
-                        </div>
-                    </label>
+                    <Switch checked={showCumulative} onChange={setShowCumulative}>Cumulative</Switch>
+                    <Switch checked={hideZeroDays} onChange={setHideZeroDays}>Hide zero days</Switch>
                 </div>
             </div>
             <ResponsiveContainer width="100%" height={chartHeight} key={`audio-${hideZeroDays}-${showCumulative}`}>
@@ -405,7 +377,7 @@ export function UnavailableChart({data}: {data: UnavailableByDayData}) {
         <>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
                 <p className="text-[var(--muted-foreground)]">
-                    Current total: <span className="text-amber-500 font-bold text-xl">{data.total.toLocaleString()}</span>
+                    Current total: <span className="text-warning-strong font-bold text-xl">{data.total.toLocaleString()}</span>
                 </p>
                 {hasLaterDays && (
                     <Button variant={showInitialBacklog ? 'selected' : 'secondary'} size="sm"
@@ -420,7 +392,7 @@ export function UnavailableChart({data}: {data: UnavailableByDayData}) {
             </div>
 
             <Alert variant="warning" className="mb-5">
-                <span className="font-semibold text-amber-500">Initial record: {initialDay.count.toLocaleString()} on {initialDay.date}.</span>{' '}
+                <span className="font-semibold text-warning-strong">Initial record: {initialDay.count.toLocaleString()} on {initialDay.date}.</span>{' '}
                 It may include older unavailable audio collected when tracking began{hasLaterDays && !showInitialBacklog ? ', so it is excluded from the chart scale' : ''}.
             </Alert>
 
@@ -442,12 +414,12 @@ export function UnavailableChart({data}: {data: UnavailableByDayData}) {
                         tick={{fill: 'var(--muted-foreground)', fontSize: isMobile ? 10 : 12}}
                         width={isMobile ? 30 : 60}
                     />
-                    <Tooltip content={<UnavailableTooltip />} cursor={{fill: '#f59e0b', fillOpacity: 0.08}} />
+                    <Tooltip content={<UnavailableTooltip />} cursor={{fill: 'var(--warning)', fillOpacity: 0.08}} />
                     <Bar dataKey="count" name="Marked unavailable" shape={UnavailableBar} />
                     <Brush
                         dataKey="date"
                         height={isMobile ? 40 : 30}
-                        stroke="#f59e0b"
+                        stroke="var(--warning)"
                         fill="var(--card)"
                         startIndex={defaultStartIndex}
                         endIndex={defaultEndIndex}
@@ -501,36 +473,8 @@ export function SourcesChart({data}: SourcesChartProps) {
                     Total: <span className="text-[var(--primary)] font-bold text-xl">{data.total.toLocaleString()}</span> sources
                 </p>
                 <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                        <span className="text-sm text-[var(--muted-foreground)]">Cumulative</span>
-                        <div
-                            className={`relative w-11 h-6 rounded-full transition-colors ${
-                                showCumulative ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                            }`}
-                            onClick={() => setShowCumulative(!showCumulative)}
-                        >
-                            <div
-                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                                    showCumulative ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                            />
-                        </div>
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                        <span className="text-sm text-[var(--muted-foreground)]">Hide zero days</span>
-                        <div
-                            className={`relative w-11 h-6 rounded-full transition-colors ${
-                                hideZeroDays ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                            }`}
-                            onClick={() => setHideZeroDays(!hideZeroDays)}
-                        >
-                            <div
-                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                                    hideZeroDays ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                            />
-                        </div>
-                    </label>
+                    <Switch checked={showCumulative} onChange={setShowCumulative}>Cumulative</Switch>
+                    <Switch checked={hideZeroDays} onChange={setHideZeroDays}>Hide zero days</Switch>
                 </div>
             </div>
             <ResponsiveContainer width="100%" height={chartHeight} key={`sources-${hideZeroDays}-${showCumulative}`}>
@@ -734,7 +678,7 @@ const ScatterTooltip = ({active, payload}: ScatterTooltipProps) => {
                 <p className="text-[var(--foreground)] font-semibold mb-1 truncate">{d.name}</p>
                 <p className="text-sm text-[var(--muted-foreground)]">{d.total.toLocaleString()} total files</p>
                 <p className="text-sm text-[var(--muted-foreground)]">{d.unavailable.toLocaleString()} unavailable</p>
-                <p className="text-sm font-bold mt-1" style={{color: d.ratio > 0.5 ? 'var(--destructive, #ef4444)' : d.ratio > 0.1 ? '#f59e0b' : 'var(--primary)'}}>
+                <p className="text-sm font-bold mt-1" style={{color: d.ratio > 0.5 ? 'var(--destructive)' : d.ratio > 0.1 ? 'rgb(var(--warning-strong-rgb))' : 'var(--primary)'}}>
                     {pct}% unavailable
                 </p>
             </div>

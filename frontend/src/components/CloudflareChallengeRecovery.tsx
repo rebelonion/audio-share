@@ -37,7 +37,7 @@ export default function CloudflareChallengeRecovery() {
     return (
         <dialog
             ref={dialogRef}
-            className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl backdrop:bg-black/70"
+            className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl backdrop:bg-[var(--overlay-strong)]"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="security-check-title"

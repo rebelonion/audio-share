@@ -135,7 +135,7 @@ export default function TrackListSection({title, tracks, source = 'home'}: Track
                             className="flex-shrink-0 w-44 snap-start group animate-fadeIn"
                             style={{animationDelay: `${index * 35}ms`, animationFillMode: 'both'}}
                         >
-                            <Card padding="none" className="relative overflow-hidden group-hover:border-[var(--primary)] group-hover:shadow-[0_8px_20px_rgba(196,136,42,0.12)] transition-[border-color,box-shadow] duration-200">
+                            <Card padding="none" className="relative overflow-hidden group-hover:border-[var(--primary)] group-hover:[box-shadow:var(--shadow-primary-glow)] transition-[border-color,box-shadow] duration-200">
                                 <Link
                                     to={`/share/${track.shareKey}`}
                                     onClick={() => trackEvent('carousel-click', {
