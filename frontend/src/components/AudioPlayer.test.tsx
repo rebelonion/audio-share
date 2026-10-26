@@ -104,31 +104,18 @@ afterEach(() => {
 });
 
 describe('immersive player', () => {
-    it.each([false, true])('highlights discovery once and tracks entry and exit (mobile: %s)', async mobile => {
+    it.each([false, true])('tracks entry and exit (mobile: %s)', async mobile => {
         setMobile(mobile);
-        const view = render(<ToastProvider><AudioPlayer /></ToastProvider>);
+        render(<ToastProvider><AudioPlayer /></ToastProvider>);
         if (mobile) fireEvent.click(screen.getByRole('button', {name: 'Expand player'}));
         const opener = screen.getByRole('button', {name: 'Open immersive player'});
-        expect(within(opener).getByText('New')).toBeTruthy();
+        expect(within(opener).queryByText('New')).toBeNull();
         fireEvent.click(opener);
         const dialog = await screen.findByRole('dialog', {name: 'Immersive player'});
-        expect(analytics.track).toHaveBeenCalledWith('immersive-player-open', {
-            entryPoint: 'expanded', highlighted: true,
-        });
+        expect(analytics.track).toHaveBeenCalledWith('immersive-player-open', {entryPoint: 'expanded'});
         expect(analytics.track.mock.calls.filter(([event]) => event === 'immersive-player-open')).toHaveLength(1);
         fireEvent.keyDown(within(dialog).getByRole('button', {name: 'Exit immersive player'}), {key: 'Escape'});
         expect(analytics.track).toHaveBeenCalledWith('immersive-player-close', {scene: 'traveler'});
-        expect(localStorage.getItem('audio-share:immersive-discovered')).toBe('true');
-        view.unmount();
-        render(<ToastProvider><AudioPlayer /></ToastProvider>);
-        if (mobile) fireEvent.click(screen.getByRole('button', {name: 'Expand player'}));
-        const returningOpener = screen.getByRole('button', {name: 'Open immersive player'});
-        expect(within(returningOpener).queryByText('New')).toBeNull();
-        fireEvent.click(returningOpener);
-        await screen.findByRole('dialog', {name: 'Immersive player'});
-        expect(analytics.track).toHaveBeenCalledWith('immersive-player-open', {
-            entryPoint: 'expanded', highlighted: false,
-        });
     });
 
     it.each([

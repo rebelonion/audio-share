@@ -40,10 +40,7 @@ import {useLikes} from '@/contexts/LikesContext';
 import {useToast} from '@/contexts/ToastContext';
 import {audioShareUrl} from '@/lib/share';
 import {useRybbit} from '@/hooks/useRybbit';
-import {readLocalStorage, writeLocalStorage} from '@/lib/storage';
 import ImmersiveErrorBoundary from './immersive/ImmersiveErrorBoundary';
-
-const IMMERSIVE_DISCOVERED_KEY = 'audio-share:immersive-discovered';
 
 const ImmersivePlayer = lazy(() => import('./immersive/ImmersivePlayer'));
 
@@ -57,7 +54,6 @@ export default function AudioPlayer() {
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [showQueue, setShowQueue] = useState(false);
     const [showImmersive, setShowImmersive] = useState(false);
-    const [immersiveIsNew, setImmersiveIsNew] = useState(() => readLocalStorage(IMMERSIVE_DISCOVERED_KEY) !== 'true');
     const {track: trackEvent} = useRybbit();
     const queueButtonRef = useRef<HTMLButtonElement>(null);
     const queueId = useId();
@@ -158,26 +154,19 @@ export default function AudioPlayer() {
     if (!currentTrack) return null;
 
     const immersiveEntry = (
-        <Button size="sm" variant={immersiveIsNew ? 'selected' : 'ghost'}
+        <Button size="sm" variant="ghost"
             type="button"
             onClick={() => {
                 setShowQueue(false);
                 setShowImmersive(true);
                 enableAudioLevels?.();
-                setImmersiveIsNew(false);
-                writeLocalStorage(IMMERSIVE_DISCOVERED_KEY, 'true');
-                trackEvent('immersive-player-open', {
-                    entryPoint: 'expanded',
-                    highlighted: immersiveIsNew,
-                });
+                trackEvent('immersive-player-open', {entryPoint: 'expanded'});
             }}
             className="min-h-9 shrink-0"
             aria-label="Open immersive player"
-            aria-description={immersiveIsNew ? 'New: explore waveform landscapes while you listen' : undefined}
-            title={immersiveIsNew ? 'New: explore immersive waveform scenes' : 'Open immersive player'}
+            title="Open immersive player"
         >
             <Mountain className="h-4 w-4" />
-            {immersiveIsNew && <span className="text-[9px] font-semibold uppercase tracking-wide">New</span>}
         </Button>
     );
 
