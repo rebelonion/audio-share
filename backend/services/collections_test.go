@@ -95,8 +95,8 @@ func TestIntegrationCollectionsAliasesRequestsAndEmptyWrappers(t *testing.T) {
 	if all.Added[0].FolderPath == nil || *all.Added[0].FolderPath != "root/creator" {
 		t.Fatalf("%+v", all)
 	}
-	if len(all.Downloading) != 1 {
-		t.Fatal("indexing must not mark an unfinished download added")
+	if len(all.Downloading) != 0 || len(all.Added) != 2 {
+		t.Fatalf("indexing must mark a matched download added: %+v", all)
 	}
 	// A retained collection from a removed directory must not hide its replacement.
 	if _, err := db.db.Exec(`INSERT INTO collections(path,name) VALUES ('root/removed','Old location');

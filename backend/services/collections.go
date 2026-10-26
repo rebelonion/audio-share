@@ -170,7 +170,7 @@ func (s *indexJob) refreshCollections() error {
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE source_requests sr SET status='added',updated_at=CURRENT_TIMESTAMP
      FROM collections c JOIN folders f ON f.path=c.path
-     WHERE sr.collection_id=c.id AND sr.status='indexing'
+     WHERE sr.collection_id=c.id AND sr.status IN ('downloading','indexing')
      AND NOT EXISTS (
        SELECT 1 FROM unnest($1::text[]) AS deferred(path)
        WHERE deferred.path=c.path OR starts_with(deferred.path,c.path || '/')
