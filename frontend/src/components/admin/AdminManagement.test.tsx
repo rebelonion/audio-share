@@ -11,6 +11,7 @@ import type {SourceRequest} from '@/types';
 
 vi.mock('@/lib/adminManagement');
 const existing: SourceRequest = {id: 7, title: 'Quiet rain', submittedUrl: 'https://example.test/rain', status: 'requested', tags: [{name: 'ASMR', color: '#c4882a'}], folderShareKey: 'folder-1', createdAt: '', updatedAt: ''};
+const pendingMessage: api.PendingTargetedMessage = {id: 12, sessionId: 'visitor-id', title: 'Hello', message: 'A note', createdAt: '2026-10-29T12:00:00Z'};
 const authFailure = vi.fn();
 const change = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), {target: {value}});
 const click = (name: string) => fireEvent.click(screen.getByRole('button', {name}));
@@ -24,7 +25,8 @@ beforeEach(() => {
     vi.mocked(api.listAdminRequests).mockResolvedValue([existing]);
     vi.mocked(api.listAudioSources).mockResolvedValue([{shareKey: 'audio-1', filename: 'rain.wav', title: 'Rain', webpageUrl: 'https://example.test/rain', unavailableAt: null, removalRequestedAt: null}]);
     vi.mocked(api.createAdminRequest).mockImplementation(async draft => ({...existing, ...draft, id: 8}));
-    vi.mocked(api.sendTargetedMessage).mockResolvedValue({id: 12});
+    vi.mocked(api.sendTargetedMessage).mockResolvedValue(pendingMessage);
+    vi.mocked(api.listTargetedMessages).mockResolvedValue([]);
 });
 afterEach(cleanup);
 
@@ -105,17 +107,66 @@ it('reports expired credentials to the admin shell', async () => {
 });
 
 it('queues a message only once while pending and clears the form on success', async () => {
-    let finish!: (value: {id: number}) => void;
+    let finish!: (value: api.PendingTargetedMessage) => void;
     vi.mocked(api.sendTargetedMessage).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     render(<AdminMessages onAuthFailure={authFailure} />);
     change('Session ID', ' visitor-id '); change('Message title (optional)', ' Hello '); change('Message', ' A note '); click('Send message');
     expect(api.sendTargetedMessage).toHaveBeenCalledWith({sessionId: 'visitor-id', title: 'Hello', message: 'A note'}, expect.any(AbortSignal));
     fireEvent.submit(screen.getByLabelText('Message').closest('form')!);
     expect(api.sendTargetedMessage).toHaveBeenCalledTimes(1);
-    await act(async () => finish({id: 12}));
+    await act(async () => finish(pendingMessage));
     expect(screen.getByText(/Message #12 queued/)).toBeTruthy();
     expect((screen.getByLabelText('Session ID') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('');
+    expect(screen.getByText(/#12 · /)).toBeTruthy();
+});
+
+it('lists pending messages and deletes one after confirmation', async () => {
+    vi.mocked(api.listTargetedMessages).mockResolvedValue([pendingMessage, {...pendingMessage, id: 13, sessionId: 'other-id', message: 'Second note'}]);
+    vi.mocked(api.deleteTargetedMessage).mockResolvedValue(true);
+    render(<AdminMessages onAuthFailure={authFailure} />);
+    await screen.findByText('Second note');
+    fireEvent.click(screen.getAllByRole('button', {name: 'Delete message'})[0]);
+    click('Cancel');
+    expect(api.deleteTargetedMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', {name: 'Delete message'})[0]);
+    click('Confirm delete');
+    await screen.findByText(/Message #12 deleted/);
+    expect(api.deleteTargetedMessage).toHaveBeenCalledWith(12, expect.any(AbortSignal));
+    expect(screen.queryByText('A note')).toBeNull();
+    expect(screen.getByText('Second note')).toBeTruthy();
+});
+
+it('keeps a pending message listed when deletion fails', async () => {
+    vi.mocked(api.listTargetedMessages).mockResolvedValue([pendingMessage]);
+    vi.mocked(api.deleteTargetedMessage).mockRejectedValue(new Error('Could not confirm the change. Check the current state before retrying.'));
+    render(<AdminMessages onAuthFailure={authFailure} />);
+    await screen.findByText('A note');
+    click('Delete message'); click('Confirm delete');
+    await screen.findByText(/Could not confirm the change/);
+    expect(screen.getByText('A note')).toBeTruthy();
+});
+
+it('drops a message the visitor already dismissed and closes the confirmation', async () => {
+    vi.mocked(api.listTargetedMessages).mockResolvedValue([pendingMessage]);
+    vi.mocked(api.deleteTargetedMessage).mockResolvedValue(false);
+    render(<AdminMessages onAuthFailure={authFailure} />);
+    await screen.findByText('A note');
+    click('Delete message'); click('Confirm delete');
+    await screen.findByText(/Message #12 was already gone/);
+    expect(screen.queryByText('A note')).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Confirm delete'})).toBeNull();
+});
+
+it('keeps a message sent while the pending list is still loading', async () => {
+    let finishList!: (value: api.PendingTargetedMessage[]) => void;
+    vi.mocked(api.listTargetedMessages).mockImplementation(() => new Promise(resolve => { finishList = resolve; }));
+    render(<AdminMessages onAuthFailure={authFailure} />);
+    change('Session ID', 'visitor-id'); change('Message', 'A note'); click('Send message');
+    await screen.findByText(/Message #12 queued/);
+    await act(async () => finishList([{...pendingMessage, id: 13, sessionId: 'other-id', message: 'Older note'}]));
+    expect(screen.getByText('A note')).toBeTruthy();
+    expect(screen.getByText('Older note')).toBeTruthy();
 });
 
 it('retains a message draft on conflict and cancels requests when leaving', async () => {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/onion/audio-share-backend/services"
@@ -152,4 +153,67 @@ func (h *AdminHandler) handleTargetedMessageCreate(w http.ResponseWriter, r *htt
 	}
 
 	writeJSON(w, http.StatusCreated, message)
+}
+
+func (h *AdminHandler) handleTargetedMessageList(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT id, session_id, title, message, created_at FROM targeted_messages
+		ORDER BY created_at DESC, id DESC
+	`)
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: targeted message list failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	defer rows.Close()
+
+	messages := []targetedMessage{}
+	for rows.Next() {
+		var message targetedMessage
+		if err := rows.Scan(&message.ID, &message.SessionID, &message.Title, &message.Message, &message.CreatedAt); err != nil {
+			services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+			log.Printf("admin: targeted message scan failed: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+			return
+		}
+		messages = append(messages, message)
+	}
+	if err := rows.Err(); err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: targeted message list failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, messages)
+}
+
+func (h *AdminHandler) handleTargetedMessageDelete(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid message ID"})
+		return
+	}
+
+	result, err := h.db.ExecContext(r.Context(), "DELETE FROM targeted_messages WHERE id = $1", id)
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: targeted message delete failed for id=%d: %v", id, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		services.AddErrorContext(r.Context(), services.ErrorDetails(err))
+		log.Printf("admin: targeted message delete result failed for id=%d: %v", id, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	if affected == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Message not found. The visitor may have already seen it."})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

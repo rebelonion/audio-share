@@ -19,6 +19,13 @@ export interface NewRequest {
     tags: Tag[];
 }
 export interface TargetedMessageDraft {sessionId: string; title: string; message: string}
+export interface PendingTargetedMessage extends TargetedMessageDraft {id: number; createdAt: string}
+
+// A failed admin request that reached the server, kept with its status so
+// callers can treat specific outcomes, such as an already-removed row, apart.
+export class AdminRequestError extends Error {
+    constructor(message: string, readonly status: number) { super(message); }
+}
 
 async function request<T>(path: string, signal: AbortSignal, method = 'GET', body?: unknown): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -30,7 +37,7 @@ async function request<T>(path: string, signal: AbortSignal, method = 'GET', bod
     if (!response.ok) {
         const result = await response.json().catch(() => null);
         const fallback = method === 'GET' ? 'Could not load data. Try refreshing.' : 'Could not confirm the change. Check the current state before retrying.';
-        throw new Error(response.status < 500 && typeof result?.error === 'string' ? result.error : fallback);
+        throw new AdminRequestError(response.status < 500 && typeof result?.error === 'string' ? result.error : fallback, response.status);
     }
     return response.json();
 }
@@ -46,7 +53,13 @@ export const deleteAdminRequest = (id: number, signal: AbortSignal) => request(`
 export const listAudioSources = (signal: AbortSignal) => request<AudioSource[]>('/api/admin/audio/sources', signal);
 export const setAudioUnavailable = (key: string, unavailable: boolean, signal: AbortSignal) => request(`/api/admin/audio/${encodeURIComponent(key)}/unavailable`, signal, 'PATCH', {unavailable});
 export const setAudioRemovalRequested = (key: string, removalRequested: boolean, signal: AbortSignal) => request(`/api/admin/audio/${encodeURIComponent(key)}/removal-request`, signal, 'PATCH', {removalRequested});
-export const sendTargetedMessage = (body: TargetedMessageDraft, signal: AbortSignal) => request<{id: number}>('/api/admin/targeted-messages', signal, 'POST', body);
+export const sendTargetedMessage = (body: TargetedMessageDraft, signal: AbortSignal) => request<PendingTargetedMessage>('/api/admin/targeted-messages', signal, 'POST', body);
+export const listTargetedMessages = (signal: AbortSignal) => request<PendingTargetedMessage[]>('/api/admin/targeted-messages', signal);
+// Resolves false when the message was already gone because its visitor acknowledged it.
+export const deleteTargetedMessage = (id: number, signal: AbortSignal) => request(`/api/admin/targeted-messages/${id}`, signal, 'DELETE').then(
+    () => true,
+    (cause: unknown) => { if (cause instanceof AdminRequestError && cause.status === 404) return false; throw cause; },
+);
 
 export type TrafficKind = 'stream' | 'download' | 'artwork' | 'api' | 'web';
 export type TrafficRange = '1h' | '24h' | '7d' | '30d';

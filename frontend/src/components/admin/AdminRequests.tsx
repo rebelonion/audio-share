@@ -113,7 +113,7 @@ export default function AdminRequests({onAuthFailure}: {onAuthFailure: AuthFailu
     const selected = list.items.find(item => item.id === editing) ?? null;
     if (editing !== null) return <RequestEditor key={editing} request={selected} onAuthFailure={onAuthFailure} onClose={() => setEditing(null)} onChange={value => {
         if (value) {
-            list.setItems(items => editing === 'new' ? [value, ...items] : items.map(item => item.id === value.id ? value : item));
+            list.setItems(items => editing === 'new' ? [value, ...items.filter(item => item.id !== value.id)] : items.map(item => item.id === value.id ? value : item));
             if (editing === 'new') { setEditing(value.id); list.setNotice('Request created.'); }
         } else { list.setItems(items => items.filter(item => item.id !== editing)); setEditing(null); list.setNotice('Request deleted.'); }
     }} />;

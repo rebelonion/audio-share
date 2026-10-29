@@ -64,8 +64,12 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleAudioRemovalRequest(w, r, handleKey)
 
 	// Targeted messages
+	case path == "targeted-messages" && r.Method == http.MethodGet:
+		h.handleTargetedMessageList(w, r)
 	case path == "targeted-messages" && r.Method == http.MethodPost:
 		h.handleTargetedMessageCreate(w, r)
+	case strings.HasPrefix(path, "targeted-messages/") && r.Method == http.MethodDelete:
+		h.handleTargetedMessageDelete(w, r, strings.TrimPrefix(path, "targeted-messages/"))
 
 	// Requests
 	case path == "requests" && r.Method == http.MethodPost:

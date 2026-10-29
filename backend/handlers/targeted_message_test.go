@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -249,5 +250,70 @@ func TestTargetedMessageAcknowledgementRequiresSession(t *testing.T) {
 	NewTargetedMessageHandler(nil, "secret").ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("status=%d", recorder.Code)
+	}
+}
+
+func TestAdminListsPendingTargetedMessages(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	createdAt := time.Date(2026, time.July, 31, 12, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("SELECT id, session_id, title, message, created_at FROM targeted_messages").
+		WillReturnRows(sqlmock.NewRows(
+			[]string{"id", "session_id", "title", "message", "created_at"},
+		).AddRow(42, "session-123", "Hello", "Please get in touch.", createdAt))
+
+	handler := NewAdminHandler(db, nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "https://example.test/api/admin/targeted-messages", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response []targetedMessage
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response) != 1 || response[0].ID != 42 || response[0].SessionID != "session-123" || !response[0].CreatedAt.Equal(createdAt) {
+		t.Fatalf("response = %#v", response)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAdminDeletesTargetedMessage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec("DELETE FROM targeted_messages WHERE id").WithArgs(int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM targeted_messages WHERE id").WithArgs(int64(43)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM targeted_messages WHERE id").WithArgs(int64(44)).WillReturnResult(sqlmock.NewErrorResult(errors.New("rows affected unavailable")))
+
+	handler := NewAdminHandler(db, nil)
+	for _, tc := range []struct {
+		path string
+		want int
+	}{
+		{"42", http.StatusOK},
+		{"43", http.StatusNotFound},
+		{"44", http.StatusInternalServerError},
+		{"abc", http.StatusBadRequest},
+		{"0", http.StatusBadRequest},
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "https://example.test/api/admin/targeted-messages/"+tc.path, nil))
+		if recorder.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d, body=%s", tc.path, recorder.Code, tc.want, recorder.Body.String())
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -32,14 +32,31 @@ export function useAdminTask(onAuthFailure: AuthFailure) {
     return {busy, error, notice, setNotice, run};
 }
 
+type ListEdit<T> = (items: T[]) => T[];
+
 export function useAdminList<T>(load: (signal: AbortSignal) => Promise<T[]>, onAuthFailure: AuthFailure) {
-    const [items, setItems] = useState<T[]>([]);
+    const [items, setRawItems] = useState<T[]>([]);
     const [loaded, setLoaded] = useState(false);
     const task = useAdminTask(onAuthFailure);
     const {run} = task;
+    // Edits made while a load is in flight, such as a row added by another
+    // task, are replayed onto its result so the older snapshot cannot drop them.
+    // The result may already include the change, so edits must be safe to
+    // repeat: replace or remove rows by ID instead of blindly prepending.
+    const editsDuringLoad = useRef<ListEdit<T>[] | null>(null);
+    const setItems = useCallback((edit: ListEdit<T>) => {
+        editsDuringLoad.current?.push(edit);
+        setRawItems(edit);
+    }, []);
     const reload = useCallback(() => run(async signal => {
-        const values = await load(signal);
-        if (!signal.aborted) { setItems(values); setLoaded(true); }
+        const edits: ListEdit<T>[] = [];
+        editsDuringLoad.current = edits;
+        try {
+            const values = await load(signal);
+            if (!signal.aborted) { setRawItems(edits.reduce((current, edit) => edit(current), values)); setLoaded(true); }
+        } finally {
+            if (editsDuringLoad.current === edits) editsDuringLoad.current = null;
+        }
     }), [load, run]);
     useEffect(() => { void reload(); }, [reload]);
     return {...task, items, setItems, loaded, reload};
