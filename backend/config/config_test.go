@@ -19,6 +19,22 @@ func TestEnvFileDoesNotOverrideExplicitlyDisabledSchedule(t *testing.T) {
 	}
 }
 
+func TestRybbitScriptSrc(t *testing.T) {
+	t.Setenv("RYBBIT_URL", "")
+	t.Setenv("RYBBIT_SCRIPT_SRC", "")
+	if got := mustLoad(t).RybbitScript(); got != "" {
+		t.Fatalf("unconfigured=%q", got)
+	}
+	t.Setenv("RYBBIT_URL", "https://rybbit.example.test")
+	if got := mustLoad(t).RybbitScript(); got != "https://rybbit.example.test/api/script.js" {
+		t.Fatalf("base URL=%q", got)
+	}
+	t.Setenv("RYBBIT_SCRIPT_SRC", "/_r/script.js")
+	if got := mustLoad(t).RybbitScript(); got != "/_r/script.js" {
+		t.Fatalf("override=%q", got)
+	}
+}
+
 func TestAdminSessionTTLConfiguration(t *testing.T) {
 	t.Setenv("ADMIN_SESSION_TTL", "")
 	if got := mustLoad(t).AdminSessionTTL; got != "8h" {

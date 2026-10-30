@@ -117,8 +117,9 @@ type Config struct {
 	DatabaseURL   string
 	IndexSchedule string
 
-	RybbitURL    string
-	RybbitSiteID string
+	RybbitURL       string
+	RybbitScriptSrc string
+	RybbitSiteID    string
 
 	DefaultTitle       string
 	DefaultDescription string
@@ -142,6 +143,20 @@ type Config struct {
 	WaveformCron        string
 	WaveformMaxDuration string
 	WaveformWorkers     int
+}
+
+// RybbitScript returns the src for the Rybbit tracker tag. RYBBIT_SCRIPT_SRC is
+// used verbatim when set (absolute URL or root-relative path); otherwise the
+// script is loaded from RYBBIT_URL + "/api/script.js". The tracker derives its
+// API base from this src, so it also decides where events are sent.
+func (c *Config) RybbitScript() string {
+	if c.RybbitScriptSrc != "" {
+		return c.RybbitScriptSrc
+	}
+	if c.RybbitURL != "" {
+		return c.RybbitURL + "/api/script.js"
+	}
+	return ""
 }
 
 // Load reads configuration from the environment. Malformed numeric settings
@@ -215,6 +230,7 @@ func Load() (*Config, error) {
 		IndexSchedule: getEnv("INDEX_SCHEDULE", ""),
 
 		RybbitURL:          getEnv("RYBBIT_URL", ""),
+		RybbitScriptSrc:    getEnv("RYBBIT_SCRIPT_SRC", ""),
 		RybbitSiteID:       getEnv("RYBBIT_SITE_ID", ""),
 		DefaultTitle:       getEnv("DEFAULT_TITLE", "Audio Archive"),
 		DefaultDescription: getEnv("DEFAULT_DESCRIPTION", "Browse and listen to audio files"),

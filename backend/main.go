@@ -273,7 +273,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 	spaHandler := handlers.NewSPAHandler(
 		cfg.StaticDir,
 		frontendConfig,
-		cfg.RybbitURL,
+		cfg.RybbitScript(),
 		cfg.RybbitSiteID,
 		db.DB(),
 		handlers.SPAHandlerOptions{
@@ -285,7 +285,7 @@ func appHandler(cfg *config.Config, db *services.Database, fsService *services.F
 		},
 	)
 
-	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitURL, cfg.CapPublicEndpoint)
+	securityHeaders := middleware.NewSecurityHeaders(cfg.RybbitScript(), cfg.CapPublicEndpoint)
 	for _, name := range []string{"BANNER_MESSAGE", "BANNER_VARIANT", "BANNER_LINK_TEXT", "BANNER_LINK_URL"} {
 		if os.Getenv(name) != "" {
 			log.Printf("WARNING: %s is no longer read; set the site banner from the admin dashboard's Banner tab", name)

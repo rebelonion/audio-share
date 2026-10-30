@@ -46,7 +46,7 @@ type SPAHandlerOptions struct {
 	Banner          bannerSource
 }
 
-func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSiteID string, db *sql.DB, options ...SPAHandlerOptions) *SPAHandler {
+func NewSPAHandler(staticDir string, config FrontendConfig, rybbitScriptSrc, rybbitSiteID string, db *sql.DB, options ...SPAHandlerOptions) *SPAHandler {
 	cleanDir := filepath.Clean(staticDir)
 	indexPath := filepath.Join(cleanDir, "index.html")
 
@@ -64,8 +64,8 @@ func NewSPAHandler(staticDir string, config FrontendConfig, rybbitURL, rybbitSit
 		ldScript := `<script type="application/ld+json">` + string(ldJSON) + `</script>`
 
 		injection := configScript + ldScript
-		if rybbitURL != "" && rybbitSiteID != "" {
-			injection += `<script defer src="` + html.EscapeString(rybbitURL) + `/api/script.js" data-site-id="` + html.EscapeString(rybbitSiteID) + `"></script>`
+		if rybbitScriptSrc != "" && rybbitSiteID != "" {
+			injection += `<script defer src="` + html.EscapeString(rybbitScriptSrc) + `" data-site-id="` + html.EscapeString(rybbitSiteID) + `"></script>`
 		}
 
 		// Store template with config/ld+json/analytics injected but without title or meta tags;

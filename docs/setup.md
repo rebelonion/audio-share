@@ -158,7 +158,7 @@ Set `DEFAULT_TITLE` and `DEFAULT_DESCRIPTION` in `.env.local`, and put Markdown 
 
 For a site-wide announcement, open the admin dashboard's Banner tab. Choose an info, warning, or success style and optionally add a link. Changes take effect on visitors' next page load without a redeploy. The old `BANNER_*` environment variables are no longer read.
 
-For optional analytics, set `RYBBIT_URL` to your Rybbit base URL without a trailing slash and `RYBBIT_SITE_ID` to the site ID. The old `UMAMI_*` variables are no longer read.
+For optional analytics, set `RYBBIT_URL` to your Rybbit base URL without a trailing slash and `RYBBIT_SITE_ID` to the site ID. To serve the tracker from your own domain (some blocklists match Rybbit's `/api/` paths), proxy a prefix such as `/_r/` to Rybbit's `/api/` and set `RYBBIT_SCRIPT_SRC=/_r/script.js`; it overrides `RYBBIT_URL`. The old `UMAMI_*` variables are no longer read.
 
 ## Optional Cap CAPTCHA
 

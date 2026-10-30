@@ -185,6 +185,23 @@ func TestSPAHandlerInjectsBuildIDAndDoesNotCacheHTML(t *testing.T) {
 	}
 }
 
+func TestSPAHandlerInjectsRybbitScriptSrcVerbatim(t *testing.T) {
+	staticDir := t.TempDir()
+	indexHTML := `<!doctype html><html><head><title>Audio Share</title></head><body><div id="root"></div></body></html>`
+	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte(indexHTML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewSPAHandler(staticDir, FrontendConfig{}, "/_r/script.js", "site-1", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "https://example.test/", nil))
+
+	want := `<script defer src="/_r/script.js" data-site-id="site-1"></script>`
+	if !strings.Contains(recorder.Body.String(), want) {
+		t.Fatalf("response does not contain %q: %s", want, recorder.Body.String())
+	}
+}
+
 func TestSPAHandlerCachesHashedAssetsImmutably(t *testing.T) {
 	staticDir := t.TempDir()
 	assetsDir := filepath.Join(staticDir, "assets")

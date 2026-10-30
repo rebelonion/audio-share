@@ -56,8 +56,9 @@ The table below lists server environment variables and their application default
 | `DEFAULT_TITLE` | Site title (injected into frontend) | `Audio Archive` |
 | `DEFAULT_DESCRIPTION` | Site description (injected into frontend) | `Browse and listen to audio files` |
 | `POPULAR_BANLIST` | Comma-separated words; tracks whose title contains any of them (case-insensitive) are hidden from the popular carousel | - |
-| `RYBBIT_URL` | Rybbit base URL without a trailing slash; the server appends `/api/script.js` | - |
-| `RYBBIT_SITE_ID` | Rybbit site ID; both Rybbit settings are required to enable analytics | - |
+| `RYBBIT_URL` | Rybbit base URL without a trailing slash; the tracker loads from `RYBBIT_URL/api/script.js` unless `RYBBIT_SCRIPT_SRC` is set | - |
+| `RYBBIT_SCRIPT_SRC` | Full tracker `src`, used as-is: an absolute URL or a root-relative path such as `/_r/script.js`. Takes precedence over `RYBBIT_URL`. The tracker sends events to the path the script was loaded from, so the proxy must map `/_r/` to Rybbit's `/api/` | - |
+| `RYBBIT_SITE_ID` | Rybbit site ID; analytics is enabled when it and `RYBBIT_URL` or `RYBBIT_SCRIPT_SRC` are set | - |
 | `NTFY_URL` | Ntfy server URL | `https://ntfy.sh` |
 | `NTFY_TOPIC` | Ntfy topic for notifications | - |
 | `NTFY_TOKEN` | Ntfy authentication token | - |

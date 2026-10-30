@@ -10,9 +10,11 @@ type SecurityHeaders struct {
 	capDomain    string
 }
 
-func NewSecurityHeaders(rybbitURL, capURL string) *SecurityHeaders {
+// NewSecurityHeaders takes the Rybbit script src; a root-relative src is
+// covered by 'self' and adds no origin.
+func NewSecurityHeaders(rybbitScriptSrc, capURL string) *SecurityHeaders {
 	return &SecurityHeaders{
-		rybbitDomain: origin(rybbitURL),
+		rybbitDomain: origin(rybbitScriptSrc),
 		capDomain:    origin(capURL),
 	}
 }
