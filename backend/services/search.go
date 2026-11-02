@@ -112,9 +112,11 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 			audioArgs = append(audioArgs, likeQuery)
 			clause := fmt.Sprintf("%s ILIKE $%d", col, len(audioArgs))
 			// A collection represents one artist, so its aliases match all descendant
-			// tracks, including tracks from that artist’s other accounts.
+			// tracks, including tracks from that artist’s other accounts. Keep this an
+			// uncorrelated ANY(ARRAY(...)): a correlated EXISTS inside the OR blocks a
+			// BitmapOr over the trigram indexes and forces a full seq scan.
 			if f == "artist" {
-				clause = "(" + clause + fmt.Sprintf(" OR EXISTS (SELECT 1 FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=audio_files.source_path AND cn.name ILIKE $%d))", len(audioArgs))
+				clause = "(" + clause + fmt.Sprintf(" OR audio_files.source_path = ANY(ARRAY(SELECT c.path FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE cn.name ILIKE $%d)))", len(audioArgs))
 			}
 			fieldClauses = append(fieldClauses, clause)
 		}
@@ -123,7 +125,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 			fieldClauses = []string{
 				fmt.Sprintf("filename ILIKE $%d", len(audioArgs)-4),
 				fmt.Sprintf("title ILIKE $%d", len(audioArgs)-3),
-				fmt.Sprintf("(meta_artist ILIKE $%d OR EXISTS (SELECT 1 FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=audio_files.source_path AND cn.name ILIKE $%d))", len(audioArgs)-2, len(audioArgs)-2),
+				fmt.Sprintf("(meta_artist ILIKE $%d OR audio_files.source_path = ANY(ARRAY(SELECT c.path FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE cn.name ILIKE $%d)))", len(audioArgs)-2, len(audioArgs)-2),
 				fmt.Sprintf("description ILIKE $%d", len(audioArgs)-1),
 				fmt.Sprintf("webpage_url ILIKE $%d", len(audioArgs)),
 			}
@@ -184,7 +186,7 @@ func (s *SearchService) Search(query string, limit int, offset int, opts SearchO
 		likeQuery := "%" + query + "%"
 		folderArgs = append(folderArgs, likeQuery, likeQuery)
 		folderArgIdx = 3
-		folderWhere = "(name ILIKE $1 OR folder_name ILIKE $2 OR EXISTS (SELECT 1 FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE c.path=folders.path AND cn.name ILIKE $1))"
+		folderWhere = "(name ILIKE $1 OR folder_name ILIKE $2 OR path = ANY(ARRAY(SELECT c.path FROM collection_names cn JOIN collections c ON c.id=cn.collection_id WHERE cn.name ILIKE $1)))"
 	}
 
 	if opts.DateFrom != "" {
