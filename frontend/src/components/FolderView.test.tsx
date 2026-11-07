@@ -86,6 +86,16 @@ describe('FolderView', () => {
         expect(screen.queryByText('New Name')).toBeNull();
     });
 
+    it('filters folders by their on-disk directory name when it differs from the display name', () => {
+        render(<ToastProvider><MemoryRouter><FolderView currentPath="root" items={[{
+            name: 'Foo', path: 'root/bar', type: 'folder', modifiedAt: '',
+        }]}/></MemoryRouter></ToastProvider>);
+        fireEvent.change(screen.getByRole('textbox'), {target: {value: 'bar'}});
+        expect(screen.getByText('Foo')).toBeTruthy();
+        fireEvent.change(screen.getByRole('textbox'), {target: {value: 'root'}});
+        expect(screen.queryByText('Foo')).toBeNull();
+    });
+
     it('publishes download failures through the global toast provider', async () => {
         mediaAccess.startAudioDownload.mockRejectedValueOnce(
             new MediaAccessError(429, 'rate_limited', 3_600),

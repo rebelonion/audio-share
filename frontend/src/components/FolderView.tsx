@@ -255,6 +255,13 @@ export default function FolderView({items, currentPath = ''}: FolderViewProps) {
         return items.map(item => {
             const parts = [item.name];
 
+            if (item.type === 'folder') {
+                // The display name can differ from the on-disk directory name
+                // (the one in the URL), so match against the real name too.
+                const dirName = item.path.split('/').filter(Boolean).pop();
+                if (dirName && dirName !== item.name) parts.push(dirName);
+            }
+
             if (item.type === 'folder' && item.metadata) {
                 if (item.metadata.name) parts.push(item.metadata.name);
                 parts.push(...(item.metadata.aliases ?? []));
